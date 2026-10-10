@@ -7,6 +7,7 @@ import { removeFromBundleAction } from "@/app/rentals/actions";
 import { requireUser } from "@/server/auth/session";
 import { getBundle } from "@/server/booking/bundle";
 import { DEFAULT_PLANNED_DAYS, quoteBundle } from "@/server/booking/checkout";
+import { gateway } from "@/server/payments/gateway";
 import { CheckoutForm } from "./checkout-form";
 
 export const metadata: Metadata = { title: "Bundle" };
@@ -94,6 +95,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
             We pre-authorise the estimate and hold the deposit on your card. You&apos;re charged for
             the wear you actually add when each pair is returned, and the deposit is released once
             its condition is checked. Delivery fees are quoted by the ride-hailing app.
+            {gateway().name === "mock" && " Test mode: no real card is charged."}
           </p>
         </Card>
         {quote.problems.length > 0 ? (

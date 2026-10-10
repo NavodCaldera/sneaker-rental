@@ -23,6 +23,13 @@ const ITEM_STATUS: Record<
   LOST: { label: "Lost", tone: "bad" },
 };
 
+const DEPOSIT_LABEL = {
+  held: "held",
+  released: "released",
+  captured: "partly captured",
+  none: "not taken",
+} as const;
+
 export default async function RentalsPage({ searchParams }: PageProps<"/rentals">) {
   const user = await requireUser("BORROWER");
   const { booked } = await searchParams;
@@ -50,9 +57,12 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
             <section key={rental.id} aria-label={`Rental from ${formatDate(rental.createdAt)}`}>
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <h2 className="font-medium">Booked {formatDate(rental.createdAt)}</h2>
-                <span className="text-subtle">
-                  Deposit {formatLKR(rental.depositAmount.toString())} · estimate{" "}
-                  {formatLKR(rental.estimate.toString())}
+                <span className="flex flex-wrap items-center gap-2 text-subtle">
+                  Deposit {formatLKR(rental.depositAmount.toString())}
+                  <Badge tone={rental.depositStatus === "captured" ? "warn" : "neutral"}>
+                    {DEPOSIT_LABEL[rental.depositStatus]}
+                  </Badge>
+                  · estimate {formatLKR(rental.estimate.toString())}
                 </span>
               </div>
               <ul className="flex flex-col gap-3">

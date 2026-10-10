@@ -5,6 +5,7 @@ import { D, roundMoney, toD } from "@/lib/decimal";
 import { bundleDailyCost, curveParams, estimateItem, priceAt } from "@/lib/pricing";
 import { db } from "../db";
 import { requestDelivery } from "../logistics/requests";
+import { PaymentError, authorizeRental } from "../payments";
 import { type SettingsRow, getActiveSettings, toPricingSettings } from "../settings";
 
 export class BookingError extends Error {}
@@ -167,11 +168,11 @@ export async function checkout(
     throw new BookingError("Some pairs are no longer listed");
   if (quote.problems.length) throw new BookingError(quote.problems[0]);
 
-  return db.$transaction(async (tx) => {
+  const rental = await db.$transaction(async (tx) => {
     const rental = await tx.rental.create({
       data: {
         borrowerId,
-        status: "ACTIVE",
+        status: "PENDING_PAYMENT",
         deliveryAddress: input.deliveryAddress,
         estimate: quote.estimate,
         depositAmount: quote.deposit,
@@ -209,5 +210,34 @@ export async function checkout(
       }
     }
     return rental;
+  });
+
+  try {
+    return await authorizeRental(rental.id);
+  } catch (e) {
+    if (!(e instanceof PaymentError)) throw e;
+    await cancelRental(rental.id);
+    throw new BookingError(`Payment failed: ${e.message}`);
+  }
+}
+
+/** Undo a booking whose payment failed: free the pairs and cancel its deliveries. */
+export async function cancelRental(rentalId: string) {
+  await db.$transaction(async (tx) => {
+    const items = await tx.rentalItem.findMany({ where: { rentalId } });
+    for (const item of items) {
+      if (item.status === "AWAITING_DELIVERY") {
+        await tx.shoe.updateMany({
+          where: { id: item.shoeId, status: "RESERVED" },
+          data: { status: "AVAILABLE" },
+        });
+      }
+    }
+    await tx.delivery.updateMany({
+      where: { rentalItem: { rentalId } },
+      data: { status: "CANCELLED" },
+    });
+    await tx.rentalItem.updateMany({ where: { rentalId }, data: { status: "CANCELLED" } });
+    await tx.rental.update({ where: { id: rentalId }, data: { status: "CANCELLED" } });
   });
 }

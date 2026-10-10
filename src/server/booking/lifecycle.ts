@@ -5,6 +5,7 @@ import { catchUpPhi, curveParams, incomeBetween, splitCharge } from "@/lib/prici
 import { colomboDay, wearAdded, wearEnd } from "@/lib/wear-ledger";
 import { type Tx, db } from "../db";
 import { requestDelivery } from "../logistics/requests";
+import { settleItems } from "../payments";
 import { type SettingsRow, getActiveSettings, toPricingSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
 import { BookingError } from "./checkout";
@@ -151,7 +152,7 @@ export async function recordCondition(
   for (const p of input.photos) saved.push(await savePhoto(p, `condition/${input.itemId}`));
   const photoRows = () => saved.map((s) => ({ kind: "CONDITION" as const, ...s }));
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const item = await tx.rentalItem.findUniqueOrThrow({
       where: { id: input.itemId },
       include: { rental: true, shoe: true, conditionReports: true },
@@ -234,6 +235,10 @@ export async function recordCondition(
     await tx.shoe.update({ where: { id: item.shoeId }, data: { latestGrade: input.grade } });
     return { reportId, closedItemIds: closed };
   });
+
+  // Charge the closed items and release deposits that are no longer needed.
+  await settleItems(result.closedItemIds);
+  return result;
 }
 
 async function openDamageDispute(tx: Tx, itemId: string, userId: string, notes?: string) {
