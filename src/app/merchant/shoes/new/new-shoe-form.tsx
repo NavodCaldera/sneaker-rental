@@ -14,11 +14,15 @@ export function NewShoeForm({
   photoSlots,
   lifespanMin,
   lifespanMax,
+  monthsMin,
+  monthsMax,
 }: {
   categories: string[];
   photoSlots: { kind: string; label: string }[];
   lifespanMin: number;
   lifespanMax: number;
+  monthsMin: number;
+  monthsMax: number;
 }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(createShoeAction, {});
   const errors = state.fieldErrors ?? {};
@@ -120,7 +124,7 @@ export function NewShoeForm({
             label="Expected lifespan (wear-days)"
             name="lifespanDays"
             error={errors.lifespanDays}
-            hint={`${lifespanMin}–${lifespanMax}. Longer means a lower daily price and more rentals, but if the pair wears out early you lose the income it didn't collect.`}
+            hint={`${lifespanMin}–${lifespanMax} wear-days (${monthsMin}–${monthsMax} months). Need longer? Ask us to extend your limit. Longer means a lower daily price and more rentals, but if the pair wears out early you lose the income it didn't collect.`}
           >
             <Input
               name="lifespanDays"

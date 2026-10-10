@@ -6,6 +6,7 @@ import {
   createShoe,
   getListing,
   publishShoe,
+  setLifespanExtension,
   shoeSchema,
   updatePayoutAccount,
 } from "@/server/catalogue";
@@ -27,7 +28,7 @@ const allPhotos = () => ({
   BOX: photo(),
 });
 
-const LIMITS = { minLifespanDays: 60, maxLifespanDays: 1095 };
+const LIMITS = { minLifespanDays: 183, maxLifespanDays: 730 };
 const input = shoeSchema(LIMITS).parse({
   brand: "Nike",
   model: "Pegasus 41",
@@ -86,9 +87,10 @@ describe("listing a shoe", () => {
 
   it("validates lifespan bounds from settings, value format and wear used", () => {
     const schema = shoeSchema(LIMITS);
-    expect(schema.safeParse({ ...input, lifespanDays: "59" }).success).toBe(false);
-    expect(schema.safeParse({ ...input, lifespanDays: "1096" }).success).toBe(false);
-    expect(schema.safeParse({ ...input, lifespanDays: "60" }).success).toBe(true);
+    expect(schema.safeParse({ ...input, lifespanDays: "182" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, lifespanDays: "731" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, lifespanDays: "183" }).success).toBe(true);
+    expect(schema.safeParse({ ...input, lifespanDays: "730" }).success).toBe(true);
     expect(schema.safeParse({ ...input, value: "6,000" }).success).toBe(false);
     expect(schema.safeParse({ ...input, value: "0" }).success).toBe(false);
     expect(schema.safeParse({ ...input, initialWear: "365" }).success).toBe(false);
@@ -100,6 +102,33 @@ describe("listing a shoe", () => {
     const { merchant } = await makeUser("MERCHANT");
     await db.pricingSettings.create({ data: { ...TEST_SETTINGS, minLifespanDays: 400 } });
     await expect(createShoe(merchant!.id, input, allPhotos())).rejects.toThrow(/between 400/);
+  });
+
+  it("lifespans are 6–24 months unless an admin extends the merchant's limit", async () => {
+    const { merchant } = await makeUser("MERCHANT");
+    const long = { ...input, lifespanDays: 1095 }; // 36 months
+    await expect(createShoe(merchant!.id, long, allPhotos())).rejects.toThrow(/183 and 730/);
+
+    await expect(setLifespanExtension(merchant!.id, 24)).rejects.toThrow(/more than 24 months/);
+    await setLifespanExtension(merchant!.id, 36);
+    expect(
+      (await db.merchant.findUniqueOrThrow({ where: { id: merchant!.id } })).maxLifespanDays,
+    ).toBe(1095);
+    const shoe = await createShoe(merchant!.id, long, allPhotos());
+    expect(shoe.lifespanDays).toBe(1095);
+    await expect(
+      createShoe(merchant!.id, { ...input, lifespanDays: 1096 }, allPhotos()),
+    ).rejects.toThrow(/183 and 1095/);
+
+    // Removing the extension blocks new long listings; the listed shoe keeps its curve.
+    await setLifespanExtension(merchant!.id, null);
+    await expect(createShoe(merchant!.id, long, allPhotos())).rejects.toThrow(/183 and 730/);
+    await expect(publishShoe(merchant!.id, shoe.id)).rejects.toThrow(/183 and 730/);
+    const stored = await db.shoe.findUniqueOrThrow({
+      where: { id: shoe.id },
+      include: { settings: true },
+    });
+    expect(shoePricing(stored).priceNew.startsWith("9.64")).toBe(true); // 28.92 / 3
   });
 
   it("lists a second-hand pair at its declared wear", async () => {
@@ -162,11 +191,18 @@ describe("browsing and prices", () => {
   it("prices the 6,000 LKR / 365-day shoe at 28.9248 new and 8.6774 at end of life", async () => {
     const row = await getActiveSettings();
     const settings = toPricingSettings(row);
-    const shoe = { value: "6000", lifespanDays: 365, initialWear: "0", collectedSoFar: "0" };
+    const shoe = {
+      value: "6000",
+      lifespanDays: 365,
+      initialWear: "0",
+      collectedSoFar: "0",
+      merchantCollected: "0",
+    };
     const pricing = shoePricing({ ...shoe, wear: "0", settings: row });
     expect(pricing.priceToday.slice(0, 7)).toBe("28.9247");
     expect(pricing.priceEnd.slice(0, 6)).toBe("8.6774");
     expect(pricing.lifeLeft).toBe("1");
+    expect(pricing.merchantTarget).toBe("6600");
     const worn = shoePricing({ ...shoe, wear: "73", settings: row });
     expect(worn.lifeLeft).toBe("0.8");
     const preview = curvePreview("6000", 365, settings);

@@ -19,7 +19,8 @@ export interface PricingSettings {
   baseSteepness: Decimal.Value;
   /** Lifespan the base curve was tuned for (365) */
   refLife: number;
-  /** OPEN DECISION: shortest and longest lifespan a merchant may declare, in wear-days */
+  /** Shortest and longest lifespan a merchant may declare, in wear-days (6–24 months).
+   *  An admin can grant a merchant a longer maximum on request. */
   minLife: number;
   maxLife: number;
   /** Highest idle discount (Phase 2 ladder) */
@@ -40,8 +41,8 @@ export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   midpointRatio: new D(200).div(365),
   baseSteepness: "0.03",
   refLife: 365,
-  minLife: 60,
-  maxLife: 1095,
+  minLife: 183, // 6 months
+  maxLife: 730, // 24 months
   idleDiscountCap: "0.05",
   catchUp: false,
   capitalRate: "0.12",

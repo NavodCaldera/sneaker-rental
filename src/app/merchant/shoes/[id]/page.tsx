@@ -63,7 +63,11 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
           </div>
           <Stat label="Declared value" value={formatLKR(shoe.value.toString())} />
           <Stat label="Lifetime income target (R)" value={formatLKR(pricing.lifetimeIncome)} />
-          <Stat label="You earn over its life" value={formatLKR(preview.merchantShare)} />
+          <Stat label="You earn over its life" value={formatLKR(pricing.merchantTarget)} />
+          <Stat
+            label="Paid to you so far (you're paid first)"
+            value={`${formatLKR(pricing.merchantCollected)} of ${formatLKR(pricing.merchantTarget)}`}
+          />
           <Stat label="Collected so far" value={formatLKR(shoe.collectedSoFar.toString())} />
           <Stat label="Lost to discounts" value={formatLKR(shoe.lostToDiscounts.toString())} />
         </Card>

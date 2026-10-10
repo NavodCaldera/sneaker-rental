@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/server/auth/session";
-import { CATEGORIES, LISTING_PHOTOS } from "@/server/catalogue";
+import {
+  CATEGORIES,
+  LISTING_PHOTOS,
+  daysToMonths,
+  getMerchantForUser,
+  listingLimits,
+} from "@/server/catalogue";
 import { getActiveSettings } from "@/server/settings";
 import { NewShoeForm } from "./new-shoe-form";
 
 export const metadata: Metadata = { title: "Add shoe" };
 
 export default async function NewShoePage() {
-  await requireUser("MERCHANT");
-  const settings = await getActiveSettings();
+  const user = await requireUser("MERCHANT");
+  const merchant = await getMerchantForUser(user.id);
+  const limits = listingLimits(await getActiveSettings(), merchant);
   return (
     <main>
       <PageHeader
@@ -19,8 +26,10 @@ export default async function NewShoePage() {
       <NewShoeForm
         categories={CATEGORIES}
         photoSlots={LISTING_PHOTOS}
-        lifespanMin={settings.minLifespanDays}
-        lifespanMax={settings.maxLifespanDays}
+        lifespanMin={limits.minLifespanDays}
+        lifespanMax={limits.maxLifespanDays}
+        monthsMin={daysToMonths(limits.minLifespanDays)}
+        monthsMax={daysToMonths(limits.maxLifespanDays)}
       />
     </main>
   );

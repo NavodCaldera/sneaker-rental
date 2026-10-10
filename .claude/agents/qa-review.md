@@ -25,10 +25,10 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
    - [ ] No JS `number`/`parseFloat`/`Float` for money or wear. Decimal everywhere.
    - [ ] Rounding (`toFixed`, `roundMoney`, `toDecimalPlaces`) only at display or charge boundaries.
    - [ ] Discounts and φ apply to one rental item only. The next item starts from the curve.
-   - [ ] Charged amounts come from `chargedAmounts` (platform share rounded, merchant gets the remainder).
+   - [ ] Charged amounts come from `chargedAmounts`, merchant first: the platform gets nothing on a shoe until its merchant is paid (1 + μm) × V, and `Shoe.merchantCollected` stays in step (closes, lost pairs, refunds).
    - [ ] A listed shoe is priced with its own settings snapshot (`shoeCurve`), never `getActiveSettings()` + `curveParams` directly.
-   - [ ] Wear-ledger days are inclusive and a handoff day belongs to the giver (receiver starts the next day).
-   - [ ] No hard-coded settings values (0.10, 5000, 3 days, 4 pairs, 60 / 1095 lifespan limits) outside PricingSettings defaults and seed.
+   - [ ] Wear-ledger days are inclusive; a holding ends on the End-rental day (waiting for the driver is free); a shoe is never held by two items on one day.
+   - [ ] No hard-coded settings values (0.10, 5000, 3 days, 4 pairs, 183 / 730 lifespan limits) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] MVP scope respected (§10). No unrequested Phase 2/3 features.
    - [ ] Agents stayed in their owned directories.

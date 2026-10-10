@@ -7,7 +7,7 @@ import {
   colomboDay,
   dateToDay,
   dayToDate,
-  handoffDays,
+  receiverFirstDay,
   runLedger,
   wearAdded,
   wearEnd,
@@ -113,11 +113,12 @@ describe("days", () => {
     expect(dateToDay(dayToDate(day))).toBe(day);
   });
 
-  it("a handoff day belongs to the giver; the receiver starts the next day", () => {
+  it("a handoff receiver starts on the delivery day, or the day after the giver's last day", () => {
     const at = new Date("2026-10-11T15:00:00+05:30");
-    const { giverLastDay, receiverFirstDay } = handoffDays(at);
-    expect(giverLastDay).toBe(colomboDay(at));
-    expect(receiverFirstDay).toBe(giverLastDay + 1);
+    const day = colomboDay(at);
+    expect(receiverFirstDay(at, day - 3)).toBe(day); // giver ended 3 days ago: waiting was free
+    expect(receiverFirstDay(at, day)).toBe(day + 1); // giver ended today: never both
+    expect(receiverFirstDay(at, null)).toBe(day);
   });
 });
 
@@ -145,7 +146,7 @@ describe("ledger guards", () => {
     catchUp: false,
   });
   const opts = { maxPairs: 4 };
-  const settingsFor = () => S;
+  const owedFor = () => 0;
 
   it("rejects unknown shoes, items that end before they start and bad dates", async () => {
     const { estimate, dayNumber } = await import("..");
@@ -153,8 +154,8 @@ describe("ledger guards", () => {
     const item = { id: "a", borrowerId: "u", shoeId: "A", start: 5, end: 9 };
     expect(() => runLedger([{ ...item, shoeId: "Z" }], shoes, 1, 9, opts)).toThrow(/Unknown shoe/);
     expect(() => runLedger([{ ...item, end: 4 }], shoes, 1, 9, opts)).toThrow(/ends before/);
-    expect(() => estimate([{ ...item, end: null }], shoes, settingsFor, opts)).toThrow(/planned/);
-    expect(estimate([], shoes, settingsFor, opts).total.eq(0)).toBe(true);
+    expect(() => estimate([{ ...item, end: null }], shoes, owedFor, opts)).toThrow(/planned/);
+    expect(estimate([], shoes, owedFor, opts).total.eq(0)).toBe(true);
     expect(() => dayNumber("11/10/2026")).toThrow(RangeError);
   });
 

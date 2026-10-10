@@ -8,6 +8,11 @@ The maths and rules behind the pricing engine (`src/lib/pricing/`) and the wear 
 
 This file is authoritative. It merges the reference rent engine and its spec (Rental Pricing Formula Guide v2 and `rental_pricing_engine.py`), which were ported into this repo and then removed. Their test suite now lives in `src/lib/pricing/__tests__/acceptance.test.ts` and must keep passing. If you change a formula here, change the engine and those tests together.
 
+**Product decisions that override the reference (2026-10-11):**
+1. **Merchant first.** Rent goes to the merchant until they have received their target, (1 + μm) × V for a new pair; after that it goes to the platform (§7). The reference split every charge in the ratio μm : μp.
+2. **Waiting for the driver is free.** A borrower's last day is the day they end the rental, not the day the pair reaches the next holder (§5).
+3. **Lifespan 6–24 months** (183–730 wear-days). An admin can grant a merchant a longer maximum on request (§1.1).
+
 ---
 
 ## 1. Inputs
@@ -23,7 +28,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | `baseSteepness` | β at L = refLife | 0.03 | Steepness of the curve |
 | `refLife` | | 365 | Lifespan the curve shape was tuned for |
 | `maxPairsPerBundle` | | 4 | Pairs a borrower may hold at once |
-| `minLifespanDays` / `maxLifespanDays` (`minLife` / `maxLife`) | | 60 / 1095 | Lifespan a merchant may declare (OPEN DECISION) |
+| `minLifespanDays` / `maxLifespanDays` (`minLife` / `maxLife`) | | 183 / 730 | Lifespan a merchant may declare: 6–24 months (1 month = 365/12 days, rounded up). `Merchant.maxLifespanDays` is a longer maximum an admin granted that merchant on request (`setLifespanExtension`, `/admin/merchants`). |
 | `idleDiscountCap` | | 0.05 | Highest idle discount (Phase 2) |
 | `catchUpEnabled` (`catchUp`) | | false | Option B: spread past discounts over the remaining life (OPEN DECISION) |
 | `capitalRate` | r | 0.12 | Idle-cost test only |
@@ -39,7 +44,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | Expected lifespan | L | 365 wear-days |
 | Wear already used, if listed second-hand (`initialWear`) | w₀ | 0 |
 
-Shoe state: `wear` (w, starts at w₀), `collectedSoFar` (charged on the platform, after discounts, unrounded), `lostToDiscounts`, `settingsId`. What a shoe has collected over its **whole life** is `lifetimeCollected = F(w₀) + collectedSoFar`; catch-up and the catch-up remaining value use that.
+Shoe state: `wear` (w, starts at w₀), `collectedSoFar` (charged on the platform, after discounts, unrounded), `lostToDiscounts`, `merchantCollected` (merchant shares charged so far, net of refunds, 2 dp), `settingsId`. What a shoe has collected over its **whole life** is `lifetimeCollected = F(w₀) + collectedSoFar`; catch-up and the catch-up remaining value use that.
 
 ### 1.3 Per rental item (one pair inside a borrower's rental)
 
@@ -48,7 +53,7 @@ Shoe state: `wear` (w, starts at w₀), `collectedSoFar` (charged on the platfor
 | borrower | Who holds it |
 | shoe | Which pair |
 | `firstDay` | First day held (the delivery date), inclusive |
-| `lastDay` | Last day held (the return or handoff date), inclusive; null while held |
+| `lastDay` | Last day held (the day the borrower ended the rental), inclusive; null while held |
 | `discount` | One-off discount d for this item, 0 to < 1 |
 | `discountFunding` | `PLATFORM` (promotion, default) or `MERCHANT` (idle discount) |
 | `phi` | Catch-up factor φ, fixed at the start of the item |
@@ -74,7 +79,7 @@ K     = R ÷ A                              price per wear-day when new
 
 Numerics: `ln(1 + e^x)` is computed as a stable softplus. Clamp w to [0, L] before use. All arithmetic in decimal.js at precision 40, never JS `number`.
 
-`validateListing(V, L, settings)`: V > 0 and minLife ≤ L ≤ maxLife, or it throws. `curveParams` calls it.
+`validateListing(V, L, limits)`: V > 0 and minLife ≤ L ≤ maxLife, or it throws. It runs when a shoe is created and published, with the limits that apply to that merchant (`listingLimits`: the settings, or the merchant's extension). `curveParams` only requires V > 0 and L > 0, so a shoe listed under an extension keeps its curve after the extension is removed.
 
 | 6,000 LKR shoe, L = 365 | Value |
 |---|---|
@@ -102,7 +107,7 @@ Charge w0 → w1      (1 − d) × φ × K × [IQ(w1) − IQ(w0)]
 
 ## 4. Wear: the ledger
 
-A **wear-day** is one calendar day a pair is held. Days are calendar dates in Asia/Colombo, and **both the first and the last day count**.
+A **wear-day** is one calendar day a pair is held. Days are calendar dates in Asia/Colombo, and **both the first day (delivery) and the last day (the day the borrower ends the rental) count**.
 
 For each borrower and each day t:
 
@@ -129,16 +134,17 @@ Accruing day by day gives exactly the same total as one formula per item, becaus
 
 ## 5. Holding period and delivery events
 
-The holding period runs from delivery to the borrower until delivery to the next holder (the next borrower for a handoff, the merchant for a return). The borrower isn't charged for days the merchant takes to inspect.
+The holding period runs from delivery to the borrower until the day the borrower **ends the rental**. Days the pair then waits at the borrower's home for the driver, travels, or waits for the merchant's inspection are charged to nobody and add no wear (product decision 2). The risk that a borrower keeps wearing the pair after ending is handled by the condition check at the next handover.
 
-| Event (`onDeliveryDelivered`) | Ledger days |
+| Event | Ledger days |
 |---|---|
 | Merchant → borrower delivered on day D | receiver `firstDay = D` |
-| Return delivered to the merchant on day D | returner `lastDay = D` |
-| Direct handoff delivered on day D | giver `lastDay = D`; receiver `firstDay = D + 1` (`handoffDays`) |
+| Borrower ends the rental on day E (`endRental`) | `lastDay = E` |
+| Return delivered to the merchant | `endDate` (timestamp) recorded; `lastDay` unchanged |
+| Direct handoff delivered on day D | giver's `endDate` recorded; receiver `firstDay = max(D, giver's lastDay + 1)` (`receiverFirstDay`) |
 | Lost pair | `lastDay` = the day it is marked lost, if not already set |
 
-A pair received by handoff and returned the same day has `lastDay < firstDay` and adds no wear. The item **closes** (wear, charge and split are computed) when the receiver records condition. Items on one shoe close in order, so `w_start` (the shoe's wear at close) equals the previous holder's `w_end`.
+A shoe is never held by two items on the same day. The item **closes** (wear, charge and split are computed) when the receiver records condition. Items on one shoe close in order, so `w_start` (the shoe's wear at close) equals the previous holder's `w_end`.
 
 ---
 
@@ -154,14 +160,22 @@ A pair received by handoff and returned the same day has `lastDay < firstDay` an
 ## 7. Closing an item and invoicing
 
 1. Wear from the ledger through the item's `lastDay`; gross (before discount) and amount (after discount) from the pricing engine.
-2. Round with `chargedAmounts(settings, amount, { undiscounted: gross, fundedBy })`:
+2. Round and split **merchant first** with `chargedAmounts(amount, { merchantOutstanding, undiscounted: gross })`:
+
+```
+merchantTarget      = (1 + μm) × V × (1 − IQ(w₀) ÷ A) − merchant-funded discounts so far
+                      (= (1 + μm) × V for a new pair; a second-hand pair's share of what is still collectable)
+merchantOutstanding = max(0, merchantTarget − merchantCollected)
+```
 
 | Field | Rule |
 |---|---|
 | `charge` | `round(amount)`, the only rounding of the charge |
+| `merchantShare` | `min(charge, round(merchantOutstanding))` |
+| `platformShare` | `charge − merchantShare`, so cents always add up |
 | `discountGiven` | `round(gross) − charge` |
-| `platformShare` | `round(charge × μp ÷ (1 + μm + μp))` |
-| `merchantShare` | `charge − platformShare`, so cents always add up |
+
+The platform earns nothing on a shoe until its merchant has been paid in full; once the target is met, the platform gets everything. Over a full life of a new 6,000 LKR shoe the merchant still gets 6,600 and the platform 600 (the brief's 110 : 10 ratio holds for the lifetime, not per rental). If a shoe's lifetime rent falls short of the target (discounts without catch-up, early retirement), the merchant gets all of it and the platform nothing. `merchantCollected` is updated at close; helpers: `merchantOwed(shoe)`, `merchantFundedDiscounts(tx, shoeId)` in `src/server/catalogue/pricing.ts`.
 
 3. Capture the final total (not the estimate) from the pre-authorisation. Release the deposit when the condition check passes and no dispute is open.
 4. The merchant share is paid after the dispute window (3 days), in the weekly payout.
@@ -178,8 +192,8 @@ Option A (default, catchUp = false):  φ = 1. Lifetime = R − Σ discount costs
 Option B (catchUp = true):            φ = (R − lifetimeCollected) ÷ (K × [A − IQ(w)])  at the item's start, never below 0
 ```
 
-- **Idle discounts** (`discountFunding = MERCHANT`) are capped at `idleDiscountCap` (5%) and come out of the merchant's share only: the platform share is taken on the rounded undiscounted gross (never more than the charge), and the merchant gets the rest of the charge.
-- **Platform promotions** (`PLATFORM`, the default) reduce both shares in proportion.
+- **Idle discounts** (`discountFunding = MERCHANT`) are capped at `idleDiscountCap` (5%) and lower the merchant's target by their cost, so the merchant bears them.
+- **Platform promotions** (`PLATFORM`, the default) leave the merchant's target alone, so the platform bears them: it reaches its own share later, or not at all.
 
 ---
 
@@ -187,11 +201,12 @@ Option B (catchUp = true):            φ = (R − lifetimeCollected) ÷ (K × [A
 
 | Event | Calculation |
 |---|---|
-| Early return | `lastDay` = the actual return date. Charge only what the ledger accrued. |
+| Early return | `lastDay` = the day the borrower ends it. Charge only what the ledger accrued. |
 | Extension | Rentals are open-ended until the borrower ends them; the estimate covers the planned days. Topping up the pre-authorisation when the charge will exceed it depends on the gateway (OPEN DECISION) and isn't built yet. |
-| Direct handoff | The handoff day is the giver's last day; the receiver starts the next day. Never both. |
+| Direct handoff | The giver's last day is the day they ended the rental; the receiver starts on the delivery day (the next day if the giver ended that same day). Waiting days in between are free. |
 | Shoe reaches L | No more wear or charge; the item stays open until returned and still counts in n. |
-| Lost shoe | Charge `remainingValue(p, w, lifetimeCollected, settings)`: K × (A − IQ(w)), or R − lifetimeCollected with catch-up. Split as usual; deposit first, then the card. |
+| Lost shoe | Charge `remainingValue(p, w, lifetimeCollected, settings)`: K × (A − IQ(w)), or R − lifetimeCollected with catch-up. Split merchant first (a new pair: 7,200 → merchant 6,600, platform 600); deposit first, then the card. |
+| Refund (upheld dispute) | Up to the item's charge. Up to that item's merchant share comes off the merchant's payout and `merchantCollected`, so later rentals pay the merchant back first; the rest is the platform's cost. |
 | Buy it now (Phase 2) | Price = `remainingValue`, same as a lost shoe. Close the item first, then sell. |
 | Damage | Assessed separately against the deposit through a dispute; not part of the rent. |
 | Wrong size within 24 h | Close the item at return; charge only the wear-days used. The return trip is on the platform. |
@@ -223,13 +238,14 @@ All in `src/lib/pricing/__tests__/acceptance.test.ts`. Tolerance 1e-4 on 4-dp va
 | Next renter at wear 100 | Starts at 28.0059 (Option A) or 29.8580 with φ = 1.066133 (Option B) |
 | Three renters, 10% each, full life | Lifetime 6,480.00 |
 | 100-wear-day rental from new | 2,866.11 |
-| Split of 2,866.11 | Merchant 2,627.27, platform 238.84 |
+| Lifetime ratio of 2,866.11 (brief §9) | 2,627.27 / 238.84 (`splitCharge`; previews only) |
+| Merchant first | 2,866.11 against 6,600 owed → all to the merchant; the rental that crosses the target splits at the target; hard test: each merchant gets exactly 1.1 V, the platform 2,800 in all |
 | 4 pairs held one day | Each gains 0.25 wear-day; total ≈ one new pair-day |
-| Merchant-funded 5% idle discount | Same charge as a shared discount; platform share computed on the undiscounted charge |
-| Worked example (section 12) | A 216.89, B 95.81, total 312.70; merchant 286.65, platform 26.05 |
+| Merchant-funded 5% idle discount | Same charge as a promotion; lowers the merchant's lifetime total by its cost (a promotion lowers the platform's) |
+| Worked example (section 12) | A 216.89, B 95.81, total 312.70; all to the merchants (neither target reached) |
 | Estimate vs final | Equal when the plan is kept; estimate leaves shoe state unchanged |
 | Remaining value at wear 100 / idle cost | 7,200 − 2,866.1143; 1.9726 a day; 5% on 30 days ≈ 22 idle days |
-| Guards | Double booking, more than 4 pairs, lifespan outside limits, value ≤ 0, discount outside [0, 1) all throw |
+| Guards | Double booking, more than 4 pairs, lifespan outside 183–730 at listing (unless extended), value ≤ 0, discount outside [0, 1) all throw |
 
 ### Scenario inputs
 
@@ -268,9 +284,11 @@ Shoes: A (6,000 LKR, new) and B (8,000 LKR, wear 50), both L = 365. The borrower
 
 | Item | Wear | Price per wear-day, start → end | Charged | Merchant | Platform |
 |---|---|---|---|---|---|
-| A (6,000 LKR) | 0 → 7.5 | 28.92 → 28.91 | 216.89 | 198.82 | 18.07 |
-| B (8,000 LKR) | 50 → 52.5 | 38.33 → 38.31 | 95.81 | 87.83 | 7.98 |
-| **Invoice** | | | **312.70** | **286.65** | **26.05** |
+| A (6,000 LKR) | 0 → 7.5 | 28.92 → 28.91 | 216.89 | 216.89 | 0.00 |
+| B (8,000 LKR) | 50 → 52.5 | 38.33 → 38.31 | 95.81 | 95.81 | 0.00 |
+| **Invoice** | | | **312.70** | **312.70** | **0.00** |
+
+Merchant first: A's merchant is owed 6,600 and B's 8,800 × (1 − IQ(50) ÷ A), so both rentals go entirely to the merchants. (The reference split them 286.65 / 26.05.)
 
 A = K_A × [IQ(7.5) − IQ(0)] and B = K_B × [IQ(52.5) − IQ(50)]. Application code never computes charges by hand; it calls the engine.
 
@@ -278,7 +296,7 @@ A = K_A × [IQ(7.5) − IQ(0)] and B = K_B × [IQ(52.5) − IQ(50)]. Application
 
 ## 13. Where it lives
 
-- `src/lib/pricing/`: `curveParams`, `validateListing`, `Q`, `IQ`, `priceAt`, `shownPrice`, `curveIncome`, `curvePoints`, `targetIncome`, `incomeBetween`, `catchUpPhi`, `lifetimeCollected`, `remainingValue`, `splitCharge` (exact, for previews), `chargedAmounts`, `bundleDailyCost`, `idleCostPerDay`, `breakEvenIdleDays`.
-- `src/lib/wear-ledger/`: `wearAdded`, `wearEnd`, `colomboDay`, `dayToDate` / `dateToDay` / `dayNumber`, `handoffDays`, `lifeLeft`; `runLedger`, `estimate`, `buildInvoice` (accrual.ts).
-- `src/server/catalogue/pricing.ts`: `shoeCurve`, `nextPhi`, `shoePricing` (a shoe priced with its own settings snapshot).
-- Close-out: `closeItem` in `src/server/booking/lifecycle.ts`. Estimate: `quoteBundle` in `src/server/booking/checkout.ts`. Lost pair: `markLost` in `src/server/payments/index.ts`.
+- `src/lib/pricing/`: `curveParams`, `validateListing`, `Q`, `IQ`, `priceAt`, `shownPrice`, `curveIncome`, `curvePoints`, `targetIncome`, `incomeBetween`, `catchUpPhi`, `lifetimeCollected`, `remainingValue`, `splitCharge` (proportional, for previews), `merchantTarget`, `merchantOutstanding`, `chargedAmounts` (merchant first), `bundleDailyCost`, `idleCostPerDay`, `breakEvenIdleDays`.
+- `src/lib/wear-ledger/`: `wearAdded`, `wearEnd`, `colomboDay`, `dayToDate` / `dateToDay` / `dayNumber`, `receiverFirstDay`, `lifeLeft`; `runLedger`, `estimate`, `buildInvoice` (accrual.ts; carries each shoe's merchant balance across its items).
+- `src/server/catalogue/pricing.ts`: `shoeCurve`, `nextPhi`, `shoePricing`, `merchantOwed`, `merchantFundedDiscounts` (a shoe priced with its own settings snapshot). `src/server/catalogue/index.ts`: `listingLimits`, `setLifespanExtension`, `monthsToDays` / `daysToMonths`.
+- End of a holding: `endRental`; close-out: `closeItem`, both in `src/server/booking/lifecycle.ts`. Estimate: `quoteBundle` in `src/server/booking/checkout.ts`. Lost pair: `markLost` in `src/server/payments/index.ts`.

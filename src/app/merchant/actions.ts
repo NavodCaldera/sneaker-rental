@@ -10,6 +10,7 @@ import {
   createShoe,
   deleteDraft,
   getMerchantForUser,
+  listingLimits,
   publishShoe,
   shoeSchema,
   updatePayoutAccount,
@@ -33,7 +34,7 @@ export async function createShoeAction(
   formData: FormData,
 ): Promise<ActionState> {
   const merchant = await currentMerchant();
-  const limits = await getActiveSettings();
+  const limits = listingLimits(await getActiveSettings(), merchant);
   const parsed = shoeSchema(limits).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
 

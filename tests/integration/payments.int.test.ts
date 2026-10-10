@@ -40,7 +40,7 @@ describe("checkout → return → charge → deposit release (mock gateway)", ()
     ]);
 
     await arrive(await deliveryFor(item.id, "DELIVER"), day(0));
-    await endRental(borrower.id, item.id, day(98));
+    await endRental(borrower.id, item.id, day(99));
     await arrive(await deliveryFor(item.id, "COLLECT"), day(99));
     await recordCondition(merchant.id, { itemId: item.id, grade: "B", photos: photos() }, day(99));
 
@@ -136,7 +136,7 @@ describe("lost pair (§4 rule 3)", () => {
     // First borrower wears it for 100 days and returns it.
     const first = await rentOne(other.id, shoe.id);
     await arrive(await deliveryFor(first.item.id, "DELIVER"), day(0));
-    await endRental(other.id, first.item.id, day(98));
+    await endRental(other.id, first.item.id, day(99));
     await arrive(await deliveryFor(first.item.id, "COLLECT"), day(99));
     await recordCondition(
       merchant.id,
@@ -148,7 +148,10 @@ describe("lost pair (§4 rule 3)", () => {
     const { item } = await rentOne(borrower.id, shoe.id);
     await arrive(await deliveryFor(item.id, "DELIVER"), day(101));
     const lost = await markLost(item.id, day(110));
-    // R − F(100) = 7,200 − 2,866.11
+    // R − F(100) = 7,200 − 2,866.11. Merchant first: the merchant has had 2,866.11 of their
+    // 6,600, so they get the remaining 3,733.89 and the platform its 600.
     expect(lost.charge!.toFixed(2)).toBe("4333.89");
+    expect(lost.merchantShare!.toFixed(2)).toBe("3733.89");
+    expect(lost.platformShare!.toFixed(2)).toBe("600.00");
   });
 });

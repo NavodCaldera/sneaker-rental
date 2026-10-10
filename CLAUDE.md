@@ -20,7 +20,7 @@ Conventions:
 - **Server code** lives in `src/server/<module>/`, imports `server-only`, and uses `db` from `src/server/db.ts`. Pages call services; services hold the business logic and are integration-tested.
 - **Prisma 7:** `prisma migrate dev` does not regenerate the client, so use `npm run db:migrate` (migrate + generate).
 - **Settings:** a listed shoe is priced with the settings version it was listed under (`Shoe.settingsId`). Use `shoeCurve(shoe)` / `shoePricing(shoe)` from `src/server/catalogue/pricing.ts` (include `settings: true` in the query). `getActiveSettings()` is for operational values (deposit, bundle size, windows, fees), new listings and previews.
-- **Days:** wear-ledger days are Asia/Colombo calendar dates, both the first and the last day count, and a handoff day belongs to the giver (the receiver starts the next day). They live in `RentalItem.firstDay` / `lastDay`.
+- **Days:** wear-ledger days are Asia/Colombo calendar dates in `RentalItem.firstDay` / `lastDay`, both counted. The first day is the delivery day; the last day is the day the borrower presses End rental, so waiting for the driver is free. A handoff receiver starts on the delivery day, or the day after the giver's last day if that is later.
 
 ## Databases
 
@@ -34,7 +34,7 @@ Conventions:
 
 ## Hard rules (§9)
 
-1. **Prices and wear come only from the pricing engine (`src/lib/pricing/`) and the wear ledger (`src/lib/wear-ledger/`).** No other module computes a price, a charge, a share or a wear value. Adding up engine outputs (a shoe's collected total, payment and payout sums) is bookkeeping and is fine; deriving a new price, share or wear figure is not. Charged amounts come from `chargedAmounts()`: charge rounded, platform share rounded, merchant share is the remainder.
+1. **Prices and wear come only from the pricing engine (`src/lib/pricing/`) and the wear ledger (`src/lib/wear-ledger/`).** No other module computes a price, a charge, a share or a wear value. Adding up engine outputs (a shoe's collected total, payment and payout sums) is bookkeeping and is fine; deriving a new price, share or wear figure is not. Charged amounts come from `chargedAmounts()`: charge rounded, then **merchant first**: the merchant's share fills what they are still owed of (1 + μm) × V, and the platform gets the rest.
 2. **Keep values unrounded; round only what is shown or charged, to 2 decimals.** No JS `number` for money or wear. Use decimal.js in code and `Decimal` in Prisma.
 3. **Discounts never stack.** Always start from the curve price at the shoe's current wear.
 4. **Exact curve ratios:** m = 200·L/365, β = 0.03·365/L, q = 0.30.
@@ -55,7 +55,7 @@ Build the **MVP only** (§10 roadmap): pricing engine and tests, listings with c
 | --------------------------------------- | ---------------------- | --------------------------------------------------------------- |
 | μm / μp                                 | 0.10 / 0.10            | Open decision: the split may change                             |
 | Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03    | PricingSettings; reference lifespan 365                         |
-| Declared lifespan limits                | 60–1,095 wear-days     | Open decision                                                   |
+| Declared lifespan limits                | 6–24 months (183–730)  | Admin can extend a merchant's maximum on request                |
 | φ (catch-up)                            | 1, off                 | Discounts funded from margin                                    |
 | Deposit                                 | 5,000 LKR × pairs held | §2 fixes it; §10 still lists it as open, so keep it in settings |
 | Max pairs per bundle                    | 4                      |                                                                 |
