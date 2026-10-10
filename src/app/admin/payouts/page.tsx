@@ -4,6 +4,7 @@ import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 import { formatDateTime, formatLKR } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { isoWeek, payoutPreview, recentPayouts, runPayoutBatch } from "@/server/payouts";
+import { getActiveSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "Payouts" };
 
@@ -16,12 +17,16 @@ async function runBatchAction() {
 
 export default async function AdminPayouts() {
   await requireUser("ADMIN");
-  const [preview, history] = await Promise.all([payoutPreview(), recentPayouts()]);
+  const [preview, history, settings] = await Promise.all([
+    payoutPreview(),
+    recentPayouts(),
+    getActiveSettings(),
+  ]);
   return (
     <main className="flex flex-col gap-8">
       <PageHeader
         title="Payouts"
-        description={`Merchant shares become payable 3 days after a rental closes, unless disputed. This week: ${isoWeek(new Date())}.`}
+        description={`Merchant shares become payable ${settings.disputeWindowDays} days after a rental closes, unless disputed. This week: ${isoWeek(new Date())}.`}
         actions={
           <form action={runBatchAction}>
             <Button type="submit" disabled={preview.length === 0}>

@@ -1,8 +1,8 @@
 import "server-only";
 import type { Delivery, Grade } from "@/generated/prisma/client";
-import { roundMoney, toD } from "@/lib/decimal";
-import { catchUpPhi, curveParams, incomeBetween, splitCharge } from "@/lib/pricing";
-import { colomboDay, wearAdded, wearEnd } from "@/lib/wear-ledger";
+import { toD } from "@/lib/decimal";
+import { catchUpPhi, chargedAmounts, curveParams, incomeBetween } from "@/lib/pricing";
+import { atEndOfLife, colomboDay, wearAdded, wearEnd } from "@/lib/wear-ledger";
 import { type Tx, db } from "../db";
 import { requestDelivery } from "../logistics/requests";
 import { settleItems } from "../payments";
@@ -43,8 +43,12 @@ export async function endRental(borrowerId: string, itemId: string, now = new Da
 
     // Don't hand off a pair that will reach end of life with this holding.
     const holdings = await loadHoldings(tx, borrowerId);
-    const projected = toD(item.shoe.wear).plus(wearAdded(holdings, item.id, asOfToday(now)));
-    const endOfLife = projected.gte(item.shoe.lifespanDays);
+    const projected = wearEnd(
+      item.shoe.wear.toString(),
+      wearAdded(holdings, item.id, asOfToday(now)),
+      item.shoe.lifespanDays,
+    );
+    const endOfLife = atEndOfLife(projected, item.shoe.lifespanDays);
 
     if (next && !endOfLife) {
       return requestDelivery(tx, {
@@ -282,15 +286,10 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
     toD(item.discount),
     phi,
   );
-  const split = splitCharge(settings, income, {
+  const { charge, merchantShare, platformShare } = chargedAmounts(settings, income, {
     undiscounted,
     fundedBy: item.discountFunding === "MERCHANT" ? "merchant" : "platform",
   });
-  // Charged amounts: round the charge and the merchant share; the platform share is the
-  // remainder so the two always add up to the charge to the cent.
-  const charge = roundMoney(income);
-  const merchantShare = roundMoney(split.merchant);
-  const platformShare = charge.minus(merchantShare);
 
   const closed = await tx.rentalItem.update({
     where: { id: item.id },
@@ -336,7 +335,7 @@ export async function markCleaned(merchantId: string, shoeId: string) {
   const shoe = await db.shoe.findFirst({ where: { id: shoeId, merchantId } });
   if (!shoe) throw new BookingError("Shoe not found");
   if (shoe.status !== "CLEANING") throw new BookingError("This pair isn't waiting for cleaning");
-  const retire = toD(shoe.wear).gte(shoe.lifespanDays) || shoe.latestGrade === "D";
+  const retire = atEndOfLife(shoe.wear.toString(), shoe.lifespanDays) || shoe.latestGrade === "D";
   return db.shoe.update({
     where: { id: shoeId },
     data: retire ? { status: "RETIRED", retiredAt: new Date() } : { status: "AVAILABLE" },

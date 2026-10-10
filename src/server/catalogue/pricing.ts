@@ -9,6 +9,7 @@ import {
   remainingValue,
   splitCharge,
 } from "@/lib/pricing";
+import { wearRemaining } from "@/lib/wear-ledger";
 
 /**
  * View models for prices shown in the catalogue. Every number comes from the pricing
@@ -36,7 +37,7 @@ export function shoePricing(
     priceEnd: priceAt(p, p.L).toString(),
     lifetimeIncome: p.R.toString(),
     remainingValue: remainingValue(p, wear).toString(),
-    wearRemaining: p.L.minus(wear).toString(),
+    wearRemaining: wearRemaining(wear, p.L).toString(),
   };
 }
 

@@ -6,6 +6,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/server/auth/session";
 import { getMerchantForUser } from "@/server/catalogue";
 import { db } from "@/server/db";
+import { getActiveSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "Record condition" };
 
@@ -20,6 +21,7 @@ export default async function MerchantConditionPage({
     include: { shoe: true, rental: { include: { borrower: { select: { name: true } } } } },
   });
   if (!item) notFound();
+  const settings = await getActiveSettings();
 
   return (
     <main className="max-w-2xl">
@@ -30,7 +32,7 @@ export default async function MerchantConditionPage({
       <Card>
         <p className="mb-4 text-sm text-subtle">
           Recording condition closes the rental: the borrower is charged for the wear they added and
-          your share joins a payout after the 3-day dispute window.
+          your share joins a payout after the {settings.disputeWindowDays}-day dispute window.
         </p>
         <ConditionForm action={recordConditionAction.bind(null, item.id, "/merchant/returns")} />
       </Card>

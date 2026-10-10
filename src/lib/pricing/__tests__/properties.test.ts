@@ -135,3 +135,18 @@ describe("charges", () => {
     expect(() => curvePoints(p, 1)).toThrow(RangeError);
   });
 });
+
+describe("chargedAmounts", () => {
+  it("rounds charge and merchant share; platform share is the remainder", async () => {
+    const { chargedAmounts } = await import("..");
+    const r = chargedAmounts(S, "2866.1142780659993");
+    expect(r.charge.toFixed(2)).toBe("2866.11");
+    expect(r.merchantShare.toFixed(2)).toBe("2627.27");
+    expect(r.platformShare.toFixed(2)).toBe("238.84");
+    // A case where rounding both shares separately would drift by a cent.
+    for (const x of ["0.05", "10.015", "333.335", "1.005"]) {
+      const a = chargedAmounts(S, x);
+      expect(a.merchantShare.plus(a.platformShare).eq(a.charge)).toBe(true);
+    }
+  });
+});

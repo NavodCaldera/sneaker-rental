@@ -4,6 +4,7 @@ import { formatDate, formatLKR } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { getMerchantForUser } from "@/server/catalogue";
 import { merchantPayouts } from "@/server/payouts";
+import { getActiveSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "Payouts" };
 
@@ -16,13 +17,16 @@ const STATE = {
 export default async function MerchantPayouts() {
   const user = await requireUser("MERCHANT");
   const merchant = await getMerchantForUser(user.id);
-  const { payouts, waiting } = await merchantPayouts(merchant.id);
+  const [{ payouts, waiting }, settings] = await Promise.all([
+    merchantPayouts(merchant.id),
+    getActiveSettings(),
+  ]);
 
   return (
     <main className="flex flex-col gap-8">
       <PageHeader
         title="Payouts"
-        description={`Your share of each rental is paid weekly, 3 days after the rental closes. Paid to ${merchant.payoutAccount ?? "— add a payout account"}.`}
+        description={`Your share of each rental is paid weekly, ${settings.disputeWindowDays} days after the rental closes. Paid to ${merchant.payoutAccount ?? "— add a payout account"}.`}
       />
       <section>
         <h2 className="mb-3 font-medium">Coming up</h2>

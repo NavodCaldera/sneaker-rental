@@ -1,7 +1,7 @@
 import "server-only";
 import type { PaymentKind } from "@/generated/prisma/client";
 import { D, roundMoney, toD } from "@/lib/decimal";
-import { curveParams, remainingValue, splitCharge } from "@/lib/pricing";
+import { chargedAmounts, curveParams, remainingValue } from "@/lib/pricing";
 import { db } from "../db";
 import { getActiveSettings, toPricingSettings } from "../settings";
 import { type GatewayResult, gateway } from "./gateway";
@@ -170,9 +170,7 @@ export async function markLost(itemId: string, now = new Date()) {
     const params = curveParams(toD(item.shoe.value), item.shoe.lifespanDays, settings);
     const wStart = toD(item.shoe.wear);
     const owed = remainingValue(params, wStart);
-    const split = splitCharge(settings, owed);
-    const charge = roundMoney(owed);
-    const merchantShare = roundMoney(split.merchant);
+    const { charge, merchantShare, platformShare } = chargedAmounts(settings, owed);
 
     await tx.rentalItem.update({
       where: { id: item.id },
@@ -187,7 +185,7 @@ export async function markLost(itemId: string, now = new Date()) {
         discountCost: "0",
         charge: charge.toFixed(2),
         merchantShare: merchantShare.toFixed(2),
-        platformShare: charge.minus(merchantShare).toFixed(2),
+        platformShare: platformShare.toFixed(2),
       },
     });
     await tx.shoe.update({

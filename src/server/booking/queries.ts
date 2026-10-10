@@ -1,7 +1,7 @@
 import "server-only";
 import { toD } from "@/lib/decimal";
 import { curveParams, incomeBetween } from "@/lib/pricing";
-import { wearAdded, wearEnd } from "@/lib/wear-ledger";
+import { cappedWearAdded, wearAdded, wearEnd } from "@/lib/wear-ledger";
 import { db } from "../db";
 import { getActiveSettings, toPricingSettings } from "../settings";
 import { asOfToday, loadHoldings } from "./holdings";
@@ -43,7 +43,7 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
         const wEnd = wearEnd(wStart, added, item.shoe.lifespanDays);
         const params = curveParams(toD(item.shoe.value), item.shoe.lifespanDays, settings);
         live = {
-          wearSoFar: wEnd.minus(wStart).toString(),
+          wearSoFar: cappedWearAdded(wStart, added, item.shoe.lifespanDays).toString(),
           chargeSoFar: incomeBetween(
             params,
             wStart,

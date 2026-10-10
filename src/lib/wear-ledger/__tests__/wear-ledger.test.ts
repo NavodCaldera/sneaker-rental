@@ -61,3 +61,15 @@ describe("wear ledger", () => {
     expect(colomboDay(new Date("2026-10-10T00:00:00+05:30"))).toBe(before);
   });
 });
+
+describe("wear helpers", () => {
+  it("caps added wear, never goes negative on remaining, and flags end of life", async () => {
+    const { cappedWearAdded, wearRemaining, atEndOfLife } = await import("..");
+    expect(cappedWearAdded("360", "10", 365).eq(5)).toBe(true);
+    expect(cappedWearAdded("100", "2.5", 365).eq("2.5")).toBe(true);
+    expect(wearRemaining("100", 365).eq(265)).toBe(true);
+    expect(wearRemaining("400", 365).eq(0)).toBe(true);
+    expect(atEndOfLife("365", 365)).toBe(true);
+    expect(atEndOfLife("364.99", 365)).toBe(false);
+  });
+});

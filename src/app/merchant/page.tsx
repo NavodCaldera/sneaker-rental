@@ -4,7 +4,7 @@ import { Alert, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { formatLKR, formatWear } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
-import { getMerchantForUser, listMerchantShoes } from "@/server/catalogue";
+import { getMerchantForUser, listMerchantShoes, merchantSummary } from "@/server/catalogue";
 import { shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings, toPricingSettings } from "@/server/settings";
 
@@ -13,10 +13,19 @@ export const metadata: Metadata = { title: "My shoes" };
 export default async function MerchantHome() {
   const user = await requireUser("MERCHANT");
   const merchant = await getMerchantForUser(user.id);
-  const [shoes, settings] = await Promise.all([
+  const [shoes, settings, summary] = await Promise.all([
     listMerchantShoes(merchant.id),
     getActiveSettings().then(toPricingSettings),
+    merchantSummary(merchant.id),
   ]);
+  const tiles = [
+    { label: "Available", value: String(summary.available) },
+    { label: "With borrowers", value: String(summary.out) },
+    { label: "Cleaning", value: String(summary.cleaning) },
+    { label: "Rentals closed", value: String(summary.rentalsClosed) },
+    { label: "Earned", value: formatLKR(summary.earned) },
+    { label: "Paid out", value: formatLKR(summary.paidOut) },
+  ];
 
   return (
     <main>
@@ -25,6 +34,14 @@ export default async function MerchantHome() {
         description={merchant.businessName}
         actions={<LinkButton href="/merchant/shoes/new">Add shoe</LinkButton>}
       />
+      <dl className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {tiles.map((t) => (
+          <div key={t.label} className="rounded-xl border border-line p-3">
+            <dt className="text-xs text-subtle">{t.label}</dt>
+            <dd className="mt-1 text-lg font-semibold">{t.value}</dd>
+          </div>
+        ))}
+      </dl>
       <div className="mb-6 flex flex-col gap-2">
         {!merchant.verified && (
           <Alert tone="info">
