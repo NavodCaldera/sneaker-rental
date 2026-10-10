@@ -8,12 +8,15 @@ export function RentPanel({
   shoeId,
   status,
   handoffTaken,
+  releaseOpen,
   signedInAs,
   inBundle,
 }: {
   shoeId: string;
   status: ShoeStatus;
   handoffTaken: boolean;
+  /** A held pair can be reserved once its holder's release window opens */
+  releaseOpen: boolean;
   signedInAs: Role | null;
   inBundle: boolean;
 }) {
@@ -47,7 +50,7 @@ export function RentPanel({
       </form>
     );
   }
-  if (status === "WITH_BORROWER" && !handoffTaken) {
+  if (status === "WITH_BORROWER" && !handoffTaken && releaseOpen) {
     return (
       <Card className="flex flex-col gap-3 text-sm">
         <p>

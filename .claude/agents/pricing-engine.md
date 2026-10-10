@@ -33,10 +33,11 @@ Pure functions, decimal.js only (`D` from `src/lib/decimal.ts`, precision 40), n
 - `merchantTarget(p, w₀, settings, merchantFundedDiscounts)` → (1 + μm)·V·(1 − IQ(w₀)/A) − discounts; `merchantOutstanding(target, merchantCollected)` → never below 0
 - `chargedAmounts(income, { merchantOutstanding, undiscounted })` → `{ charge, merchantShare, platformShare, discountGiven }`: charge = round(income); **merchant first**: merchant = min(charge, round(outstanding)); platform = charge − merchant
 - `splitCharge(settings, amount)`: exact proportional split (the lifetime ratio), for previews only
+- `releaseWindowStart(releaseDay, settings)`, `releaseDiscount(today, releaseDay, settings)` → min(maxDiscount, step × days since the window opened), 0 before it or with no release day
 - `bundleDailyCost(prices[])`, `idleCostPerDay(V, settings)`, `breakEvenIdleDays(p, w0, w1, d, settings)`, `assertDiscount(d)`
 - `roundMoney(x)` → 2 dp, half away from zero, used **only** at display/charge boundaries
 
-`PricingSettings` is passed in as a plain object (merchantMargin, platformMargin, floor, midpointRatio, baseSteepness, refLife, minLife, maxLife, idleDiscountCap, catchUp, capitalRate, holdCostPerDay). The engine never reads config itself. Callers price a listed shoe with that shoe's own settings snapshot.
+`PricingSettings` is passed in as a plain object (merchantMargin, platformMargin, floor, midpointRatio, baseSteepness, refLife, minLife, maxLife, maxDiscount, releaseLeadDays, releaseDiscountStep, catchUp, capitalRate, holdCostPerDay). The engine never reads config itself. Callers price a listed shoe with that shoe's own settings snapshot.
 
 ## Must not
 

@@ -25,7 +25,9 @@ export const DEFAULT_SETTINGS = {
   refLife: 365,
   minLifespanDays: 183, // 6 months
   maxLifespanDays: 730, // 24 months; admins can extend per merchant
-  idleDiscountCap: "0.05",
+  maxDiscount: "0.10", // release discount cap
+  releaseLeadDays: 10,
+  releaseDiscountStep: "0.005",
   capitalRate: "0.12",
   holdCost: "0",
   depositPerPair: "5000",

@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PhotoImg, WearBar } from "@/components/shoe-bits";
 import { Badge, Button, EmptyState, Input, PageHeader, Select } from "@/components/ui";
-import { formatLKR, formatWear } from "@/lib/format";
+import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { browseFacets, browseShoes } from "@/server/catalogue";
-import { shoePricing } from "@/server/catalogue/pricing";
+import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
+import { getActiveSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "Browse" };
 
@@ -20,7 +22,12 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
     category: one(sp.category),
     q: one(sp.q),
   };
-  const [shoes, facets] = await Promise.all([browseShoes(filters), browseFacets()]);
+  const [shoes, facets, active] = await Promise.all([
+    browseShoes(filters),
+    browseFacets(),
+    getActiveSettings(),
+  ]);
+  const today = colomboDay(new Date());
 
   return (
     <main>
@@ -69,7 +76,9 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
       ) : (
         <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {shoes.map((shoe) => {
-            const pricing = shoePricing(shoe);
+            const release = releaseInfo(shoe, active, today);
+            const pricing = shoePricing(shoe, release.discount);
+            const discounted = release.discount.gt(0);
             return (
               <li key={shoe.id}>
                 <Link
@@ -83,11 +92,12 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                       alt=""
                       className="aspect-square w-full rounded-xl transition group-hover:opacity-90"
                     />
-                    {shoe.status === "WITH_BORROWER" && (
-                      <span className="absolute left-2 top-2">
-                        <Badge tone="info">Reserve next</Badge>
-                      </span>
-                    )}
+                    <span className="absolute left-2 top-2 flex flex-col items-start gap-1">
+                      {shoe.status === "WITH_BORROWER" && <Badge tone="info">Reserve next</Badge>}
+                      {discounted && (
+                        <Badge tone="good">{formatPercent(release.discount)} off</Badge>
+                      )}
+                    </span>
                   </div>
                   <div>
                     <div className="text-sm font-medium">
@@ -99,8 +109,18 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                   </div>
                   <div className="text-sm">
                     <span className="font-semibold">{formatLKR(pricing.priceToday)}</span>
+                    {discounted && (
+                      <s className="ml-1 text-xs text-subtle">
+                        {formatLKR(pricing.priceBeforeDiscount)}
+                      </s>
+                    )}
                     <span className="text-subtle"> / wear-day</span>
                   </div>
+                  {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
+                    <div className="text-xs text-subtle">
+                      Free from {formatDate(dayToDate(release.releaseDay))}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 text-xs text-subtle">
                     <div className="w-16">
                       <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />

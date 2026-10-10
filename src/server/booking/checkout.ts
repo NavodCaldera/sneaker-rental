@@ -3,13 +3,21 @@ import { z } from "zod";
 import type { RentalItemStatus } from "@/generated/prisma/client";
 import { D, toD } from "@/lib/decimal";
 import { bundleDailyCost, shownPrice } from "@/lib/pricing";
+import { formatDate } from "@/lib/format";
 import {
   type LedgerItem,
   type LedgerShoe,
   atEndOfLife,
+  dayToDate,
   estimate as ledgerEstimate,
 } from "@/lib/wear-ledger";
-import { type PricedShoe, merchantOwed, nextPhi, shoeCurve } from "../catalogue/pricing";
+import {
+  type PricedShoe,
+  merchantOwed,
+  nextPhi,
+  releaseInfo,
+  shoeCurve,
+} from "../catalogue/pricing";
 import { db } from "../db";
 import { requestDelivery } from "../logistics/requests";
 import { PaymentError, authorizeRental } from "../payments";
@@ -34,7 +42,11 @@ export type QuoteLine = {
   size: string;
   photoId?: string;
   mode: "deliver" | "handoff";
+  /** Price per wear-day after the release discount */
   priceToday: string;
+  priceBeforeDiscount: string;
+  /** Release discount locked in for this pair's whole rental (0 = none) */
+  discount: string;
   wear: string;
   lifespanDays: number;
   estimate: string;
@@ -69,15 +81,17 @@ function ledgerShoe(id: string, shoe: PricedShoe): LedgerShoe {
  * Prices a bundle: today's price per pair, the bundle's daily cost (each pair accrues 1/n
  * per day across all pairs held), the pre-auth estimate and the deposit. The estimate runs
  * the wear ledger on copies of the shoes over the planned days, counting the pairs the
- * borrower already holds as held throughout (pricing-spec.md "Booking").
+ * borrower already holds as held throughout (pricing-spec.md "Booking"). A pair whose last
+ * holder's release window has opened carries the release discount for the day of booking.
  */
 export async function quoteBundle(
   borrowerId: string | null,
   shoeIds: string[],
   plannedDays = DEFAULT_PLANNED_DAYS,
   settingsRow?: SettingsRow,
+  now = new Date(),
 ): Promise<BundleQuote> {
-  const row = settingsRow ?? (await getActiveSettings());
+  const row = settingsRow ?? (await getActiveSettings(now));
   const heldItems = borrowerId
     ? await db.rentalItem.findMany({
         where: { rental: { borrowerId }, status: { in: HELD_STATUSES } },
@@ -109,18 +123,19 @@ export async function quoteBundle(
   const listed = shoeIds.flatMap((id) => shoes.filter((s) => s.id === id));
 
   // Planned days: from today through today + plannedDays − 1, both inclusive.
-  const first = asOfToday();
+  const first = asOfToday(now);
   const last = first + plannedDays - 1;
+  const release = new Map(listed.map((s) => [s.id, releaseInfo(s, row, first)]));
   const ledgerShoes = new Map<string, LedgerShoe>();
   const owedByKey = new Map<string, D>();
   const ledgerItems: LedgerItem[] = [];
-  const plan = (key: string, shoe: PricedShoe) => {
+  const plan = (key: string, shoe: PricedShoe, discount: D) => {
     ledgerShoes.set(key, ledgerShoe(key, shoe));
     owedByKey.set(key, merchantOwed(shoe).outstanding);
-    ledgerItems.push({ id: key, borrowerId: "me", shoeId: key, start: first, end: last });
+    ledgerItems.push({ id: key, borrowerId: "me", shoeId: key, start: first, end: last, discount });
   };
-  for (const h of heldItems) plan(`held:${h.id}`, h.shoe);
-  for (const shoe of listed) plan(`new:${shoe.id}`, shoe);
+  for (const h of heldItems) plan(`held:${h.id}`, h.shoe, toD(h.discount));
+  for (const shoe of listed) plan(`new:${shoe.id}`, shoe, release.get(shoe.id)!.discount);
   const invoice = ledgerEstimate(ledgerItems, ledgerShoes, (key) => owedByKey.get(key)!, {
     maxPairs: Math.max(row.maxPairsPerBundle, totalPairs),
   });
@@ -129,7 +144,9 @@ export async function quoteBundle(
   const lines: QuoteLine[] = listed.map((shoe) => {
     const { params } = shoeCurve(shoe);
     const wear = toD(shoe.wear);
-    const problem = lineProblem(shoe, borrowerId);
+    const info = release.get(shoe.id)!;
+    const phi = nextPhi(shoe);
+    const problem = lineProblem(shoe, borrowerId, info);
     if (problem) problems.push(`${shoe.brand} ${shoe.model}: ${problem}`);
     return {
       shoeId: shoe.id,
@@ -138,7 +155,9 @@ export async function quoteBundle(
       size: shoe.size,
       photoId: shoe.photos[0]?.id,
       mode: shoe.status === "WITH_BORROWER" ? ("handoff" as const) : ("deliver" as const),
-      priceToday: shownPrice(params, wear, 0, nextPhi(shoe)).toString(),
+      priceToday: shownPrice(params, wear, info.discount, phi).toString(),
+      priceBeforeDiscount: shownPrice(params, wear, 0, phi).toString(),
+      discount: info.discount.toString(),
       wear: wear.toString(),
       lifespanDays: shoe.lifespanDays,
       estimate: estimateFor(shoe.id).charge.toFixed(2),
@@ -168,12 +187,22 @@ type ShoeForLine = {
   rentalItems: { status: RentalItemStatus; rental: { borrowerId: string } }[];
 };
 
-function lineProblem(shoe: ShoeForLine, borrowerId: string | null): string | undefined {
+function lineProblem(
+  shoe: ShoeForLine,
+  borrowerId: string | null,
+  release: { open: boolean; opensOn: number | null },
+): string | undefined {
   if (!shoe.merchant.verified) return "not available";
   if (atEndOfLife(shoe.wear.toString(), shoe.lifespanDays)) return "at end of life";
   if (shoe.status === "AVAILABLE") return undefined;
   if (shoe.status !== "WITH_BORROWER") return "no longer available";
   if (shoe.rentalItems.some((i) => i.status === "WAITING_HANDOFF")) return "already reserved next";
+  // A held pair opens for the next borrower in its holder's release window (§8).
+  if (!release.open) {
+    return release.opensOn === null
+      ? "not open for reservations"
+      : `opens for reservations on ${formatDate(dayToDate(release.opensOn))}`;
+  }
   if (borrowerId && shoe.rentalItems.some((i) => i.rental.borrowerId === borrowerId)) {
     return "you're holding this pair";
   }
@@ -187,13 +216,15 @@ export const checkoutSchema = z.object({
 
 /**
  * Books a bundle (§5.2 step 3). Available pairs are reserved and a delivery is requested;
- * pairs held by another borrower join the handoff queue. Payment (pre-auth + deposit) is
- * attached by the payments module.
+ * pairs held by another borrower join the handoff queue. Each item keeps its planned days
+ * (its release day) and the release discount of the day of booking. Payment (pre-auth +
+ * deposit) is attached by the payments module.
  */
 export async function checkout(
   borrowerId: string,
   shoeIds: string[],
   input: z.infer<typeof checkoutSchema>,
+  now = new Date(),
 ) {
   const unique = [...new Set(shoeIds)];
   if (unique.length === 0) throw new BookingError("Your bundle is empty");
@@ -201,8 +232,8 @@ export async function checkout(
   if (borrower.role !== "BORROWER") throw new BookingError("Only borrowers can rent");
   if (borrower.locked) throw new BookingError("Your account is locked");
 
-  const settingsRow = await getActiveSettings();
-  const quote = await quoteBundle(borrowerId, unique, input.plannedDays, settingsRow);
+  const settingsRow = await getActiveSettings(now);
+  const quote = await quoteBundle(borrowerId, unique, input.plannedDays, settingsRow, now);
   if (quote.lines.length !== unique.length)
     throw new BookingError("Some pairs are no longer listed");
   if (quote.problems.length) throw new BookingError(quote.problems[0]);
@@ -219,6 +250,14 @@ export async function checkout(
     });
 
     for (const line of quote.lines) {
+      const terms = {
+        plannedDays: input.plannedDays,
+        discount: line.discount,
+        // OPEN DECISION: who funds the release discount. The platform does for now, so the
+        // merchant is still paid first; discounts beyond the platform's margin leave the
+        // merchant short of their target.
+        discountFunding: new D(line.discount).gt(0) ? ("PLATFORM" as const) : null,
+      };
       if (line.mode === "deliver") {
         // Conditional update: fails if someone else reserved the pair in the meantime.
         const { count } = await tx.shoe.updateMany({
@@ -228,7 +267,7 @@ export async function checkout(
         if (count === 0) throw new BookingError(`${line.brand} ${line.model} was just taken`);
         const shoe = await tx.shoe.findUniqueOrThrow({ where: { id: line.shoeId } });
         const item = await tx.rentalItem.create({
-          data: { rentalId: rental.id, shoeId: line.shoeId, status: "AWAITING_DELIVERY" },
+          data: { rentalId: rental.id, shoeId: line.shoeId, status: "AWAITING_DELIVERY", ...terms },
         });
         await requestDelivery(tx, {
           type: "DELIVER",
@@ -244,7 +283,7 @@ export async function checkout(
         if (taken > 0)
           throw new BookingError(`${line.brand} ${line.model} is already reserved next`);
         await tx.rentalItem.create({
-          data: { rentalId: rental.id, shoeId: line.shoeId, status: "WAITING_HANDOFF" },
+          data: { rentalId: rental.id, shoeId: line.shoeId, status: "WAITING_HANDOFF", ...terms },
         });
       }
     }

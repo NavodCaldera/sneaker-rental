@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import type { PricingSettings as PricingSettingsRow } from "@/generated/prisma/client";
+import { D } from "@/lib/decimal";
 import { type PricingSettings } from "@/lib/pricing";
 import { db } from "../db";
 
@@ -30,17 +31,17 @@ export function toPricingSettings(row: SettingsRow): PricingSettings {
     refLife: row.refLife,
     minLife: row.minLifespanDays,
     maxLife: row.maxLifespanDays,
-    idleDiscountCap: row.idleDiscountCap.toString(),
+    maxDiscount: row.maxDiscount.toString(),
+    releaseLeadDays: row.releaseLeadDays,
+    releaseDiscountStep: row.releaseDiscountStep.toString(),
     catchUp: row.catchUpEnabled,
     capitalRate: row.capitalRate.toString(),
     holdCostPerDay: row.holdCost.toString(),
   };
 }
 
-const ratio = z
-  .string()
-  .trim()
-  .regex(/^\d+(\.\d+)?$/, "Enter a decimal number");
+const RATIO = /^\d+(\.\d+)?$/;
+const ratio = z.string().trim().regex(RATIO, "Enter a decimal number");
 const money = z
   .string()
   .trim()
@@ -56,7 +57,10 @@ export const settingsSchema = z
     refLife: z.coerce.number().int().min(1).max(3650),
     minLifespanDays: z.coerce.number().int().min(1).max(3650),
     maxLifespanDays: z.coerce.number().int().min(1).max(3650),
-    idleDiscountCap: ratio,
+    // Zod runs this even when the format check failed, so re-check before parsing.
+    maxDiscount: ratio.refine((v) => RATIO.test(v) && new D(v).lt(1), "Must be below 1"),
+    releaseLeadDays: z.coerce.number().int().min(0).max(90),
+    releaseDiscountStep: ratio,
     capitalRate: ratio,
     holdCost: money,
     depositPerPair: money,

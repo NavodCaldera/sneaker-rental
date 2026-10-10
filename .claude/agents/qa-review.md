@@ -30,6 +30,7 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
    - [ ] Wear-ledger days are inclusive; a holding ends on the End-rental day (waiting for the driver is free); a shoe is never held by two items on one day.
    - [ ] No hard-coded settings values (0.10, 5000, 3 days, 4 pairs, 183 / 730 lifespan limits) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
+   - [ ] The release discount comes from `releaseDiscount`, is fixed on the item at checkout, and never reaches the current holder.
    - [ ] MVP scope respected (§10). No unrequested Phase 2/3 features.
    - [ ] Agents stayed in their owned directories.
 

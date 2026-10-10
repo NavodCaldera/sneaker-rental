@@ -13,6 +13,7 @@ import {
 import { curvePreview, shoeCurve, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings, toPricingSettings } from "@/server/settings";
 import { PhotoError } from "@/server/storage";
+import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { TEST_SETTINGS, makeUser, resetDb } from "./helpers";
 
 beforeEach(resetDb);
@@ -176,6 +177,16 @@ describe("browsing and prices", () => {
           status: "WITH_BORROWER",
           size: "UK 10",
           brand: "Adidas",
+          // Holder's plan ends in 5 days: inside the 10-day release window, so shown.
+          releaseDay: dayToDate(colomboDay(new Date()) + 5),
+        },
+        {
+          ...base,
+          merchantId: verified.merchant!.id,
+          status: "WITH_BORROWER",
+          brand: "Puma",
+          // Plan ends in 30 days: not open for reservations yet, so hidden.
+          releaseDay: dayToDate(colomboDay(new Date()) + 30),
         },
         { ...base, merchantId: verified.merchant!.id, status: "DRAFT" },
         { ...base, merchantId: verified.merchant!.id, status: "RETIRED" },

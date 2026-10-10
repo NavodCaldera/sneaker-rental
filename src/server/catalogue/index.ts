@@ -1,8 +1,9 @@
 import "server-only";
 import { z } from "zod";
 import { D } from "@/lib/decimal";
-import type { PhotoKind, Prisma, ShoeStatus } from "@/generated/prisma/client";
+import type { PhotoKind, Prisma } from "@/generated/prisma/client";
 import { validateListing } from "@/lib/pricing";
+import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { db } from "../db";
 import { type SettingsRow, getActiveSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
@@ -211,15 +212,25 @@ export async function getMerchantShoe(merchantId: string, shoeId: string) {
   return shoe;
 }
 
-/** Shoes a borrower can see: available now, or held by someone and open for a handoff reservation. */
-export const BROWSABLE: ShoeStatus[] = ["AVAILABLE", "WITH_BORROWER"];
+/**
+ * Available pairs, plus held pairs whose release window has opened: from `releaseLeadDays`
+ * before the holder's planned last day (day 81 of a 90-day rental), so the next borrower
+ * can reserve them at the release discount (pricing-spec.md §8).
+ */
+async function browsableWhere(now: Date): Promise<Prisma.ShoeWhereInput> {
+  const active = await getActiveSettings(now);
+  const openBy = dayToDate(colomboDay(now) + active.releaseLeadDays - 1);
+  return {
+    merchant: { verified: true },
+    OR: [{ status: "AVAILABLE" }, { status: "WITH_BORROWER", releaseDay: { lte: openBy } }],
+  };
+}
 
 export type BrowseFilters = { size?: string; brand?: string; category?: string; q?: string };
 
-export async function browseShoes(filters: BrowseFilters) {
+export async function browseShoes(filters: BrowseFilters, now = new Date()) {
   const where: Prisma.ShoeWhereInput = {
-    status: { in: BROWSABLE },
-    merchant: { verified: true },
+    AND: [await browsableWhere(now)],
     ...(filters.size && { size: filters.size }),
     ...(filters.brand && { brand: filters.brand }),
     ...(filters.category && { category: filters.category }),
@@ -241,9 +252,9 @@ export async function browseShoes(filters: BrowseFilters) {
   });
 }
 
-export async function browseFacets() {
+export async function browseFacets(now = new Date()) {
   const shoes = await db.shoe.findMany({
-    where: { status: { in: BROWSABLE }, merchant: { verified: true } },
+    where: await browsableWhere(now),
     select: { size: true, brand: true, category: true },
   });
   const uniq = (xs: string[]) =>

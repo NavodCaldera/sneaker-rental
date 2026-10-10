@@ -4,10 +4,12 @@ import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { Card } from "@/components/ui";
 import { D } from "@/lib/decimal";
-import { formatLKR, formatWear } from "@/lib/format";
+import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { colomboDay, dayToDate } from "@/lib/wear-ledger";
+import { getActiveSettings } from "@/server/settings";
 import { getCurrentUser } from "@/server/auth/session";
 import { getListing } from "@/server/catalogue";
-import { shoeCurvePreview, shoePricing } from "@/server/catalogue/pricing";
+import { releaseInfo, shoeCurvePreview, shoePricing } from "@/server/catalogue/pricing";
 import { getBundle } from "@/server/booking/bundle";
 import { RentPanel } from "./rent-panel";
 
@@ -18,9 +20,16 @@ export async function generateMetadata({ params }: PageProps<"/shoes/[id]">): Pr
 
 export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
   const { id } = await params;
-  const [shoe, user, bundle] = await Promise.all([getListing(id), getCurrentUser(), getBundle()]);
+  const [shoe, user, bundle, active] = await Promise.all([
+    getListing(id),
+    getCurrentUser(),
+    getBundle(),
+    getActiveSettings(),
+  ]);
   if (!shoe) notFound();
-  const pricing = shoePricing(shoe);
+  const release = releaseInfo(shoe, active, colomboDay(new Date()));
+  const pricing = shoePricing(shoe, release.discount);
+  const discounted = release.discount.gt(0);
   const preview = shoeCurvePreview(shoe);
   const [main, ...rest] = shoe.photos;
 
@@ -65,6 +74,23 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
         <div>
           <span className="text-3xl font-semibold">{formatLKR(pricing.priceToday)}</span>
           <span className="text-subtle"> / wear-day today</span>
+          {discounted && (
+            <p className="mt-1 text-sm">
+              <s className="text-subtle">{formatLKR(pricing.priceBeforeDiscount)}</s>{" "}
+              <span className="font-medium text-good">
+                {formatPercent(release.discount)} off for your whole rental
+              </span>{" "}
+              if you book today
+            </p>
+          )}
+          {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
+            <p className="mt-1 text-sm text-subtle">
+              Its current rental ends {formatDate(dayToDate(release.releaseDay))}.
+              {!release.open &&
+                release.opensOn !== null &&
+                ` Reservations open ${formatDate(dayToDate(release.opensOn))}.`}
+            </p>
+          )}
         </div>
         <div className="text-sm">
           <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />
@@ -79,6 +105,7 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           shoeId={shoe.id}
           status={shoe.status}
           handoffTaken={shoe.rentalItems.length > 0}
+          releaseOpen={release.open}
           signedInAs={user?.role ?? null}
           inBundle={bundle.includes(shoe.id)}
         />

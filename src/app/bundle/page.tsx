@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { D } from "@/lib/decimal";
 import { PhotoImg } from "@/components/shoe-bits";
 import { Alert, Badge, Button, Card, EmptyState, Input, PageHeader } from "@/components/ui";
-import { formatLKR, formatWear } from "@/lib/format";
+import { formatLKR, formatPercent, formatWear } from "@/lib/format";
 import { removeFromBundleAction } from "@/app/rentals/actions";
 import { requireUser } from "@/server/auth/session";
 import { getBundle } from "@/server/booking/bundle";
@@ -51,6 +52,9 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
                       {line.brand} {line.model}
                     </Link>
                     {line.mode === "handoff" && <Badge tone="info">Reserved next · handoff</Badge>}
+                    {new D(line.discount).gt(0) && (
+                      <Badge tone="good">{formatPercent(line.discount)} off this rental</Badge>
+                    )}
                   </div>
                   <div className="text-sm text-subtle">
                     {line.size} · worn {formatWear(line.wear)} / {line.lifespanDays} ·{" "}

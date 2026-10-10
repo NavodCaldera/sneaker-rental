@@ -23,8 +23,12 @@ export interface PricingSettings {
    *  An admin can grant a merchant a longer maximum on request. */
   minLife: number;
   maxLife: number;
-  /** Highest idle discount (Phase 2 ladder) */
-  idleDiscountCap: Decimal.Value;
+  /** Highest discount a borrower can get (release discount cap): 0.10 */
+  maxDiscount: Decimal.Value;
+  /** Days before a holder's planned last day that the pair is shown, discounted, to the next borrower: 10 */
+  releaseLeadDays: number;
+  /** Release discount added per day from the start of that window: 0.005 */
+  releaseDiscountStep: Decimal.Value;
   /** Option B: spread past discounts over the remaining life (OPEN DECISION; off at launch) */
   catchUp: boolean;
   /** r: yearly return on money tied up in a shoe (idle-cost test only) */
@@ -43,7 +47,9 @@ export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   refLife: 365,
   minLife: 183, // 6 months
   maxLife: 730, // 24 months
-  idleDiscountCap: "0.05",
+  maxDiscount: "0.10",
+  releaseLeadDays: 10,
+  releaseDiscountStep: "0.005",
   catchUp: false,
   capitalRate: "0.12",
   holdCostPerDay: "0",

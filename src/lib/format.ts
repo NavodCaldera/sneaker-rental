@@ -14,6 +14,11 @@ export function formatLKR(value: Decimal.Value): string {
   return lkr.format(roundMoney(value).toFixed(2) as unknown as number);
 }
 
+/** Display a ratio as a percentage to at most 2 dp, e.g. 0.005 → "0.5%". */
+export function formatPercent(ratio: Decimal.Value): string {
+  return `${new D(ratio).times(100).toDecimalPlaces(2).toString()}%`;
+}
+
 /** Display wear-days to at most 2 dp, e.g. "12.5". */
 export function formatWear(value: Decimal.Value): string {
   return new D(value).toDecimalPlaces(2).toString();

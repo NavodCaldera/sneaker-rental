@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { toD } from "./decimal";
-import { formatDate, formatDateTime, formatLKR, formatWear } from "./format";
+import { formatDate, formatDateTime, formatLKR, formatPercent, formatWear } from "./format";
 
 const NBSP = " ";
 
@@ -14,6 +14,8 @@ describe("format", () => {
 
   it("formats wear to at most 2 dp", () => {
     expect(formatWear("2.5")).toBe("2.5");
+    expect(formatPercent("0.005")).toBe("0.5%");
+    expect(formatPercent("0.1")).toBe("10%");
     expect(formatWear("12.3456")).toBe("12.35");
     expect(formatWear("365")).toBe("365");
   });
