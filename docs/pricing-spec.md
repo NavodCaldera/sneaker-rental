@@ -58,7 +58,7 @@ DiscountCost                 = d · φ · K · [IQ(w_end) − IQ(w_start)]
 - **Discount funding** (§4 rule 4). Platform promotions reduce both shares in proportion, which is the plain split of the discounted income. A merchant idle discount comes from the merchant share only: the platform share is computed on the *undiscounted* income and the merchant gets the rest.
 - **Lost shoe / buy-out:** `remainingValue(w) = R − F(w)`, split as normal. (If the Python defines F(w) as actual collected income rather than curve income, follow the Python.)
 - **End of life:** at w = L the shoe stops earning. Clamp w_end to L.
-- **Idle-cost test:** checks whether discount d pays for itself in idle days saved, using capital rate r and hold cost h from PricingSettings. The brief cites "10% only pays for itself if it saves about 44 idle days" but gives no formula, so take it from the Python. Merchant idle discounts are capped at 5% (`idleDiscountCap`).
+- **Idle-cost test:** checks whether discount d pays for itself in idle days saved, using capital rate r and hold cost h from PricingSettings. The brief cites "10% only pays for itself if it saves about 44 idle days" but gives no formula, so take it from the Python. Merchant idle discounts are capped at 5% (`idleDiscountCap`). **Not implemented yet:** the idle discount ladder is a Phase 2 feature and the formula isn't in the brief.
 
 ## Wear ledger
 
@@ -96,6 +96,10 @@ Checked against the formulas above with a float reference script:
 Notes:
 - The three-user 6,480.0000 figure holds only **without** catch-up. That case is 0.9 × R, the margin-funded launch default.
 - For the L = 730 area the brief has 497.8428 and these formulas give 497.84271, a 4th-decimal gap. Assert it with tolerance 1e-3 until the Python settles it.
+
+## Implementation
+
+`src/lib/pricing/`: `curveParams`, `Q`, `IQ`, `priceAt`, `curveIncome`, `curvePoints`, `incomeBetween`, `catchUpPhi`, `remainingValue`, `splitCharge`, `estimateItem`, `bundleDailyCost`. Tests: `src/lib/pricing/__tests__/`.
 
 ## Acceptance tests
 
