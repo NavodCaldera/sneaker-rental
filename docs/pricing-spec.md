@@ -69,6 +69,9 @@ DiscountCost                 = d · φ · K · [IQ(w_end) − IQ(w_start)]
 - Holding without wearing still counts (§6).
 - 24-hour free return for wrong size/fit: the borrower is charged only for wear-days actually used.
 - Day-boundary convention (same-day start/end, inclusive vs exclusive end) must match the Python. Until then, use half-open `[start, end)` in calendar days, in Asia/Colombo time.
+- **Holding period** (as implemented): it starts when the pair is delivered to the borrower and ends when it is delivered to the next holder (the next borrower for a handoff, the merchant for a return). The item **closes** (wear, charge and split are computed) when that receiver records condition. So the borrower isn't charged for days the merchant takes to inspect, and in a handoff chain one borrower's end is exactly the next one's start.
+- `w_start` is the shoe's wear when the item closes. Items on one shoe close in order, so this equals the previous holder's `w_end`.
+- Implementation: `src/lib/wear-ledger/` (`wearAdded`, `wearEnd`, `colomboDay`); close-out in `src/server/booking/lifecycle.ts` (`closeItem`).
 
 ## Rounding
 

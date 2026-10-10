@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/server/auth/session";
 import { getListing } from "@/server/catalogue";
 import { curvePreview, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings, toPricingSettings } from "@/server/settings";
+import { getBundle } from "@/server/booking/bundle";
 import { RentPanel } from "./rent-panel";
 
 export async function generateMetadata({ params }: PageProps<"/shoes/[id]">): Promise<Metadata> {
@@ -17,10 +18,11 @@ export async function generateMetadata({ params }: PageProps<"/shoes/[id]">): Pr
 
 export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
   const { id } = await params;
-  const [shoe, user, settingsRow] = await Promise.all([
+  const [shoe, user, settingsRow, bundle] = await Promise.all([
     getListing(id),
     getCurrentUser(),
     getActiveSettings(),
+    getBundle(),
   ]);
   if (!shoe) notFound();
   const settings = toPricingSettings(settingsRow);
@@ -83,6 +85,7 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           status={shoe.status}
           handoffTaken={shoe.rentalItems.length > 0}
           signedInAs={user?.role ?? null}
+          inBundle={bundle.includes(shoe.id)}
         />
       </aside>
     </main>
