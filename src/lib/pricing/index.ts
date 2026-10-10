@@ -27,6 +27,8 @@ export {
   lifetimeCollected,
   merchantOutstanding,
   merchantTarget,
+  releaseDiscount,
+  releaseWindowStart,
   remainingValue,
   splitCharge,
 } from "./charges";

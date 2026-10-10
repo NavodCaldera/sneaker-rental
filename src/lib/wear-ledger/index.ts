@@ -69,6 +69,11 @@ export function receiverFirstDay(deliveredAt: Date, giverLastDay: Day | null): D
   return giverLastDay === null ? day : Math.max(day, giverLastDay + 1);
 }
 
+/** A holder's planned last day: first day + planned days − 1 (both inclusive). */
+export function plannedLastDay(firstDay: Day, plannedDays: number): Day {
+  return firstDay + plannedDays - 1;
+}
+
 function covers(h: Holding, day: Day) {
   return h.start <= day && (h.end === null || day <= h.end);
 }

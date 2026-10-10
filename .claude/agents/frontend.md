@@ -19,11 +19,11 @@ You build the user interface. Read `CLAUDE.md` and `docs/business-model.md` §1,
    - **Curve preview before publish** (§5.1): chart of P(w) over 0..L, plus start price, end price and lifetime income R and merchant share, all from the API. Note that a longer L lowers the daily price but risks uncollected income.
    - Dashboard: every pair with status, wear w / L, collected so far, idle days and upcoming payouts.
 2. **Borrower**
-   - Browse and filter by size, brand and style. Each card shows today's price per wear-day and wear so far. The listing page shows the shown price, wear used and % of life left.
+   - Browse and filter by size, brand and style. Each card shows today's price per wear-day and wear so far, plus the release discount ("x% off", the struck-through full price, "free from" date) when it applies. The listing page shows the shown price, wear used, % of life left, and for a held pair when its rental ends and when reservations open.
    - Bundle builder for 1–4 pairs, showing the daily cost of the whole bundle (1/n split explained in one line), the estimate and the deposit (5,000 × pairs).
    - Checkout (pre-auth + deposit + delivery booking), then condition-confirmation photos on receipt.
    - My rentals: end a pair, reserve a pair held by someone else (handoff), invoices.
-3. **Admin:** dispute queue (photos + trip log side by side, decide), pricing settings editor (μm, μp, q, curve and reference lifespan, lifespan limits, idle discount cap, r, h, deposit, booking fee; say that pricing changes apply to new listings only), manual delivery booking/status, merchant verification, and per-merchant lifespan extensions (months).
+3. **Admin:** dispute queue (photos + trip log side by side, decide), pricing settings editor (μm, μp, q, curve and reference lifespan, lifespan limits, release discount (max, lead days, daily step), r, h, deposit, booking fee; say that pricing changes apply to new listings only), manual delivery booking/status, merchant verification, and per-merchant lifespan extensions (months).
 4. **Courier link page:** mobile-first, no login. Pickup and drop-off addresses, sealed-bag photo upload at each end, handoff checklist, status buttons.
 5. Mobile-first throughout (borrowers and drivers are on phones). Accessible forms. LKR formatting.
 

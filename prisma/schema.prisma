@@ -116,6 +116,8 @@ model Shoe {
   /// Merchant shares charged so far, net of refunds. Rent goes to the merchant until this
   /// reaches their target (merchant first), then to the platform.
   merchantCollected Decimal  @default(0) @db.Decimal(14, 2)
+  /// The current or last holder's planned last day: the release discount counts from it
+  releaseDay      DateTime?  @db.Date
   /// Settings version the shoe is priced with: snapshotted when listed, so its curve
   /// never changes under a running rental
   settingsId      String
@@ -181,7 +183,12 @@ model PricingSettings {
   /// merchant a longer maximum (Merchant.maxLifespanDays).
   minLifespanDays    Int      @default(183)
   maxLifespanDays    Int      @default(730)
-  idleDiscountCap    Decimal  @db.Decimal(20, 16)
+  /// Highest discount a borrower can get (the release discount's cap)
+  maxDiscount        Decimal  @default(0.10) @db.Decimal(20, 16)
+  /// Release discount: shown from this many days before a holder's planned last day...
+  releaseLeadDays    Int      @default(10)
+  /// ...growing by this much a day, up to maxDiscount
+  releaseDiscountStep Decimal @default(0.005) @db.Decimal(20, 16)
   /// Capital rate r (yearly) and hold cost h (LKR per idle day) for the idle-cost test
   capitalRate        Decimal  @default(0.12) @db.Decimal(20, 16)
   holdCost           Decimal  @default(0) @db.Decimal(20, 16)
@@ -263,6 +270,8 @@ model RentalItem {
   firstDay          DateTime?        @db.Date
   lastDay           DateTime?        @db.Date
   returnRequestedAt DateTime?
+  /// Days the borrower planned at checkout (their release day = firstDay + plannedDays − 1)
+  plannedDays       Int?
   wearStart         Decimal?         @db.Decimal(28, 12)
   wearEnd           Decimal?         @db.Decimal(28, 12)
   discount          Decimal          @default(0) @db.Decimal(20, 16)

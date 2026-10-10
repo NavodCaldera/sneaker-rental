@@ -147,6 +147,39 @@ export function bundleDailyCost(prices: Decimal.Value[]): D {
   return prices.reduce<D>((sum, price) => sum.plus(price), new D(0)).div(prices.length);
 }
 
+// ─── Release discount (pricing-spec.md §8) ────────────────────────────────
+
+type ReleaseSettings = Pick<
+  PricingSettings,
+  "maxDiscount" | "releaseLeadDays" | "releaseDiscountStep"
+>;
+
+/**
+ * First day a held pair is shown to the next borrower: `releaseLeadDays` before the current
+ * holder's planned last day (day 81 of a 90-day plan, both days inclusive).
+ */
+export function releaseWindowStart(releaseDay: number, settings: ReleaseSettings): number {
+  return releaseDay - settings.releaseLeadDays + 1;
+}
+
+/**
+ * Discount for the next borrower who books a pair on day `today`, given the current or last
+ * holder's planned last day. It grows `releaseDiscountStep` a day from the start of the
+ * release window and stays at `maxDiscount` once reached, until the pair is rented again.
+ * With a 90-day plan: day 81 → 0.5%, day 90 → 5%, day 100 and later → 10%.
+ * A pair that was never rented (no release day) gets no discount.
+ */
+export function releaseDiscount(
+  today: number,
+  releaseDay: number | null,
+  settings: ReleaseSettings,
+): D {
+  if (releaseDay === null) return new D(0);
+  const days = today - releaseWindowStart(releaseDay, settings) + 1;
+  if (days <= 0) return new D(0);
+  return D.min(settings.maxDiscount, new D(settings.releaseDiscountStep).times(days));
+}
+
 // ─── Idle-cost test (Phase 2 discount ladder) ──────────────────────────────
 
 /** Idle cost per day c = V · r / 365 + h. */

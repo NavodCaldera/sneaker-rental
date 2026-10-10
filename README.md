@@ -23,19 +23,20 @@ Sign in with any seed account (password `password123`): `admin@sneakers.test`, `
 
 ## What's built (MVP, roadmap box 1)
 
-| Area                                                                                                     | Where                                                                              |
-| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Pricing engine: curve per (V, L), charges, discounts, catch-up φ, split, remaining value, idle-cost test | `src/lib/pricing/`                                                                 |
-| Wear ledger: 1/n daily split across pairs held, cap at L, inclusive days, daily accrual for estimates    | `src/lib/wear-ledger/`                                                             |
-| Sign-in, roles, merchant verification                                                                    | `src/server/auth/`, `/admin/merchants`                                             |
-| Listings with live price-curve preview, browse and filter                                                | `src/server/catalogue/`, `/merchant/shoes/new`, `/browse`                          |
-| Bundles of up to 4 pairs, checkout, direct handoff queue, condition photos, close-out                    | `src/server/booking/`, `/bundle`, `/rentals`                                       |
-| Card pre-auth, deposit hold/release, charge at return, lost pairs (mock gateway)                         | `src/server/payments/`                                                             |
-| Deliveries booked by admin, courier links for drivers, signed webhook                                    | `src/server/logistics/`, `/admin/deliveries`, `/courier/[token]`                   |
-| Weekly merchant payouts, disputes                                                                        | `src/server/payouts/`, `src/server/disputes/`, `/admin/payouts`, `/admin/disputes` |
-| Pricing settings (append-only versions; each shoe keeps the version it was listed under)                 | `src/server/settings/`, `/admin/settings`                                          |
+| Area                                                                                                              | Where                                                                              |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Pricing engine: curve per (V, L), charges, discounts, catch-up φ, split, remaining value, idle-cost test          | `src/lib/pricing/`                                                                 |
+| Wear ledger: 1/n daily split across pairs held, cap at L, inclusive days, daily accrual for estimates             | `src/lib/wear-ledger/`                                                             |
+| Sign-in, roles, merchant verification                                                                             | `src/server/auth/`, `/admin/merchants`                                             |
+| Listings with live price-curve preview, browse and filter                                                         | `src/server/catalogue/`, `/merchant/shoes/new`, `/browse`                          |
+| Bundles of up to 4 pairs, checkout, direct handoff queue, condition photos, close-out                             | `src/server/booking/`, `/bundle`, `/rentals`                                       |
+| Card pre-auth, deposit hold/release, charge at return, lost pairs (mock gateway)                                  | `src/server/payments/`                                                             |
+| Deliveries booked by admin, courier links for drivers, signed webhook                                             | `src/server/logistics/`, `/admin/deliveries`, `/courier/[token]`                   |
+| Weekly merchant payouts, disputes                                                                                 | `src/server/payouts/`, `src/server/disputes/`, `/admin/payouts`, `/admin/disputes` |
+| Release discount: a pair is offered to the next borrower 10 days before its rental ends, 0.5% off a day up to 10% | `src/lib/pricing/`, `/browse`, `/shoes/[id]`                                       |
+| Pricing settings (append-only versions; each shoe keeps the version it was listed under)                          | `src/server/settings/`, `/admin/settings`                                          |
 
-Not built yet (Phase 2/3): buy-out, idle discount ladder, borrower tiers, event packs, insights, membership, a real payment gateway and ride-hailing API.
+Not built yet (Phase 2/3): buy-out, merchant idle discounts, borrower tiers, event packs, insights, membership, a real payment gateway and ride-hailing API.
 
 ## Architecture
 

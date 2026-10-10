@@ -7,6 +7,7 @@ import {
   colomboDay,
   dateToDay,
   dayToDate,
+  plannedLastDay,
   receiverFirstDay,
   wearAdded,
   wearEnd,
@@ -116,7 +117,10 @@ export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) 
         where: { id: item.id },
         data: { status: "ACTIVE", startDate: at, firstDay: today },
       });
-      await tx.shoe.update({ where: { id: item.shoeId }, data: { status: "WITH_BORROWER" } });
+      await tx.shoe.update({
+        where: { id: item.shoeId },
+        data: { status: "WITH_BORROWER", releaseDay: releaseDayFor(colomboDay(at), item) },
+      });
       break;
     case "HANDOFF": {
       let giverLastDay: number | null = null;
@@ -135,7 +139,10 @@ export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) 
         where: { id: item.id },
         data: { status: "ACTIVE", startDate: at, firstDay: dayToDate(firstDay) },
       });
-      await tx.shoe.update({ where: { id: item.shoeId }, data: { status: "WITH_BORROWER" } });
+      await tx.shoe.update({
+        where: { id: item.shoeId },
+        data: { status: "WITH_BORROWER", releaseDay: releaseDayFor(firstDay, item) },
+      });
       break;
     }
     case "COLLECT":
@@ -146,6 +153,14 @@ export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) 
       await tx.shoe.update({ where: { id: item.shoeId }, data: { status: "CLEANING" } });
       break;
   }
+}
+
+/**
+ * The new holder's planned last day, from which the next borrower's release discount
+ * counts (pricing-spec.md §8). Unknown plan: no discount window.
+ */
+function releaseDayFor(firstDay: number, item: { plannedDays: number | null }) {
+  return item.plannedDays ? dayToDate(plannedLastDay(firstDay, item.plannedDays)) : null;
 }
 
 // ─── Condition reports (§5.2 step 4, §5.3 step 3) ──────────────────────────

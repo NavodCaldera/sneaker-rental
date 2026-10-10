@@ -39,9 +39,20 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
     ],
   },
   {
-    title: "Idle discounts (Phase 2)",
+    title: "Release discount (next borrower of a pair)",
     fields: [
-      { name: "idleDiscountCap", label: "Idle discount cap", hint: "0.05 = 5%" },
+      { name: "maxDiscount", label: "Maximum discount", hint: "0.10 = 10%" },
+      {
+        name: "releaseLeadDays",
+        label: "Show this many days before release",
+        hint: "10: day 81 of a 90-day rental",
+      },
+      { name: "releaseDiscountStep", label: "Discount added per day", hint: "0.005 = 0.5%" },
+    ],
+  },
+  {
+    title: "Idle-cost test (Phase 2)",
+    fields: [
       {
         name: "capitalRate",
         label: "Capital rate r",

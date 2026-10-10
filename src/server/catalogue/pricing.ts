@@ -11,11 +11,13 @@ import {
   merchantOutstanding,
   merchantTarget,
   priceAt,
+  releaseDiscount,
+  releaseWindowStart,
   remainingValue,
   shownPrice,
   splitCharge,
 } from "@/lib/pricing";
-import { lifeLeft, wearRemaining } from "@/lib/wear-ledger";
+import { type Day, dateToDay, lifeLeft, wearRemaining } from "@/lib/wear-ledger";
 import type { Tx } from "../db";
 import { type SettingsRow, toPricingSettings } from "../settings";
 
@@ -76,12 +78,37 @@ export async function merchantFundedDiscounts(tx: Tx, shoeId: string): Promise<D
 }
 
 /**
+ * Release discount for the next borrower of a pair (pricing-spec.md §8), from the active
+ * settings: it grows from `releaseLeadDays` before the current or last holder's planned
+ * last day, up to `maxDiscount`. `opensOn` is the first day a held pair is shown.
+ */
+export function releaseInfo(
+  shoe: { releaseDay: Date | null },
+  active: SettingsRow,
+  today: Day,
+): { discount: D; releaseDay: Day | null; opensOn: Day | null; open: boolean } {
+  const settings = toPricingSettings(active);
+  const releaseDay = shoe.releaseDay ? dateToDay(shoe.releaseDay) : null;
+  const opensOn = releaseDay === null ? null : releaseWindowStart(releaseDay, settings);
+  return {
+    discount: releaseDiscount(today, releaseDay, settings),
+    releaseDay,
+    opensOn,
+    open: opensOn !== null && today >= opensOn,
+  };
+}
+
+/**
  * View models for prices shown in the catalogue. Every number comes from the pricing
  * engine; this file only shapes it. Values are unrounded Decimal strings; the UI rounds
  * for display.
  */
 export type ShoePricing = {
+  /** Price per wear-day a borrower booking today pays, after any release discount */
   priceToday: string;
+  /** Curve price before the release discount */
+  priceBeforeDiscount: string;
+  discount: string;
   priceNew: string;
   priceEnd: string;
   lifetimeIncome: string;
@@ -92,11 +119,14 @@ export type ShoePricing = {
   merchantCollected: string;
 };
 
-export function shoePricing(shoe: PricedShoe): ShoePricing {
+export function shoePricing(shoe: PricedShoe, discount: Decimal.Value = 0): ShoePricing {
   const { params: p, settings, collected } = shoeCurve(shoe);
   const wear = toD(shoe.wear);
+  const phi = nextPhi(shoe);
   return {
-    priceToday: shownPrice(p, wear, 0, nextPhi(shoe)).toString(),
+    priceToday: shownPrice(p, wear, discount, phi).toString(),
+    priceBeforeDiscount: shownPrice(p, wear, 0, phi).toString(),
+    discount: toD(discount).toString(),
     priceNew: p.K.toString(),
     priceEnd: priceAt(p, p.L).toString(),
     lifetimeIncome: p.R.toString(),

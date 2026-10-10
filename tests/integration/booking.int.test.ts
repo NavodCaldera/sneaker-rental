@@ -4,6 +4,8 @@ import { BookingError, checkout, quoteBundle } from "@/server/booking/checkout";
 import { endRental, markCleaned, recordCondition } from "@/server/booking/lifecycle";
 import { borrowerRentals } from "@/server/booking/queries";
 import { D } from "@/lib/decimal";
+import { DEFAULT_PRICING_SETTINGS, curveParams, incomeBetween } from "@/lib/pricing";
+import { browseShoes } from "@/server/catalogue";
 import { colomboDay, dateToDay } from "@/lib/wear-ledger";
 import { arrive, day, deliveryFor, makeShoe, makeUser, photos, resetDb, setup } from "./helpers";
 
@@ -384,10 +386,13 @@ describe("merchant first and free waiting days", () => {
       [50, 69],
     ]) {
       const b = await makeUser("BORROWER");
-      const rental = await checkout(b.id, [shoe.id], {
-        deliveryAddress: "Home 123",
-        plannedDays: 20,
-      });
+      // Booked before the previous plan's release window, so no release discount applies.
+      const rental = await checkout(
+        b.id,
+        [shoe.id],
+        { deliveryAddress: "Home 123", plannedDays: 60 },
+        day(start - 1),
+      );
       const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
       await arrive(await deliveryFor(item.id, "DELIVER"), day(start));
       await endRental(b.id, item.id, day(end));
@@ -411,5 +416,89 @@ describe("merchant first and free waiting days", () => {
     expect(second[2]).toBe("600.00");
     const after = await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } });
     expect(after.merchantCollected.toFixed(2)).toBe("6600.00");
+  });
+});
+
+describe("release discount for the next borrower (pricing-spec.md §8)", () => {
+  it("a 90-day rental opens for reservations on day 81 at 0.5% off; the next borrower keeps the rate", async () => {
+    const { merchant, merchantId } = await setup();
+    const [a, b] = await Promise.all([makeUser("BORROWER"), makeUser("BORROWER")]);
+    const shoe = await makeShoe(merchantId);
+    // A plans 90 days and gets the pair on day 0: days 0–89, release day 89.
+    const rentalA = await checkout(
+      a.id,
+      [shoe.id],
+      { deliveryAddress: "A street", plannedDays: 90 },
+      day(0),
+    );
+    const itemA = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rentalA.id } });
+    expect(itemA.plannedDays).toBe(90);
+    await arrive(await deliveryFor(itemA.id, "DELIVER"), day(0));
+    const held = await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } });
+    expect(dateToDay(held.releaseDay!)).toBe(colomboDay(day(89)));
+
+    // Hidden until A's 81st day (day 80), then shown at 0.5% off, rising 0.5% a day.
+    expect((await browseShoes({}, day(79))).map((s) => s.id)).not.toContain(shoe.id);
+    await expect(
+      checkout(b.id, [shoe.id], { deliveryAddress: "B street", plannedDays: 10 }, day(79)),
+    ).rejects.toThrow(/opens for reservations/);
+    expect((await browseShoes({}, day(80))).map((s) => s.id)).toContain(shoe.id);
+    const discountOn = async (d: number) =>
+      (await quoteBundle(null, [shoe.id], 10, undefined, day(d))).lines[0].discount;
+    expect(await discountOn(80)).toBe("0.005");
+    expect(await discountOn(89)).toBe("0.05"); // release day
+    expect(await discountOn(99)).toBe("0.1");
+    expect(await discountOn(200)).toBe("0.1"); // steady at the maximum
+
+    // B reserves on day 84 (2.5% off) and keeps that rate for the whole rental.
+    const rentalB = await checkout(
+      b.id,
+      [shoe.id],
+      { deliveryAddress: "B street", plannedDays: 10 },
+      day(84),
+    );
+    const itemB = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rentalB.id } });
+    expect(itemB.discount.toString()).toBe("0.025");
+    expect(itemB.discountFunding).toBe("PLATFORM");
+
+    await endRental(a.id, itemA.id, day(89));
+    await arrive(await deliveryFor(itemB.id, "HANDOFF"), day(90));
+    await recordCondition(b.id, { itemId: itemB.id, grade: "A", photos: photos() }, day(90));
+    await endRental(b.id, itemB.id, day(99));
+    await arrive(await deliveryFor(itemB.id, "COLLECT"), day(99));
+    await recordCondition(merchant.id, { itemId: itemB.id, grade: "A", photos: photos() }, day(99));
+
+    const B = await db.rentalItem.findUniqueOrThrow({ where: { id: itemB.id } });
+    expect([B.wearStart!.toString(), B.wearEnd!.toString()]).toEqual(["90", "100"]);
+    const p = curveParams(6000, 365, DEFAULT_PRICING_SETTINGS);
+    const expected = incomeBetween(p, 90, 100, "0.025");
+    expect(B.chargeExact!.toString().slice(0, 12)).toBe(expected.income.toString().slice(0, 12));
+    expect(B.discountCost!.toString().slice(0, 10)).toBe(
+      expected.discountCost.toString().slice(0, 10),
+    );
+    // B's own 10-day plan sets the next release day.
+    const after = await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } });
+    expect(dateToDay(after.releaseDay!)).toBe(colomboDay(day(90)) + 9);
+  });
+
+  it("a pair back with the merchant keeps counting from the planned release; a new pair has none", async () => {
+    const { merchant, merchantId, borrower } = await setup();
+    const [shoe, fresh] = await Promise.all([makeShoe(merchantId), makeShoe(merchantId)]);
+    const rental = await checkout(
+      borrower.id,
+      [shoe.id],
+      { deliveryAddress: "Home 123", plannedDays: 30 },
+      day(0),
+    );
+    const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
+    await arrive(await deliveryFor(item.id, "DELIVER"), day(0));
+    await endRental(borrower.id, item.id, day(20)); // back early
+    await arrive(await deliveryFor(item.id, "COLLECT"), day(21));
+    await recordCondition(merchant.id, { itemId: item.id, grade: "A", photos: photos() }, day(21));
+    await markCleaned(merchantId, shoe.id);
+    // Planned release day 29: window opens day 20; on day 49 (20 days in) it is 10%.
+    const q = await quoteBundle(null, [shoe.id, fresh.id], 5, undefined, day(49));
+    expect(q.lines.map((l) => l.discount)).toEqual(["0.1", "0"]);
+    expect(new D(q.lines[0].priceToday).lt(q.lines[0].priceBeforeDiscount)).toBe(true);
   });
 });

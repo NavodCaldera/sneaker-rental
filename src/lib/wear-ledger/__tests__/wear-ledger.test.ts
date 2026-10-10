@@ -7,6 +7,7 @@ import {
   colomboDay,
   dateToDay,
   dayToDate,
+  plannedLastDay,
   receiverFirstDay,
   runLedger,
   wearAdded,
@@ -119,6 +120,13 @@ describe("days", () => {
     expect(receiverFirstDay(at, day - 3)).toBe(day); // giver ended 3 days ago: waiting was free
     expect(receiverFirstDay(at, day)).toBe(day + 1); // giver ended today: never both
     expect(receiverFirstDay(at, null)).toBe(day);
+  });
+});
+
+describe("planned days", () => {
+  it("a 90-day plan starting on day 1 ends on day 90", () => {
+    expect(plannedLastDay(1, 90)).toBe(90);
+    expect(plannedLastDay(5, 1)).toBe(5);
   });
 });
 

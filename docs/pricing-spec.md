@@ -12,6 +12,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 1. **Merchant first.** Rent goes to the merchant until they have received their target, (1 + μm) × V for a new pair; after that it goes to the platform (§7). The reference split every charge in the ratio μm : μp.
 2. **Waiting for the driver is free.** A borrower's last day is the day they end the rental, not the day the pair reaches the next holder (§5).
 3. **Lifespan 6–24 months** (183–730 wear-days). An admin can grant a merchant a longer maximum on request (§1.1).
+4. **Release discount up to 10%** for the next borrower of a pair, shown from 10 days before the current holder's planned end (§8). The brief (§7) advised idle discounts of at most 5%; the product owner chose 10%.
 
 ---
 
@@ -29,7 +30,9 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | `refLife` | | 365 | Lifespan the curve shape was tuned for |
 | `maxPairsPerBundle` | | 4 | Pairs a borrower may hold at once |
 | `minLifespanDays` / `maxLifespanDays` (`minLife` / `maxLife`) | | 183 / 730 | Lifespan a merchant may declare: 6–24 months (1 month = 365/12 days, rounded up). `Merchant.maxLifespanDays` is a longer maximum an admin granted that merchant on request (`setLifespanExtension`, `/admin/merchants`). |
-| `idleDiscountCap` | | 0.05 | Highest idle discount (Phase 2) |
+| `maxDiscount` | | 0.10 | Highest discount a borrower can get (the release discount's cap) |
+| `releaseLeadDays` | | 10 | Days before a holder's planned last day that the pair is shown, discounted, to the next borrower |
+| `releaseDiscountStep` | | 0.005 | Release discount added per day from the start of that window |
 | `catchUpEnabled` (`catchUp`) | | false | Option B: spread past discounts over the remaining life (OPEN DECISION) |
 | `capitalRate` | r | 0.12 | Idle-cost test only |
 | `holdCost` (`holdCostPerDay`) | h | 0 | Idle-cost test only, LKR per idle day |
@@ -55,7 +58,8 @@ Shoe state: `wear` (w, starts at w₀), `collectedSoFar` (charged on the platfor
 | `firstDay` | First day held (the delivery date), inclusive |
 | `lastDay` | Last day held (the day the borrower ended the rental), inclusive; null while held |
 | `discount` | One-off discount d for this item, 0 to < 1 |
-| `discountFunding` | `PLATFORM` (promotion, default) or `MERCHANT` (idle discount) |
+| `discountFunding` | `PLATFORM` (release discount, promotions) or `MERCHANT` (merchant idle discount) |
+| `plannedDays` | Days the borrower planned at checkout; their planned last day (release day) = `firstDay` + `plannedDays` − 1 |
 | `phi` | Catch-up factor φ, fixed at the start of the item |
 
 ---
@@ -192,7 +196,25 @@ Option A (default, catchUp = false):  φ = 1. Lifetime = R − Σ discount costs
 Option B (catchUp = true):            φ = (R − lifetimeCollected) ÷ (K × [A − IQ(w)])  at the item's start, never below 0
 ```
 
-- **Idle discounts** (`discountFunding = MERCHANT`) are capped at `idleDiscountCap` (5%) and lower the merchant's target by their cost, so the merchant bears them.
+- **Merchant idle discounts** (`discountFunding = MERCHANT`, not offered yet) are capped at `maxDiscount` and lower the merchant's target by their cost, so the merchant bears them.
+
+### Release discount (built)
+
+When a borrower plans a rental, the pair is offered to the next borrower before it comes free, at a discount that grows the closer it gets to release and the longer it then waits:
+
+```
+releaseDay   = holder's firstDay + plannedDays − 1          (Shoe.releaseDay, set on delivery)
+windowStart  = releaseDay − releaseLeadDays + 1             (releaseWindowStart)
+discount(t)  = min(maxDiscount, releaseDiscountStep × (t − windowStart + 1))   for t ≥ windowStart, else 0
+```
+
+For a 90-day plan (days 1–90): hidden from Browse until day 81, then 0.5% off on day 81, 1% on day 82, … 5% on day 90 (release), 10% on day 100 if no one has taken it, and a steady 10% after that, until the pair is rented again (`releaseDiscount`).
+
+- A held pair appears in Browse ("Reserve next") only once its window opens; before that it can't be reserved. A pair that is back with the merchant stays listed and keeps counting from the same release day. A pair never rented has no discount.
+- The next borrower **locks in the rate of the day they book**, for their whole rental (`RentalItem.discount`, fixed at checkout). Their own planned days set the pair's next release day.
+- It applies to the next borrower only, never to the current holder.
+- It uses the active settings (a platform marketing rule), not the shoe's settings snapshot.
+- OPEN DECISION: it is funded by the platform (`PLATFORM`), so the merchant is still paid first. If release discounts on a pair add up to more than the platform's margin, the merchant falls short of their target.
 - **Platform promotions** (`PLATFORM`, the default) leave the merchant's target alone, so the platform bears them: it reaches its own share later, or not at all.
 
 ---
@@ -242,6 +264,7 @@ All in `src/lib/pricing/__tests__/acceptance.test.ts`. Tolerance 1e-4 on 4-dp va
 | Merchant first | 2,866.11 against 6,600 owed → all to the merchant; the rental that crosses the target splits at the target; hard test: each merchant gets exactly 1.1 V, the platform 2,800 in all |
 | 4 pairs held one day | Each gains 0.25 wear-day; total ≈ one new pair-day |
 | Merchant-funded 5% idle discount | Same charge as a promotion; lowers the merchant's lifetime total by its cost (a promotion lowers the platform's) |
+| Release discount, 90-day plan | Day 80: 0; day 81: 0.5%; day 82: 1%; day 90: 5%; day 91: 5.5%; day 100: 10%; later: 10%; never rented: 0; the whole next rental at the booked rate |
 | Worked example (section 12) | A 216.89, B 95.81, total 312.70; all to the merchants (neither target reached) |
 | Estimate vs final | Equal when the plan is kept; estimate leaves shoe state unchanged |
 | Remaining value at wear 100 / idle cost | 7,200 − 2,866.1143; 1.9726 a day; 5% on 30 days ≈ 22 idle days |
@@ -296,7 +319,7 @@ A = K_A × [IQ(7.5) − IQ(0)] and B = K_B × [IQ(52.5) − IQ(50)]. Application
 
 ## 13. Where it lives
 
-- `src/lib/pricing/`: `curveParams`, `validateListing`, `Q`, `IQ`, `priceAt`, `shownPrice`, `curveIncome`, `curvePoints`, `targetIncome`, `incomeBetween`, `catchUpPhi`, `lifetimeCollected`, `remainingValue`, `splitCharge` (proportional, for previews), `merchantTarget`, `merchantOutstanding`, `chargedAmounts` (merchant first), `bundleDailyCost`, `idleCostPerDay`, `breakEvenIdleDays`.
-- `src/lib/wear-ledger/`: `wearAdded`, `wearEnd`, `colomboDay`, `dayToDate` / `dateToDay` / `dayNumber`, `receiverFirstDay`, `lifeLeft`; `runLedger`, `estimate`, `buildInvoice` (accrual.ts; carries each shoe's merchant balance across its items).
-- `src/server/catalogue/pricing.ts`: `shoeCurve`, `nextPhi`, `shoePricing`, `merchantOwed`, `merchantFundedDiscounts` (a shoe priced with its own settings snapshot). `src/server/catalogue/index.ts`: `listingLimits`, `setLifespanExtension`, `monthsToDays` / `daysToMonths`.
+- `src/lib/pricing/`: `curveParams`, `validateListing`, `Q`, `IQ`, `priceAt`, `shownPrice`, `curveIncome`, `curvePoints`, `targetIncome`, `incomeBetween`, `catchUpPhi`, `lifetimeCollected`, `remainingValue`, `splitCharge` (proportional, for previews), `releaseWindowStart`, `releaseDiscount`, `merchantTarget`, `merchantOutstanding`, `chargedAmounts` (merchant first), `bundleDailyCost`, `idleCostPerDay`, `breakEvenIdleDays`.
+- `src/lib/wear-ledger/`: `wearAdded`, `wearEnd`, `colomboDay`, `dayToDate` / `dateToDay` / `dayNumber`, `receiverFirstDay`, `plannedLastDay`, `lifeLeft`; `runLedger`, `estimate`, `buildInvoice` (accrual.ts; carries each shoe's merchant balance across its items).
+- `src/server/catalogue/pricing.ts`: `shoeCurve`, `nextPhi`, `shoePricing`, `releaseInfo`, `merchantOwed`, `merchantFundedDiscounts` (a shoe priced with its own settings snapshot). `src/server/catalogue/index.ts`: `listingLimits`, `setLifespanExtension`, `monthsToDays` / `daysToMonths`.
 - End of a holding: `endRental`; close-out: `closeItem`, both in `src/server/booking/lifecycle.ts`. Estimate: `quoteBundle` in `src/server/booking/checkout.ts`. Lost pair: `markLost` in `src/server/payments/index.ts`.

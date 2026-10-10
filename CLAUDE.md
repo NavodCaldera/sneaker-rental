@@ -47,24 +47,24 @@ pricing engine → schema and roles → catalogue → booking and wear ledger �
 
 ## Scope
 
-Build the **MVP only** (§10 roadmap): pricing engine and tests, listings with curve preview, bundles of up to 4 pairs, booking and wear ledger, card pre-auth and deposits, deliveries booked by admin, direct handoffs, weekly merchant payouts. Phase 2/3 features (buy-out, idle discount ladder, tiers, event packs, membership, etc.) stay out until asked for. Keep the data model ready for them.
+Build the **MVP only** (§10 roadmap): pricing engine and tests, listings with curve preview, bundles of up to 4 pairs, booking and wear ledger, card pre-auth and deposits, deliveries booked by admin, direct handoffs, weekly merchant payouts. The release discount for the next borrower was built on request (pricing-spec.md §8). Phase 2/3 features (buy-out, merchant idle discounts, tiers, event packs, membership, etc.) stay out until asked for. Keep the data model ready for them.
 
 ## Launch defaults (all configurable; never hard-coded outside settings)
 
-| Setting                                 | Default                | Note                                                            |
-| --------------------------------------- | ---------------------- | --------------------------------------------------------------- |
-| μm / μp                                 | 0.10 / 0.10            | Open decision: the split may change                             |
-| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03    | PricingSettings; reference lifespan 365                         |
-| Declared lifespan limits                | 6–24 months (183–730)  | Admin can extend a merchant's maximum on request                |
-| φ (catch-up)                            | 1, off                 | Discounts funded from margin                                    |
-| Deposit                                 | 5,000 LKR × pairs held | §2 fixes it; §10 still lists it as open, so keep it in settings |
-| Max pairs per bundle                    | 4                      |                                                                 |
-| Dispute window / payout hold            | 3 days after close     |                                                                 |
-| Payout cadence                          | Weekly                 |                                                                 |
-| Idle discount cap                       | 5%                     | Phase 2 feature; setting exists now                             |
-| Idle-cost test r / h                    | 0.12 / 0 LKR a day     | Phase 2; r is an assumption                                     |
-| Currency / timezone                     | LKR / Asia/Colombo     |                                                                 |
-| Delivery booking fee                    | TBD                    | Open decision                                                   |
+| Setting                                 | Default                                        | Note                                                            |
+| --------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------- |
+| μm / μp                                 | 0.10 / 0.10                                    | Open decision: the split may change                             |
+| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03                            | PricingSettings; reference lifespan 365                         |
+| Declared lifespan limits                | 6–24 months (183–730)                          | Admin can extend a merchant's maximum on request                |
+| φ (catch-up)                            | 1, off                                         | Discounts funded from margin                                    |
+| Deposit                                 | 5,000 LKR × pairs held                         | §2 fixes it; §10 still lists it as open, so keep it in settings |
+| Max pairs per bundle                    | 4                                              |                                                                 |
+| Dispute window / payout hold            | 3 days after close                             |                                                                 |
+| Payout cadence                          | Weekly                                         |                                                                 |
+| Release discount                        | +0.5%/day from 10 days before release, max 10% | Next borrower only; platform-funded (open decision)             |
+| Idle-cost test r / h                    | 0.12 / 0 LKR a day                             | Phase 2; r is an assumption                                     |
+| Currency / timezone                     | LKR / Asia/Colombo                             |                                                                 |
+| Delivery booking fee                    | TBD                                            | Open decision                                                   |
 
 Open decisions are listed in §10. When code depends on one, read it from settings and leave a `// OPEN DECISION:` comment. Don't pick a value silently.
 

@@ -19,6 +19,8 @@ import {
   lifetimeCollected,
   merchantTarget,
   priceAt,
+  releaseDiscount,
+  releaseWindowStart,
   remainingValue,
   roundMoney,
   splitCharge,
@@ -160,6 +162,34 @@ describe("single shoe", () => {
     expect(roundMoney("2.345").toFixed(2)).toBe("2.35");
     expect(roundMoney("-2.345").toFixed(2)).toBe("-2.35");
     expect(dayNumber("2026-10-11") - dayNumber("2026-10-01")).toBe(10);
+  });
+});
+
+describe("release discount (next borrower of a pair)", () => {
+  // The first borrower planned 90 days (days 1–90): release day 90.
+  const at = (day: number) => releaseDiscount(day, 90, S).toString();
+
+  it("shows the pair from day 81, 0.5% off, rising 0.5% a day: 5% on day 90, 10% on day 100", () => {
+    expect(releaseWindowStart(90, S)).toBe(81);
+    expect(at(80)).toBe("0");
+    expect(at(81)).toBe("0.005");
+    expect(at(82)).toBe("0.01");
+    expect(at(90)).toBe("0.05");
+    expect(at(91)).toBe("0.055");
+    expect(at(100)).toBe("0.1");
+  });
+
+  it("stays at the 10% maximum after that, and a never-rented pair gets none", () => {
+    expect(at(101)).toBe("0.1");
+    expect(at(400)).toBe("0.1");
+    expect(releaseDiscount(100, null, S).eq(0)).toBe(true);
+  });
+
+  it("the second borrower's whole rental is charged at the rate of the day they booked", () => {
+    // Booked on day 90 (5% off): every wear-day of their rental is 5% cheaper.
+    const full = incomeBetween(shoe, 90, 100).income;
+    const booked = incomeBetween(shoe, 90, 100, releaseDiscount(90, 90, S)).income;
+    near(booked, full.times("0.95"), "1e-25");
   });
 });
 
