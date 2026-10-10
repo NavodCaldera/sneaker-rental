@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
@@ -21,6 +22,7 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
     throw e;
   });
   const settings = toPricingSettings(await getActiveSettings());
+  const now = new Date();
   const pricing = shoePricing(shoe, settings);
   const preview = curvePreview(shoe.value.toString(), shoe.lifespanDays, settings);
 
@@ -116,6 +118,14 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
                     </td>
                     <td className="py-2 text-right">
                       {item.merchantShare ? formatLKR(item.merchantShare.toString()) : "—"}
+                      {item.payableAt && item.payableAt > now && !item.payoutId && (
+                        <Link
+                          href={`/disputes/new?item=${item.id}`}
+                          className="ml-2 text-xs underline"
+                        >
+                          Dispute
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}

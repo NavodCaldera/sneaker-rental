@@ -34,6 +34,7 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
   const user = await requireUser("BORROWER");
   const { booked } = await searchParams;
   const rentals = await borrowerRentals(user.id);
+  const now = new Date();
 
   return (
     <main>
@@ -111,6 +112,17 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                               Confirm condition
                             </LinkButton>
                           )}
+                          {(item.status === "CLOSED" || item.status === "LOST") &&
+                            item.payableAt &&
+                            item.payableAt > now &&
+                            !item.disputes.some((d) => d.status === "OPEN") && (
+                              <LinkButton
+                                href={`/disputes/new?item=${item.id}`}
+                                variant="secondary"
+                              >
+                                Report a problem
+                              </LinkButton>
+                            )}
                           {item.status === "ACTIVE" && (
                             <form action={endRentalAction.bind(null, item.id)}>
                               <Button
