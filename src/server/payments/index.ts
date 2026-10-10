@@ -281,3 +281,24 @@ export async function chargeDeliveryFee(deliveryId: string) {
     () => gateway().capture(rental.preAuthRef ?? "", total.toFixed(2), key),
   );
 }
+
+/** Refund part of an item's charge to the borrower (an upheld overcharge dispute). */
+export async function refundItem(itemId: string, amount: string, reason: string) {
+  const capture = await db.payment.findUnique({ where: { idempotencyKey: `capture:${itemId}` } });
+  if (!capture || capture.status !== "SUCCEEDED")
+    throw new PaymentError("Nothing was charged for this pair");
+  const take = D.min(new D(amount), toD(capture.amount));
+  if (take.lte(0)) return null;
+  const key = `refund:${itemId}:${reason}`;
+  return recordPayment(
+    {
+      kind: "REFUND",
+      rentalId: capture.rentalId,
+      rentalItemId: itemId,
+      amount: take.toFixed(2),
+      key,
+      note: reason,
+    },
+    () => gateway().refund(capture.gatewayRef ?? "", take.toFixed(2), key),
+  );
+}

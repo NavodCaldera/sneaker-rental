@@ -14,6 +14,7 @@ const NAV: Record<Role, { href: string; label: string }[]> = {
     { href: "/merchant/shoes/new", label: "Add shoe" },
     { href: "/merchant/returns", label: "Returns" },
     { href: "/merchant/payouts", label: "Payouts" },
+    { href: "/merchant/account", label: "Account" },
   ],
   ADMIN: [
     { href: "/admin", label: "Overview" },

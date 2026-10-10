@@ -431,17 +431,26 @@ enum DisputeStatus {
   REJECTED
 }
 
+enum DisputeResolution {
+  /// Damage or loss: capture from the borrower's deposit; paid to the merchant
+  CHARGE_DEPOSIT
+  /// Overcharge: refund the borrower; deducted from the merchant's share
+  REFUND_BORROWER
+  NO_ACTION
+}
+
 model Dispute {
-  id           String        @id @default(cuid())
+  id           String             @id @default(cuid())
   rentalItemId String
   openedById   String
   reason       String
-  status       DisputeStatus @default(OPEN)
-  /// Damage amount captured from the deposit when upheld
-  amount       Decimal?      @db.Decimal(14, 2)
+  status       DisputeStatus      @default(OPEN)
+  resolution   DisputeResolution?
+  /// Amount actually captured (CHARGE_DEPOSIT) or refunded (REFUND_BORROWER)
+  amount       Decimal?           @db.Decimal(14, 2)
   decision     String?
   decidedById  String?
-  createdAt    DateTime      @default(now())
+  createdAt    DateTime           @default(now())
   decidedAt    DateTime?
 
   rentalItem RentalItem @relation(fields: [rentalItemId], references: [id])
