@@ -90,7 +90,12 @@ describe("pricing settings", () => {
         floor: "0.30",
         midpointRatio: "0.5479452054794521",
         baseSteepness: "0.03",
+        refLife: 365,
+        minLifespanDays: 90,
+        maxLifespanDays: 730,
         idleDiscountCap: "0.05",
+        capitalRate: "0.12",
+        holdCost: "0",
         depositPerPair: "5000",
         maxPairsPerBundle: 4,
         disputeWindowDays: 3,
@@ -102,6 +107,7 @@ describe("pricing settings", () => {
     );
     const after = await getActiveSettings();
     expect(after.merchantMargin.toString()).toBe("0.12");
+    expect(toPricingSettings(after)).toMatchObject({ minLife: 90, maxLife: 730, refLife: 365 });
     expect(after.deliveryBookingFee).toBeNull();
     expect(await db.pricingSettings.count()).toBe(2); // append-only
   });

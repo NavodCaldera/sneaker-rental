@@ -14,6 +14,7 @@ import {
   shoeSchema,
   updatePayoutAccount,
 } from "@/server/catalogue";
+import { getActiveSettings } from "@/server/settings";
 import { PhotoError } from "@/server/storage";
 
 export type ActionState = {
@@ -32,7 +33,8 @@ export async function createShoeAction(
   formData: FormData,
 ): Promise<ActionState> {
   const merchant = await currentMerchant();
-  const parsed = shoeSchema.safeParse(Object.fromEntries(formData));
+  const limits = await getActiveSettings();
+  const parsed = shoeSchema(limits).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
 
   const photos: Partial<Record<PhotoKind, File>> = {};

@@ -7,8 +7,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { formatDate, formatLKR, formatWear } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { CatalogueError, getMerchantForUser, getMerchantShoe } from "@/server/catalogue";
-import { curvePreview, shoePricing } from "@/server/catalogue/pricing";
-import { getActiveSettings, toPricingSettings } from "@/server/settings";
+import { shoeCurvePreview, shoePricing } from "@/server/catalogue/pricing";
 import { DraftActions } from "./draft-actions";
 
 export const metadata: Metadata = { title: "Shoe" };
@@ -21,10 +20,9 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
     if (e instanceof CatalogueError) notFound();
     throw e;
   });
-  const settings = toPricingSettings(await getActiveSettings());
   const now = new Date();
-  const pricing = shoePricing(shoe, settings);
-  const preview = curvePreview(shoe.value.toString(), shoe.lifespanDays, settings);
+  const pricing = shoePricing(shoe);
+  const preview = shoeCurvePreview(shoe);
 
   return (
     <main className="flex flex-col gap-6">
@@ -55,6 +53,12 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
             <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />
             <div className="mt-1">
               {formatWear(shoe.wear.toString())} of {shoe.lifespanDays} wear-days
+              {shoe.initialWear.gt(0) && (
+                <span className="text-subtle">
+                  {" "}
+                  ({formatWear(shoe.initialWear.toString())} when listed)
+                </span>
+              )}
             </div>
           </div>
           <Stat label="Declared value" value={formatLKR(shoe.value.toString())} />

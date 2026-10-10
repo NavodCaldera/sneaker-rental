@@ -4,7 +4,7 @@ description: Owns payments and payouts: card pre-authorisation at checkout, depo
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
-You build payments and payouts. Read `CLAUDE.md`, `docs/pricing-spec.md` ("Charges") and `docs/business-model.md` §4 and §6 first.
+You build payments and payouts. Read `CLAUDE.md`, `docs/pricing-spec.md` (§7 "Closing an item and invoicing", §8 "Discounts and catch-up", §9 "Special events") and `docs/business-model.md` §4 and §6 first.
 
 ## Owns
 
@@ -15,11 +15,11 @@ You build payments and payouts. Read `CLAUDE.md`, `docs/pricing-spec.md` ("Charg
 ## Must deliver
 
 1. **Gateway adapter** `PaymentGateway`: `preAuthorise(amount)`, `capture(ref, amount)`, `holdDeposit(amount)`, `releaseDeposit(ref)`, `captureDeposit(ref, amount)`, `refund(ref, amount)`, `parseWebhook(req)`. Ship a **mock gateway** first. PayHere is a candidate, but its pre-auth support is unconfirmed (open decision), so don't integrate a real gateway until asked.
-2. **Checkout:** pre-authorise the estimate (from the pricing engine via booking) and hold the deposit (`depositPerPair × pairs`).
-3. **Charge at return** (§4 rule 1): on close-out, capture the final charge booking passes you. Never recompute it. Release the deposit once the condition check passes.
+2. **Checkout:** pre-authorise the estimate (booking runs it through the wear ledger) and hold the deposit (`depositPerPair × pairs`).
+3. **Charge at return** (§4 rule 1): on close-out, capture the final charge booking stored on the item. Never recompute it. Release the deposit once the condition check passes and no dispute is open. Capturing more than the pre-authorised estimate (an extended rental) needs a top-up; how depends on the gateway (OPEN DECISION).
 4. **Damage:** if damage is flagged within 24 h and upheld by an admin, capture from the deposit.
-5. **Lost shoe** (§4 rule 3): capture the deposit first, then charge `remainingValue` from the pricing engine, split as normal, and lock the account.
-6. **Discount funding** (§4 rule 4): platform promos reduce both shares in proportion, and merchant idle discounts come out of the merchant share only. Use the pricing engine's `split` with the right `fundedBy`.
+5. **Lost shoe** (§4 rule 3): charge `remainingValue(p, w, lifetimeCollected, settings)` priced with the shoe's own settings snapshot (`shoeCurve`): K·(A − IQ(w)), or R − collected with catch-up. Round and split it with `chargedAmounts`, capture the deposit first and the card for the rest, and lock the account.
+6. **Rounding and split:** every charged amount comes from `chargedAmounts`: charge rounded to 2 dp, platform share rounded, merchant share = charge − platform share. Discount funding (§4 rule 4): platform promos reduce both shares in proportion; for a merchant idle discount pass `fundedBy: "merchant"` and the undiscounted gross, so the platform share is taken on the gross and the discount comes out of the merchant share only.
 7. **Payout ledger:** each closed RentalItem's merchant share becomes payable 3 days (`disputeWindowDays`) after close, unless a Dispute is open. A weekly batch pays every eligible share per merchant to their payout account. Record Payout rows with references and status.
 8. **Disputes:** either side opens one within 3 days of close. It holds that item's payout until an admin decides (uphold → adjust/capture; reject → release).
 9. **Idempotency:** every gateway call and webhook has an idempotency key, and duplicate webhooks are no-ops.
@@ -32,6 +32,6 @@ You build payments and payouts. Read `CLAUDE.md`, `docs/pricing-spec.md` ("Charg
 
 ## Done when
 
-- With the mock gateway: checkout → close → capture → deposit release works end to end. The lost-shoe path captures the deposit, then R − F(w).
+- With the mock gateway: checkout → close → capture → deposit release works end to end. The lost-shoe path captures the deposit, then the card for the rest of the remaining value (7,200.00 for a new 6,000 LKR shoe; 4,333.89 at wear 100).
 - The payout batch test pays an item closed 4 days ago, skips one closed 2 days ago, and skips one with an open dispute.
 - Shares in the payout ledger sum to the captured charges to the cent.

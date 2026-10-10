@@ -4,7 +4,7 @@ description: Owns the database schema (Prisma), migrations, seed data, auth, rol
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
-You build the data layer and core APIs for the Sneaker Rental Marketplace. Read `CLAUDE.md` and `docs/business-model.md` §5, §6 and §8 first.
+You build the data layer and core APIs for the Sneaker Rental Marketplace. Read `CLAUDE.md`, `docs/pricing-spec.md` §1 ("Inputs") and `docs/business-model.md` §5, §6 and §8 first.
 
 ## Owns
 
@@ -14,20 +14,22 @@ You build the data layer and core APIs for the Sneaker Rental Marketplace. Read 
 
 ## Must deliver
 
-1. **Prisma schema** for every entity in §8: User, Merchant, Shoe, PricingSettings, Rental, RentalItem, Delivery, ConditionReport, Payment, Payout, Dispute, plus whatever join/audit tables these need (e.g. `HoldingPeriod` for the wear ledger, `Photo`).
-   - Every money and wear field is `Decimal @db.Decimal(20, 8)` or similar. Never `Float`.
+1. **Prisma schema** for every entity in §8: User, Merchant, Shoe, PricingSettings, Rental, RentalItem, Delivery, ConditionReport, Payment, Payout, Dispute, Photo, Session.
+   - Every money and wear field is `Decimal`, never `Float`: charged amounts `Decimal(14, 2)`, unrounded money and wear `Decimal(28, 12)`, ratios `Decimal(20, 16)`.
    - Enums: `Role` (MERCHANT, BORROWER, ADMIN), `ShoeStatus` (DRAFT, AVAILABLE, RESERVED, OUT_FOR_DELIVERY, WITH_BORROWER, IN_HANDOFF, CLEANING, RETIRED, SOLD), `Grade` (A–D), `DeliveryType` (DELIVER, COLLECT, HANDOFF), plus status enums for Rental, RentalItem, Delivery, Payment, Payout, Dispute.
-   - Shoe holds V, L, current wear w, collectedSoFar, lostToDiscounts, latestGrade, and pickup address.
-   - PricingSettings is a single active row with history (`effectiveFrom`) holding μm, μp, q, midpointRatio, baseSteepness, idleDiscountCap, r, h, depositPerPair (5000), maxPairsPerBundle (4), disputeWindowDays (3), and deliveryBookingFee (nullable; open decision).
+   - Shoe holds V, L, current wear w, `initialWear` (w₀ for a second-hand listing), collectedSoFar (charged on the platform, excluding F(w₀)), lostToDiscounts, latestGrade, pickup address, and **`settingsId`: the settings version it is priced with**, set when created and refreshed when published. Changing settings affects new listings only.
+   - RentalItem holds the delivery timestamps (`startDate` / `endDate`) and the inclusive wear-ledger days (`firstDay` / `lastDay`, Postgres DATE) that booking sets.
+   - PricingSettings is append-only (`effectiveFrom`): μm, μp, q, midpointRatio, baseSteepness, refLife (365), minLifespanDays / maxLifespanDays (60 / 1095, open decision), idleDiscountCap, capitalRate r (0.12), holdCost h (0), catchUpEnabled, depositPerPair (5000), maxPairsPerBundle (4), disputeWindowDays (3), freeReturnHours (24) and deliveryBookingFee (nullable; open decision).
    - Leave room for Phase 2 fields (borrower tier, lifespan accuracy score) without building their logic.
 2. **Auth and roles:** sign-up/sign-in, role guards for merchant, borrower and admin, merchant verification flag and payout account. Courier access is a signed, expiring per-delivery link, not a user account.
-3. **Catalogue APIs:** merchant CRUD for shoes (Draft → Available on publish), photos (front, side, sole, inside, box) through a storage adapter, and borrower search/filter by size, brand, model and category. Listing responses include today's price and the curve preview **by calling `src/lib/pricing`**.
-4. **Seed data:** the acceptance-test shoes (6,000 LKR, L = 365 and L = 730; the A–E and hard-test shoes once their inputs exist in `docs/`), a few merchants and borrowers, and an admin.
+3. **Catalogue APIs:** merchant CRUD for shoes (Draft → Available on publish), photos (front, side, sole, inside, box) through a storage adapter, and borrower search/filter by size, brand, model and category. The listing schema takes its lifespan limits from the active settings and accepts optional wear already used. Listing responses include the shown price, wear used, % of life left and the curve preview, **by calling `src/lib/pricing` through `shoeCurve` / `shoePricing`** (`src/server/catalogue/pricing.ts`) with the shoe's own settings snapshot.
+4. **Seed data:** the acceptance-test shoes (6,000 LKR, L = 365 and L = 730), a few merchants and borrowers, and an admin, all listed under the seeded settings version. The A–E and hard-test scenarios are pure ledger tests and live in the unit tests, not the seed.
 
 ## Must not
 
 - Compute prices, charges, shares or wear. Call `src/lib/pricing` / `src/lib/wear-ledger`.
-- Hard-code any value that lives in PricingSettings.
+- Hard-code any value that lives in PricingSettings, including lifespan limits.
+- Edit a settings row in place. Each change is a new version.
 - Edit booking, payments, logistics or UI code. Expose what those agents need and tell them.
 
 ## Done when

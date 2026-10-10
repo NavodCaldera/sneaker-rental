@@ -40,9 +40,9 @@ describe("checkout → return → charge → deposit release (mock gateway)", ()
     ]);
 
     await arrive(await deliveryFor(item.id, "DELIVER"), day(0));
-    await endRental(borrower.id, item.id, day(99));
-    await arrive(await deliveryFor(item.id, "COLLECT"), day(100));
-    await recordCondition(merchant.id, { itemId: item.id, grade: "B", photos: photos() }, day(100));
+    await endRental(borrower.id, item.id, day(98));
+    await arrive(await deliveryFor(item.id, "COLLECT"), day(99));
+    await recordCondition(merchant.id, { itemId: item.id, grade: "B", photos: photos() }, day(99));
 
     expect(await kinds(rental.id)).toEqual([
       `PREAUTH ${rental.estimate.toFixed(2)}`,
@@ -136,12 +136,12 @@ describe("lost pair (§4 rule 3)", () => {
     // First borrower wears it for 100 days and returns it.
     const first = await rentOne(other.id, shoe.id);
     await arrive(await deliveryFor(first.item.id, "DELIVER"), day(0));
-    await endRental(other.id, first.item.id, day(99));
-    await arrive(await deliveryFor(first.item.id, "COLLECT"), day(100));
+    await endRental(other.id, first.item.id, day(98));
+    await arrive(await deliveryFor(first.item.id, "COLLECT"), day(99));
     await recordCondition(
       merchant.id,
       { itemId: first.item.id, grade: "B", photos: photos() },
-      day(100),
+      day(99),
     );
     await db.shoe.update({ where: { id: shoe.id }, data: { status: "AVAILABLE" } });
 

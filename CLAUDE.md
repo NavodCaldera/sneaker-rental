@@ -3,8 +3,7 @@
 An asset-light marketplace for renting sneakers by wear. Merchants list shoes, borrowers rent bundles of up to 4 pairs and pay per wear-day on a falling price curve, ride-hailing drivers move the shoes, and the platform runs pricing, booking, payments, payouts and trust. We own no shoes and run no couriers.
 
 - Full brief: [docs/business-model.md](docs/business-model.md). Cite sections as §n.
-- Pricing and wear maths: [docs/pricing-spec.md](docs/pricing-spec.md)
-- Authoritative pricing source (when present): `docs/rental_pricing_engine.py`, `docs/Rental Pricing Formula Guide v2`
+- Rent calculation spec (authoritative for pricing and wear): [docs/pricing-spec.md](docs/pricing-spec.md). It merges the reference rent engine (Formula Guide v2 / `rental_pricing_engine.py`), whose tests now live in `src/lib/pricing/__tests__/acceptance.test.ts`.
 
 ## Stack
 
@@ -20,7 +19,8 @@ Conventions:
 - **Auth:** call `requireUser(...roles)` from `src/server/auth/session.ts` at the top of every page, server action and route handler that needs a user. It redirects on failure. Sessions are random tokens in an httpOnly cookie, stored as SHA-256 hashes.
 - **Server code** lives in `src/server/<module>/`, imports `server-only`, and uses `db` from `src/server/db.ts`. Pages call services; services hold the business logic and are integration-tested.
 - **Prisma 7:** `prisma migrate dev` does not regenerate the client, so use `npm run db:migrate` (migrate + generate).
-- **Settings:** read with `getActiveSettings()` and pass `toPricingSettings(row)` to the pricing engine.
+- **Settings:** a listed shoe is priced with the settings version it was listed under (`Shoe.settingsId`). Use `shoeCurve(shoe)` / `shoePricing(shoe)` from `src/server/catalogue/pricing.ts` (include `settings: true` in the query). `getActiveSettings()` is for operational values (deposit, bundle size, windows, fees), new listings and previews.
+- **Days:** wear-ledger days are Asia/Colombo calendar dates, both the first and the last day count, and a handoff day belongs to the giver (the receiver starts the next day). They live in `RentalItem.firstDay` / `lastDay`.
 
 ## Databases
 
@@ -34,14 +34,14 @@ Conventions:
 
 ## Hard rules (§9)
 
-1. **Prices and wear come only from the pricing engine (`src/lib/pricing/`) and the wear ledger (`src/lib/wear-ledger/`).** No other module computes a price, a charge, a share or a wear value. Adding up engine outputs (a shoe's collected total, payment and payout sums) is bookkeeping and is fine; deriving a new price, share or wear figure is not. Charged amounts come from `chargedAmounts()`.
+1. **Prices and wear come only from the pricing engine (`src/lib/pricing/`) and the wear ledger (`src/lib/wear-ledger/`).** No other module computes a price, a charge, a share or a wear value. Adding up engine outputs (a shoe's collected total, payment and payout sums) is bookkeeping and is fine; deriving a new price, share or wear figure is not. Charged amounts come from `chargedAmounts()`: charge rounded, platform share rounded, merchant share is the remainder.
 2. **Keep values unrounded; round only what is shown or charged, to 2 decimals.** No JS `number` for money or wear. Use decimal.js in code and `Decimal` in Prisma.
 3. **Discounts never stack.** Always start from the curve price at the shoe's current wear.
 4. **Exact curve ratios:** m = 200·L/365, β = 0.03·365/L, q = 0.30.
 
 ## Build order
 
-Status: steps 0–8 are done (MVP complete). The step branches are on GitHub.
+Status: steps 0–8 are done (MVP complete), and step 9 aligned the app with the rent calculation spec. The step branches are on GitHub.
 
 pricing engine → schema and roles → catalogue → booking and wear ledger → payments → logistics → payouts and disputes → polish
 
@@ -54,13 +54,15 @@ Build the **MVP only** (§10 roadmap): pricing engine and tests, listings with c
 | Setting                                 | Default                | Note                                                            |
 | --------------------------------------- | ---------------------- | --------------------------------------------------------------- |
 | μm / μp                                 | 0.10 / 0.10            | Open decision: the split may change                             |
-| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03    | PricingSettings                                                 |
+| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03    | PricingSettings; reference lifespan 365                         |
+| Declared lifespan limits                | 60–1,095 wear-days     | Open decision                                                   |
 | φ (catch-up)                            | 1, off                 | Discounts funded from margin                                    |
 | Deposit                                 | 5,000 LKR × pairs held | §2 fixes it; §10 still lists it as open, so keep it in settings |
 | Max pairs per bundle                    | 4                      |                                                                 |
 | Dispute window / payout hold            | 3 days after close     |                                                                 |
 | Payout cadence                          | Weekly                 |                                                                 |
 | Idle discount cap                       | 5%                     | Phase 2 feature; setting exists now                             |
+| Idle-cost test r / h                    | 0.12 / 0 LKR a day     | Phase 2; r is an assumption                                     |
 | Currency / timezone                     | LKR / Asia/Colombo     |                                                                 |
 | Delivery booking fee                    | TBD                    | Open decision                                                   |
 

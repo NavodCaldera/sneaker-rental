@@ -1,6 +1,6 @@
 import { D } from "@/lib/decimal";
+import { validateListing } from "@/lib/pricing";
 import { getCurrentUser } from "@/server/auth/session";
-import { LIFESPAN_MAX_DAYS, LIFESPAN_MIN_DAYS } from "@/server/catalogue";
 import { curvePreview } from "@/server/catalogue/pricing";
 import { getActiveSettings, toPricingSettings } from "@/server/settings";
 
@@ -16,13 +16,15 @@ export async function GET(req: Request) {
   if (!/^\d+(\.\d{1,2})?$/.test(value) || new D(value).lte(0)) {
     return Response.json({ error: "Enter a value" }, { status: 400 });
   }
-  const days = Number(lifespan);
-  if (!Number.isInteger(days) || days < LIFESPAN_MIN_DAYS || days > LIFESPAN_MAX_DAYS) {
-    return Response.json(
-      { error: `Lifespan must be ${LIFESPAN_MIN_DAYS}–${LIFESPAN_MAX_DAYS} wear-days` },
-      { status: 400 },
-    );
+  if (!/^\d+$/.test(lifespan)) {
+    return Response.json({ error: "Lifespan must be whole wear-days" }, { status: 400 });
   }
   const settings = toPricingSettings(await getActiveSettings());
-  return Response.json(curvePreview(value, days, settings));
+  try {
+    validateListing(value, lifespan, settings);
+  } catch (e) {
+    if (e instanceof RangeError) return Response.json({ error: e.message }, { status: 400 });
+    throw e;
+  }
+  return Response.json(curvePreview(value, lifespan, settings));
 }

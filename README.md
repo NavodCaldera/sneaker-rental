@@ -3,7 +3,7 @@
 Rent sneakers by the wear you actually use. Merchants list shoes, borrowers rent bundles of up to 4 pairs on a wear-based price curve, and ride-hailing drivers move the shoes.
 
 - Business brief: [docs/business-model.md](docs/business-model.md)
-- Pricing and wear maths: [docs/pricing-spec.md](docs/pricing-spec.md)
+- Rent calculation spec (pricing and wear maths, acceptance tests): [docs/pricing-spec.md](docs/pricing-spec.md)
 - Project rules and agents: [CLAUDE.md](CLAUDE.md), [.claude/agents/](.claude/agents/)
 
 ## Setup
@@ -23,17 +23,17 @@ Sign in with any seed account (password `password123`): `admin@sneakers.test`, `
 
 ## What's built (MVP, roadmap box 1)
 
-| Area                                                                                  | Where                                                                              |
-| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Pricing engine: curve per (V, L), charges, discounts, catch-up φ, split, R − F(w)     | `src/lib/pricing/`                                                                 |
-| Wear ledger: 1/n daily split across pairs held, cap at L                              | `src/lib/wear-ledger/`                                                             |
-| Sign-in, roles, merchant verification                                                 | `src/server/auth/`, `/admin/merchants`                                             |
-| Listings with live price-curve preview, browse and filter                             | `src/server/catalogue/`, `/merchant/shoes/new`, `/browse`                          |
-| Bundles of up to 4 pairs, checkout, direct handoff queue, condition photos, close-out | `src/server/booking/`, `/bundle`, `/rentals`                                       |
-| Card pre-auth, deposit hold/release, charge at return, lost pairs (mock gateway)      | `src/server/payments/`                                                             |
-| Deliveries booked by admin, courier links for drivers, signed webhook                 | `src/server/logistics/`, `/admin/deliveries`, `/courier/[token]`                   |
-| Weekly merchant payouts, disputes                                                     | `src/server/payouts/`, `src/server/disputes/`, `/admin/payouts`, `/admin/disputes` |
-| Pricing settings (append-only versions)                                               | `src/server/settings/`, `/admin/settings`                                          |
+| Area                                                                                                     | Where                                                                              |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Pricing engine: curve per (V, L), charges, discounts, catch-up φ, split, remaining value, idle-cost test | `src/lib/pricing/`                                                                 |
+| Wear ledger: 1/n daily split across pairs held, cap at L, inclusive days, daily accrual for estimates    | `src/lib/wear-ledger/`                                                             |
+| Sign-in, roles, merchant verification                                                                    | `src/server/auth/`, `/admin/merchants`                                             |
+| Listings with live price-curve preview, browse and filter                                                | `src/server/catalogue/`, `/merchant/shoes/new`, `/browse`                          |
+| Bundles of up to 4 pairs, checkout, direct handoff queue, condition photos, close-out                    | `src/server/booking/`, `/bundle`, `/rentals`                                       |
+| Card pre-auth, deposit hold/release, charge at return, lost pairs (mock gateway)                         | `src/server/payments/`                                                             |
+| Deliveries booked by admin, courier links for drivers, signed webhook                                    | `src/server/logistics/`, `/admin/deliveries`, `/courier/[token]`                   |
+| Weekly merchant payouts, disputes                                                                        | `src/server/payouts/`, `src/server/disputes/`, `/admin/payouts`, `/admin/disputes` |
+| Pricing settings (append-only versions; each shoe keeps the version it was listed under)                 | `src/server/settings/`, `/admin/settings`                                          |
 
 Not built yet (Phase 2/3): buy-out, idle discount ladder, borrower tiers, event packs, insights, membership, a real payment gateway and ride-hailing API.
 
@@ -58,14 +58,14 @@ Next.js 16 (App Router, server components and server actions) · PostgreSQL via 
 
 These are still open (business-model.md §10). Each one is a setting or an adapter, so it can change without code rewrites:
 
-| Decision                                        | Where it lives                                                                 |
-| ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| Margin split (μm / μp)                          | `/admin/settings`                                                              |
-| Deposit size                                    | `/admin/settings` (5,000 per pair now)                                         |
-| Delivery booking fee, who pays for return trips | `/admin/settings`; `paidBy` on each delivery (free returns: platform)          |
-| Handoffs without merchant cleaning              | Allowed now, in a sealed bag with a cleaning kit                               |
-| Min / max declared lifespan                     | `LIFESPAN_MIN_DAYS` / `LIFESPAN_MAX_DAYS` in `src/server/catalogue` (30–1,500) |
-| Catch-up pricing φ                              | `/admin/settings` (off)                                                        |
-| Ride-hailing app and API                        | `src/server/logistics/provider.ts` (manual provider)                           |
-| Payment gateway and pre-auth                    | `src/server/payments/gateway.ts` (mock)                                        |
-| Platform name                                   | Placeholder "Sneaker Rental"                                                   |
+| Decision                                        | Where it lives                                                                      |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Margin split (μm / μp)                          | `/admin/settings`                                                                   |
+| Deposit size                                    | `/admin/settings` (5,000 per pair now)                                              |
+| Delivery booking fee, who pays for return trips | `/admin/settings`; `paidBy` on each delivery (free returns: platform)               |
+| Handoffs without merchant cleaning              | Allowed now, in a sealed bag with a cleaning kit                                    |
+| Min / max declared lifespan                     | `/admin/settings` (60–1,095 wear-days)                                              |
+| Catch-up pricing φ                              | `/admin/settings` (off)                                                             |
+| Ride-hailing app and API                        | `src/server/logistics/provider.ts` (manual provider)                                |
+| Payment gateway and pre-auth                    | `src/server/payments/gateway.ts` (mock); pre-auth top-up for long rentals not built |
+| Platform name                                   | Placeholder "Sneaker Rental"                                                        |

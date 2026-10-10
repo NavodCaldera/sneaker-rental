@@ -19,8 +19,31 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
     fields: [
       { name: "floor", label: "Floor q", hint: "End-of-life price as a share of new (0.30)" },
       { name: "midpointRatio", label: "Midpoint ratio", hint: "200 / 365 = 0.5479…" },
-      { name: "baseSteepness", label: "Base steepness", hint: "At L = 365 (0.03)" },
-      { name: "idleDiscountCap", label: "Idle discount cap", hint: "0.05 = 5% (Phase 2)" },
+      { name: "baseSteepness", label: "Base steepness", hint: "At the reference lifespan (0.03)" },
+      {
+        name: "refLife",
+        label: "Reference lifespan",
+        hint: "Wear-days the base curve was tuned for (365)",
+      },
+    ],
+  },
+  {
+    title: "Listings (OPEN DECISION: lifespan limits)",
+    fields: [
+      { name: "minLifespanDays", label: "Shortest lifespan (wear-days)", hint: "60" },
+      { name: "maxLifespanDays", label: "Longest lifespan (wear-days)", hint: "1095" },
+    ],
+  },
+  {
+    title: "Idle discounts (Phase 2)",
+    fields: [
+      { name: "idleDiscountCap", label: "Idle discount cap", hint: "0.05 = 5%" },
+      {
+        name: "capitalRate",
+        label: "Capital rate r",
+        hint: "Yearly, for the idle-cost test (0.12)",
+      },
+      { name: "holdCost", label: "Hold cost h (LKR per idle day)", hint: "0" },
     ],
   },
   {

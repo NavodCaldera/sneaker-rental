@@ -9,10 +9,10 @@ import {
   shoeSchema,
   updatePayoutAccount,
 } from "@/server/catalogue";
-import { curvePreview, shoePricing } from "@/server/catalogue/pricing";
+import { curvePreview, shoeCurve, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings, toPricingSettings } from "@/server/settings";
 import { PhotoError } from "@/server/storage";
-import { makeUser, resetDb } from "./helpers";
+import { TEST_SETTINGS, makeUser, resetDb } from "./helpers";
 
 beforeEach(resetDb);
 
@@ -27,7 +27,8 @@ const allPhotos = () => ({
   BOX: photo(),
 });
 
-const input = shoeSchema.parse({
+const LIMITS = { minLifespanDays: 60, maxLifespanDays: 1095 };
+const input = shoeSchema(LIMITS).parse({
   brand: "Nike",
   model: "Pegasus 41",
   size: "UK 9",
@@ -83,11 +84,50 @@ describe("listing a shoe", () => {
     await expect(publishShoe(other.merchant!.id, shoe.id)).rejects.toThrow(/not found/);
   });
 
-  it("validates lifespan bounds and value format", () => {
-    expect(shoeSchema.safeParse({ ...input, lifespanDays: "10" }).success).toBe(false);
-    expect(shoeSchema.safeParse({ ...input, lifespanDays: "5000" }).success).toBe(false);
-    expect(shoeSchema.safeParse({ ...input, value: "6,000" }).success).toBe(false);
-    expect(shoeSchema.safeParse({ ...input, value: "0" }).success).toBe(false);
+  it("validates lifespan bounds from settings, value format and wear used", () => {
+    const schema = shoeSchema(LIMITS);
+    expect(schema.safeParse({ ...input, lifespanDays: "59" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, lifespanDays: "1096" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, lifespanDays: "60" }).success).toBe(true);
+    expect(schema.safeParse({ ...input, value: "6,000" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, value: "0" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, initialWear: "365" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, initialWear: "abc" }).success).toBe(false);
+    expect(schema.parse({ ...input, initialWear: "" }).initialWear).toBe("0");
+  });
+
+  it("rejects a lifespan the active settings no longer allow", async () => {
+    const { merchant } = await makeUser("MERCHANT");
+    await db.pricingSettings.create({ data: { ...TEST_SETTINGS, minLifespanDays: 400 } });
+    await expect(createShoe(merchant!.id, input, allPhotos())).rejects.toThrow(/between 400/);
+  });
+
+  it("lists a second-hand pair at its declared wear", async () => {
+    const { merchant } = await makeUser("MERCHANT");
+    const shoe = await createShoe(merchant!.id, { ...input, initialWear: "120.5" }, allPhotos());
+    expect(shoe.wear.toString()).toBe("120.5");
+    expect(shoe.initialWear.toString()).toBe("120.5");
+    expect(shoe.collectedSoFar.toString()).toBe("0");
+  });
+
+  it("prices a shoe with the settings version active when it was published", async () => {
+    const user = await makeUser("MERCHANT");
+    const shoe = await createShoe(user.merchant!.id, input, allPhotos());
+    // Margins change before publishing: the shoe takes the new version when published.
+    const v2 = await db.pricingSettings.create({
+      data: {
+        ...TEST_SETTINGS,
+        merchantMargin: "0.15",
+        effectiveFrom: new Date(Date.now() - 1000),
+      },
+    });
+    const published = await publishShoe(user.merchant!.id, shoe.id);
+    expect(published.settingsId).toBe(v2.id);
+    // A later change doesn't move a listed shoe's curve.
+    await db.pricingSettings.create({ data: { ...TEST_SETTINGS, merchantMargin: "0.30" } });
+    const listed = await getListing(shoe.id);
+    const { params } = shoeCurve(listed!);
+    expect(params.R.toString()).toBe("7500"); // (1 + 0.15 + 0.10) × 6,000
   });
 });
 
@@ -96,7 +136,8 @@ describe("browsing and prices", () => {
     const verified = await makeUser("MERCHANT");
     const unverified = await makeUser("MERCHANT");
     await db.merchant.update({ where: { id: unverified.merchant!.id }, data: { verified: false } });
-    const base = { ...input, pickupAddress: input.pickupAddress, description: null };
+    const { id: settingsId } = await getActiveSettings();
+    const base = { ...input, pickupAddress: input.pickupAddress, description: null, settingsId };
     await db.shoe.createMany({
       data: [
         { ...base, merchantId: verified.merchant!.id, status: "AVAILABLE", size: "UK 9" },
@@ -119,10 +160,15 @@ describe("browsing and prices", () => {
   });
 
   it("prices the 6,000 LKR / 365-day shoe at 28.9248 new and 8.6774 at end of life", async () => {
-    const settings = toPricingSettings(await getActiveSettings());
-    const pricing = shoePricing({ value: "6000", lifespanDays: 365, wear: "0" }, settings);
+    const row = await getActiveSettings();
+    const settings = toPricingSettings(row);
+    const shoe = { value: "6000", lifespanDays: 365, initialWear: "0", collectedSoFar: "0" };
+    const pricing = shoePricing({ ...shoe, wear: "0", settings: row });
     expect(pricing.priceToday.slice(0, 7)).toBe("28.9247");
     expect(pricing.priceEnd.slice(0, 6)).toBe("8.6774");
+    expect(pricing.lifeLeft).toBe("1");
+    const worn = shoePricing({ ...shoe, wear: "73", settings: row });
+    expect(worn.lifeLeft).toBe("0.8");
     const preview = curvePreview("6000", 365, settings);
     expect(preview.lifetimeIncome).toBe("7200");
     expect(preview.merchantShare).toBe("6600");

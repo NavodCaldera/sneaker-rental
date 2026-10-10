@@ -22,7 +22,12 @@ export const DEFAULT_SETTINGS = {
   floor: "0.30",
   midpointRatio: "0.5479452054794521", // 200 / 365
   baseSteepness: "0.03",
+  refLife: 365,
+  minLifespanDays: 60, // OPEN DECISION
+  maxLifespanDays: 1095, // OPEN DECISION
   idleDiscountCap: "0.05",
+  capitalRate: "0.12",
+  holdCost: "0",
   depositPerPair: "5000",
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
@@ -182,6 +187,11 @@ async function main() {
     await db.pricingSettings.create({ data: DEFAULT_SETTINGS });
     console.log("Created default pricing settings");
   }
+  // Seed shoes are listed under the settings version active now.
+  const settings = await db.pricingSettings.findFirstOrThrow({
+    where: { effectiveFrom: { lte: new Date() } },
+    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+  });
 
   const passwordHash = await hashPassword(PASSWORD);
   for (const u of users) {
@@ -229,6 +239,7 @@ async function main() {
         data: {
           ...s,
           merchantId: user.merchant.id,
+          settingsId: settings.id,
           pickupAddress: `${u.businessName}, 12 Galle Road, Colombo 03`,
           status: "AVAILABLE",
           latestGrade: "A",

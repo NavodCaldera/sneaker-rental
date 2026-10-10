@@ -106,8 +106,14 @@ model Shoe {
   lifespanDays    Int
   /// Accumulated wear w (wear-days)
   wear            Decimal    @default(0) @db.Decimal(28, 12)
+  /// Wear already used when listed second-hand (w₀)
+  initialWear     Decimal    @default(0) @db.Decimal(28, 12)
+  /// Charged on the platform so far, after discounts (excludes F(w₀))
   collectedSoFar  Decimal    @default(0) @db.Decimal(28, 12)
   lostToDiscounts Decimal    @default(0) @db.Decimal(28, 12)
+  /// Settings version the shoe is priced with: snapshotted when listed, so its curve
+  /// never changes under a running rental
+  settingsId      String
   status          ShoeStatus @default(DRAFT)
   latestGrade     Grade?
   publishedAt     DateTime?
@@ -116,6 +122,7 @@ model Shoe {
   updatedAt       DateTime   @updatedAt
 
   merchant         Merchant          @relation(fields: [merchantId], references: [id])
+  settings         PricingSettings   @relation(fields: [settingsId], references: [id])
   photos           Photo[]
   rentalItems      RentalItem[]
   conditionReports ConditionReport[]
@@ -163,10 +170,15 @@ model PricingSettings {
   floor              Decimal  @db.Decimal(20, 16)
   midpointRatio      Decimal  @db.Decimal(20, 16)
   baseSteepness      Decimal  @db.Decimal(20, 16)
+  /// Lifespan the base curve was tuned for: β = baseSteepness · refLife / L
+  refLife            Int      @default(365)
+  /// OPEN DECISION: lifespan a merchant may declare (wear-days)
+  minLifespanDays    Int      @default(60)
+  maxLifespanDays    Int      @default(1095)
   idleDiscountCap    Decimal  @db.Decimal(20, 16)
-  /// Capital rate r and hold cost h for the idle-cost test (Phase 2)
-  capitalRate        Decimal? @db.Decimal(20, 16)
-  holdCost           Decimal? @db.Decimal(20, 16)
+  /// Capital rate r (yearly) and hold cost h (LKR per idle day) for the idle-cost test
+  capitalRate        Decimal  @default(0.12) @db.Decimal(20, 16)
+  holdCost           Decimal  @default(0) @db.Decimal(20, 16)
   depositPerPair     Decimal  @db.Decimal(14, 2)
   maxPairsPerBundle  Int
   disputeWindowDays  Int
@@ -177,6 +189,8 @@ model PricingSettings {
   catchUpEnabled     Boolean  @default(false)
   createdById        String?
   createdAt          DateTime @default(now())
+
+  shoes Shoe[]
 
   @@index([effectiveFrom])
 }
@@ -235,9 +249,13 @@ model RentalItem {
   rentalId          String
   shoeId            String
   status            RentalItemStatus @default(AWAITING_DELIVERY)
-  /// Holding period [startDate, endDate): delivery date → condition recorded by receiver
+  /// When the pair reached this borrower, and when it reached the next holder
   startDate         DateTime?
   endDate           DateTime?
+  /// Wear-ledger days, both inclusive (Asia/Colombo calendar dates). A handoff day
+  /// belongs to the giver; the receiver's first day is the day after.
+  firstDay          DateTime?        @db.Date
+  lastDay           DateTime?        @db.Date
   returnRequestedAt DateTime?
   wearStart         Decimal?         @db.Decimal(28, 12)
   wearEnd           Decimal?         @db.Decimal(28, 12)

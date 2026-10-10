@@ -6,16 +6,14 @@ import { formatLKR, formatWear } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { getMerchantForUser, listMerchantShoes, merchantSummary } from "@/server/catalogue";
 import { shoePricing } from "@/server/catalogue/pricing";
-import { getActiveSettings, toPricingSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "My shoes" };
 
 export default async function MerchantHome() {
   const user = await requireUser("MERCHANT");
   const merchant = await getMerchantForUser(user.id);
-  const [shoes, settings, summary] = await Promise.all([
+  const [shoes, summary] = await Promise.all([
     listMerchantShoes(merchant.id),
-    getActiveSettings().then(toPricingSettings),
     merchantSummary(merchant.id),
   ]);
   const tiles = [
@@ -66,7 +64,7 @@ export default async function MerchantHome() {
       ) : (
         <ul className="grid gap-3">
           {shoes.map((shoe) => {
-            const pricing = shoePricing(shoe, settings);
+            const pricing = shoePricing(shoe);
             return (
               <li key={shoe.id}>
                 <Link

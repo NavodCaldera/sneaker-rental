@@ -1,12 +1,21 @@
 import "server-only";
 import type { Delivery, Grade } from "@/generated/prisma/client";
 import { toD } from "@/lib/decimal";
-import { catchUpPhi, chargedAmounts, curveParams, incomeBetween } from "@/lib/pricing";
-import { atEndOfLife, colomboDay, wearAdded, wearEnd } from "@/lib/wear-ledger";
+import { catchUpPhi, chargedAmounts, incomeBetween } from "@/lib/pricing";
+import {
+  atEndOfLife,
+  colomboDay,
+  dateToDay,
+  dayToDate,
+  handoffDays,
+  wearAdded,
+  wearEnd,
+} from "@/lib/wear-ledger";
+import { shoeCurve } from "../catalogue/pricing";
 import { type Tx, db } from "../db";
 import { requestDelivery } from "../logistics/requests";
 import { settleItems } from "../payments";
-import { type SettingsRow, getActiveSettings, toPricingSettings } from "../settings";
+import { type SettingsRow, getActiveSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
 import { BookingError } from "./checkout";
 import { asOfToday, loadHoldings } from "./holdings";
@@ -87,34 +96,42 @@ export async function onDeliveryPickedUp(tx: Tx, delivery: Delivery) {
 }
 
 /**
- * Delivery arrived. The holding clock starts on the delivery date for the receiving
- * borrower and stops for the borrower handing over (handoff) or returning (collect).
+ * Delivery arrived. The holding starts on the delivery date for the receiving borrower and
+ * ends for the borrower handing over (handoff) or returning (collect). Both the first and
+ * the last day count; a handoff day belongs to the giver and the receiver starts the next
+ * day (pricing-spec.md "Special events").
  */
 export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) {
   const item = await tx.rentalItem.findUniqueOrThrow({ where: { id: delivery.rentalItemId } });
+  const today = dayToDate(colomboDay(at));
   switch (delivery.type) {
     case "DELIVER":
       await tx.rentalItem.update({
         where: { id: item.id },
-        data: { status: "ACTIVE", startDate: at },
+        data: { status: "ACTIVE", startDate: at, firstDay: today },
       });
       await tx.shoe.update({ where: { id: item.shoeId }, data: { status: "WITH_BORROWER" } });
       break;
-    case "HANDOFF":
+    case "HANDOFF": {
+      const days = handoffDays(at);
       if (delivery.fromRentalItemId) {
         await tx.rentalItem.update({
           where: { id: delivery.fromRentalItemId },
-          data: { endDate: at },
+          data: { endDate: at, lastDay: dayToDate(days.giverLastDay) },
         });
       }
       await tx.rentalItem.update({
         where: { id: item.id },
-        data: { status: "ACTIVE", startDate: at },
+        data: { status: "ACTIVE", startDate: at, firstDay: dayToDate(days.receiverFirstDay) },
       });
       await tx.shoe.update({ where: { id: item.shoeId }, data: { status: "WITH_BORROWER" } });
       break;
+    }
     case "COLLECT":
-      await tx.rentalItem.update({ where: { id: item.id }, data: { endDate: at } });
+      await tx.rentalItem.update({
+        where: { id: item.id },
+        data: { endDate: at, lastDay: today },
+      });
       await tx.shoe.update({ where: { id: item.shoeId }, data: { status: "CLEANING" } });
       break;
   }
@@ -258,27 +275,27 @@ async function openDamageDispute(tx: Tx, itemId: string, userId: string, notes?:
 // ─── Close-out (§5.4) ──────────────────────────────────────────────────────
 
 /**
- * Closes a rental item: wear from the ledger, charge and split from the pricing engine,
- * stored on the item and rolled into the shoe. Idempotent: a closed item is left alone.
+ * Closes a rental item: wear from the ledger, charge and split from the pricing engine with
+ * the shoe's own settings version, stored on the item and rolled into the shoe.
+ * Idempotent: a closed item is left alone. `settingsRow` (the active version) sets the
+ * dispute window.
  */
 export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: SettingsRow) {
   const item = await tx.rentalItem.findUniqueOrThrow({
     where: { id: itemId },
-    include: { rental: true, shoe: true },
+    include: { rental: true, shoe: { include: { settings: true } } },
   });
   if (item.status === "CLOSED") return item;
-  if (!item.startDate || !item.endDate) throw new BookingError("Holding period is incomplete");
+  if (!item.firstDay || !item.lastDay) throw new BookingError("Holding period is incomplete");
 
-  const settings = toPricingSettings(settingsRow);
   const holdings = await loadHoldings(tx, item.rental.borrowerId);
-  const added = wearAdded(holdings, item.id, colomboDay(item.endDate));
+  const added = wearAdded(holdings, item.id, dateToDay(item.lastDay));
   const wStart = toD(item.shoe.wear);
   const wEnd = wearEnd(wStart, added, item.shoe.lifespanDays);
 
-  const params = curveParams(toD(item.shoe.value), item.shoe.lifespanDays, settings);
-  const phi = settingsRow.catchUpEnabled
-    ? catchUpPhi(params, toD(item.shoe.collectedSoFar), wStart)
-    : toD(item.phi);
+  // φ is fixed at the start of the item, from the shoe's state before this rental.
+  const { params, settings, collected } = shoeCurve(item.shoe);
+  const phi = settings.catchUp ? catchUpPhi(params, collected, wStart) : toD(item.phi);
   const { income, undiscounted, discountCost } = incomeBetween(
     params,
     wStart,

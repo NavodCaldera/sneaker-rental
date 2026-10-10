@@ -13,7 +13,7 @@ export interface CurveParams {
   R: D;
   /** Midpoint m = midpointRatio · L */
   m: D;
-  /** Steepness β = baseSteepness · 365 / L */
+  /** Steepness β = baseSteepness · refLife / L */
   beta: D;
   /** Floor q */
   q: D;
@@ -48,19 +48,33 @@ export function targetIncome(V: Decimal.Value, settings: PricingSettings): D {
   return ONE.plus(settings.merchantMargin).plus(settings.platformMargin).times(V);
 }
 
+/** A listing's value must be positive and its lifespan within the settings' limits. */
+export function validateListing(
+  V: Decimal.Value,
+  L: Decimal.Value,
+  settings: Pick<PricingSettings, "minLife" | "maxLife">,
+): void {
+  if (!new D(V).gt(0)) throw new RangeError("Declared value must be greater than 0");
+  const l = new D(L);
+  if (l.lt(settings.minLife) || l.gt(settings.maxLife)) {
+    throw new RangeError(
+      `Lifespan must be between ${settings.minLife} and ${settings.maxLife} wear-days`,
+    );
+  }
+}
+
 export function curveParams(
   V: Decimal.Value,
   L: Decimal.Value,
   settings: PricingSettings,
 ): CurveParams {
+  validateListing(V, L, settings);
   const v = new D(V);
   const l = new D(L);
-  if (v.lte(0)) throw new RangeError("Declared value V must be positive");
-  if (l.lte(0)) throw new RangeError("Lifespan L must be positive");
 
   const q = new D(settings.floor);
   const m = new D(settings.midpointRatio).times(l);
-  const beta = new D(settings.baseSteepness).times(365).div(l);
+  const beta = new D(settings.baseSteepness).times(settings.refLife).div(l);
   const S0 = logistic(new D(0), m, beta);
   const SL = logistic(l, m, beta);
   const IS0 = logisticIntegral(new D(0), m, beta);
@@ -106,6 +120,19 @@ export function IQ(p: CurveParams, w: Decimal.Value): D {
 /** Price per wear-day at wear w: P(w) = K · Q(w). */
 export function priceAt(p: CurveParams, w: Decimal.Value): D {
   return p.K.times(Q(p, w));
+}
+
+/**
+ * Price per wear-day a borrower sees: (1 − d) · φ · P(w), always from the curve at the
+ * shoe's current wear, so discounts never stack.
+ */
+export function shownPrice(
+  p: CurveParams,
+  w: Decimal.Value,
+  discount: Decimal.Value = 0,
+  phi: Decimal.Value = 1,
+): D {
+  return ONE.minus(discount).times(phi).times(priceAt(p, w));
 }
 
 /** Curve income from new to wear w: F(w) = K · IQ(w) (undiscounted, φ = 1). */
