@@ -12,12 +12,14 @@ Requires Node 24+ and PostgreSQL.
 
 ```bash
 npm install
-cp .env.example .env        # then set DATABASE_URL
+cp .env.example .env
+npm run db:start            # local Postgres for dev (5544) and tests (5545)
+npx prisma migrate deploy && npm run db:seed
 npx playwright install chromium
 npm run dev                 # http://localhost:3000
 ```
 
-Database: use a local PostgreSQL on port 5432, or `docker compose up -d` for a dedicated one on port 5433 (see `docker-compose.yml`).
+Sign in with any seed account (password `password123`): `admin@sneakers.test`, `kicks@sneakers.test` (merchant), `amaya@sneakers.test` (borrower). To use your own PostgreSQL instead, change the URLs in `.env`.
 
 ## Commands
 

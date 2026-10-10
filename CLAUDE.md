@@ -24,7 +24,9 @@ Conventions:
 
 ## Databases
 
-Development uses Prisma's local Postgres (`npx prisma dev --name sneaker-rental --detach`, port 51214). Tests use a second one (`--name sneaker-rental-test`, port 51218) that the test runs wipe. Both URLs are in `.env`. PGlite serves one connection at a time, so `.env` sets `DATABASE_POOL_MAX=1`; inside `db.$transaction(async (tx) => …)` use only `tx`, never `db`, or the single connection deadlocks. If a dev database stops answering (ECONNRESET), restart it: `npx prisma dev stop <name>` then `npx prisma dev start <name>`. Seed accounts all use password `password123`: admin@, kicks@ / sole@ (merchants), amaya@ / ravi@ / nimal@ (borrowers), all `@sneakers.test`.
+`npm run db:start` runs two local PostgreSQL 18 servers from the embedded-postgres binaries (no install, no password, data in `.data/pg/`): dev on port 5544 and test on 5545. The test runs wipe the test database. `npm run db:stop` / `db:status` manage them. Both URLs are in `.env`. Inside `db.$transaction(async (tx) => …)` use only `tx`, never `db`. Seed accounts all use password `password123`: admin@, kicks@ / sole@ (merchants), amaya@ / ravi@ / nimal@ (borrowers), all `@sneakers.test`.
+
+(Prisma's `prisma dev` PGlite server was tried first and crashed under repeated test runs, so don't go back to it.)
 
 ## Commands
 
