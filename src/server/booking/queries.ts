@@ -13,6 +13,7 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
       where: { borrowerId },
       orderBy: { createdAt: "desc" },
       include: {
+        payments: { where: { status: "SUCCEEDED" }, orderBy: { createdAt: "asc" } },
         items: {
           orderBy: { createdAt: "asc" },
           include: {
@@ -33,6 +34,7 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
 
   return rentals.map((rental) => ({
     ...rental,
+    depositStatus: depositStatus(rental.payments.map((p) => p.kind)),
     items: rental.items.map((item) => {
       let live: { wearSoFar: string; chargeSoFar: string } | null = null;
       if (item.startDate && (item.status === "ACTIVE" || item.status === "RETURNING")) {
@@ -84,4 +86,11 @@ export async function merchantReturns(merchantId: string) {
     }),
   ]);
   return { returned, cleaning, inTransit };
+}
+
+function depositStatus(kinds: string[]): "held" | "released" | "captured" | "none" {
+  if (kinds.includes("DEPOSIT_CAPTURE")) return "captured";
+  if (kinds.includes("DEPOSIT_RELEASE")) return "released";
+  if (kinds.includes("DEPOSIT_HOLD")) return "held";
+  return "none";
 }

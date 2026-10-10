@@ -1,62 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Delivery } from "@/generated/prisma/client";
 import { db } from "@/server/db";
 import { BookingError, checkout, quoteBundle } from "@/server/booking/checkout";
-import {
-  endRental,
-  markCleaned,
-  onDeliveryDelivered,
-  onDeliveryPickedUp,
-  recordCondition,
-} from "@/server/booking/lifecycle";
-import { makeUser, resetDb } from "./helpers";
+import { endRental, markCleaned, recordCondition } from "@/server/booking/lifecycle";
+import { arrive, day, deliveryFor, makeShoe, makeUser, photos, resetDb, setup } from "./helpers";
 
 beforeEach(resetDb);
-
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
-const photos = () => [new File([PNG as BlobPart], "c.png", { type: "image/png" })];
-/** Noon in Colombo, `n` days after 1 Jan 2026. */
-const day = (n: number) => new Date(Date.parse("2026-01-01T12:00:00+05:30") + n * 86_400_000);
-
-async function makeShoe(
-  merchantId: string,
-  overrides: { value?: string; lifespanDays?: number } = {},
-) {
-  return db.shoe.create({
-    data: {
-      merchantId,
-      brand: "Nike",
-      model: "Pegasus 41",
-      size: "UK 9",
-      category: "Running",
-      pickupAddress: "Shop, 12 Galle Road, Colombo 03",
-      value: overrides.value ?? "6000",
-      lifespanDays: overrides.lifespanDays ?? 365,
-      status: "AVAILABLE",
-    },
-  });
-}
-
-async function deliveryFor(itemId: string, type: Delivery["type"]) {
-  return db.delivery.findFirstOrThrow({ where: { rentalItemId: itemId, type } });
-}
-
-async function arrive(delivery: Delivery, at: Date) {
-  await db.$transaction(async (tx) => {
-    await onDeliveryPickedUp(tx, delivery);
-    await tx.delivery.update({
-      where: { id: delivery.id },
-      data: { status: "DELIVERED", deliveredAt: at },
-    });
-    await onDeliveryDelivered(tx, { ...delivery, status: "DELIVERED" }, at);
-  });
-}
-
-async function setup() {
-  const merchant = await makeUser("MERCHANT");
-  const borrower = await makeUser("BORROWER");
-  return { merchant, merchantId: merchant.merchant!.id, borrower };
-}
 
 describe("rent, return and close (§5.2–5.4)", () => {
   it("a 100-day rental of a new 6,000 LKR shoe closes at 2,866.11, split 2,627.27 / 238.84", async () => {
