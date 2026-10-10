@@ -1,14 +1,17 @@
 import "server-only";
 import { toD } from "@/lib/decimal";
-import { curveParams, incomeBetween } from "@/lib/pricing";
+import { catchUpPhi, incomeBetween } from "@/lib/pricing";
 import { cappedWearAdded, wearAdded, wearEnd } from "@/lib/wear-ledger";
+import { shoeCurve } from "../catalogue/pricing";
 import { db } from "../db";
-import { getActiveSettings, toPricingSettings } from "../settings";
 import { asOfToday, loadHoldings } from "./holdings";
 
-/** A borrower's rentals, with wear so far and the running charge for pairs still held. */
+/**
+ * A borrower's rentals, with wear so far and the running charge for pairs still held:
+ * what each pair would cost if it reached the next holder today (today counts).
+ */
 export async function borrowerRentals(borrowerId: string, now = new Date()) {
-  const [rentals, holdings, settingsRow] = await Promise.all([
+  const [rentals, holdings] = await Promise.all([
     db.rental.findMany({
       where: { borrowerId },
       orderBy: { createdAt: "desc" },
@@ -17,7 +20,9 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
         items: {
           orderBy: { createdAt: "asc" },
           include: {
-            shoe: { include: { photos: { where: { kind: "FRONT" }, take: 1 } } },
+            shoe: {
+              include: { photos: { where: { kind: "FRONT" }, take: 1 }, settings: true },
+            },
             conditionReports: { select: { stage: true, recordedById: true } },
             deliveries: { orderBy: { createdAt: "desc" } },
             outgoing: { orderBy: { createdAt: "desc" } },
@@ -27,9 +32,7 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
       },
     }),
     loadHoldings(db, borrowerId),
-    getActiveSettings(),
   ]);
-  const settings = toPricingSettings(settingsRow);
   const today = asOfToday(now);
 
   return rentals.map((rental) => ({
@@ -37,11 +40,12 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
     depositStatus: depositStatus(rental.payments.map((p) => p.kind)),
     items: rental.items.map((item) => {
       let live: { wearSoFar: string; chargeSoFar: string } | null = null;
-      if (item.startDate && (item.status === "ACTIVE" || item.status === "RETURNING")) {
-        const added = wearAdded(holdings, item.id, item.endDate ? undefined : today);
+      if (item.firstDay && (item.status === "ACTIVE" || item.status === "RETURNING")) {
+        const added = wearAdded(holdings, item.id, item.lastDay ? undefined : today);
         const wStart = toD(item.shoe.wear);
         const wEnd = wearEnd(wStart, added, item.shoe.lifespanDays);
-        const params = curveParams(toD(item.shoe.value), item.shoe.lifespanDays, settings);
+        const { params, settings, collected } = shoeCurve(item.shoe);
+        const phi = settings.catchUp ? catchUpPhi(params, collected, wStart) : toD(item.phi);
         live = {
           wearSoFar: cappedWearAdded(wStart, added, item.shoe.lifespanDays).toString(),
           chargeSoFar: incomeBetween(
@@ -49,7 +53,7 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
             wStart,
             wEnd,
             toD(item.discount),
-            toD(item.phi),
+            phi,
           ).income.toString(),
         };
       }

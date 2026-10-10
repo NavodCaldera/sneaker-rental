@@ -16,7 +16,10 @@ export async function getActiveSettings(now = new Date()): Promise<SettingsRow> 
   return row;
 }
 
-/** Map a stored row to the pricing engine's input (Decimal strings, never JS numbers). */
+/**
+ * Map a stored row to the pricing engine's input (Decimal strings, never JS numbers).
+ * Price a listed shoe with its own snapshot (`shoe.settings`), not the active row.
+ */
 export function toPricingSettings(row: SettingsRow): PricingSettings {
   return {
     merchantMargin: row.merchantMargin.toString(),
@@ -24,6 +27,13 @@ export function toPricingSettings(row: SettingsRow): PricingSettings {
     floor: row.floor.toString(),
     midpointRatio: row.midpointRatio.toString(),
     baseSteepness: row.baseSteepness.toString(),
+    refLife: row.refLife,
+    minLife: row.minLifespanDays,
+    maxLife: row.maxLifespanDays,
+    idleDiscountCap: row.idleDiscountCap.toString(),
+    catchUp: row.catchUpEnabled,
+    capitalRate: row.capitalRate.toString(),
+    holdCostPerDay: row.holdCost.toString(),
   };
 }
 
@@ -36,20 +46,30 @@ const money = z
   .trim()
   .regex(/^\d+(\.\d{1,2})?$/, "Enter an amount with up to 2 decimals");
 
-export const settingsSchema = z.object({
-  merchantMargin: ratio,
-  platformMargin: ratio,
-  floor: ratio,
-  midpointRatio: ratio,
-  baseSteepness: ratio,
-  idleDiscountCap: ratio,
-  depositPerPair: money,
-  maxPairsPerBundle: z.coerce.number().int().min(1).max(10),
-  disputeWindowDays: z.coerce.number().int().min(0).max(30),
-  freeReturnHours: z.coerce.number().int().min(0).max(168),
-  deliveryBookingFee: money.optional().or(z.literal("")),
-  catchUpEnabled: z.boolean(),
-});
+export const settingsSchema = z
+  .object({
+    merchantMargin: ratio,
+    platformMargin: ratio,
+    floor: ratio,
+    midpointRatio: ratio,
+    baseSteepness: ratio,
+    refLife: z.coerce.number().int().min(1).max(3650),
+    minLifespanDays: z.coerce.number().int().min(1).max(3650),
+    maxLifespanDays: z.coerce.number().int().min(1).max(3650),
+    idleDiscountCap: ratio,
+    capitalRate: ratio,
+    holdCost: money,
+    depositPerPair: money,
+    maxPairsPerBundle: z.coerce.number().int().min(1).max(10),
+    disputeWindowDays: z.coerce.number().int().min(0).max(30),
+    freeReturnHours: z.coerce.number().int().min(0).max(168),
+    deliveryBookingFee: money.optional().or(z.literal("")),
+    catchUpEnabled: z.boolean(),
+  })
+  .refine((s) => s.minLifespanDays <= s.maxLifespanDays, {
+    message: "Must be at least the minimum lifespan",
+    path: ["maxLifespanDays"],
+  });
 
 export type SettingsInput = z.infer<typeof settingsSchema>;
 

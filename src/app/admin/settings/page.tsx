@@ -20,7 +20,12 @@ export default async function AdminSettings() {
     floor: active.floor.toString(),
     midpointRatio: active.midpointRatio.toString(),
     baseSteepness: active.baseSteepness.toString(),
+    refLife: String(active.refLife),
+    minLifespanDays: String(active.minLifespanDays),
+    maxLifespanDays: String(active.maxLifespanDays),
     idleDiscountCap: active.idleDiscountCap.toString(),
+    capitalRate: active.capitalRate.toString(),
+    holdCost: active.holdCost.toFixed(2),
     depositPerPair: active.depositPerPair.toFixed(2),
     maxPairsPerBundle: String(active.maxPairsPerBundle),
     disputeWindowDays: String(active.disputeWindowDays),
@@ -34,7 +39,7 @@ export default async function AdminSettings() {
       <div>
         <PageHeader
           title="Pricing settings"
-          description="Every change is saved as a new version. Prices, charges and splits use the version active when a rental closes, so margin and curve changes also affect pairs already listed."
+          description="Every change is saved as a new version. Each shoe is priced with the version active when it was published, so margin and curve changes apply to new listings only. Deposits, bundle size, windows and fees apply from now on."
         />
         <Card>
           <SettingsForm values={values} />

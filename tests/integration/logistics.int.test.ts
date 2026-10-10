@@ -144,6 +144,7 @@ describe("handoff trips", () => {
     await recordCondition(next.id, { itemId: item2.id, grade: "A", photos: photos() }, day(10));
     const closed = await db.rentalItem.findUniqueOrThrow({ where: { id: item1.id } });
     expect(closed.status).toBe("CLOSED");
-    expect(closed.wearEnd!.toString()).toBe("10");
+    // Days 0–10: the handoff day counts for the borrower handing over.
+    expect(closed.wearEnd!.toString()).toBe("11");
   });
 });

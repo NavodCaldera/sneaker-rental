@@ -2,6 +2,7 @@ import { db } from "@/server/db";
 import { hashPassword } from "@/server/auth/password";
 import type { Delivery, Role } from "@/generated/prisma/client";
 import { onDeliveryDelivered, onDeliveryPickedUp } from "@/server/booking/lifecycle";
+import { getActiveSettings } from "@/server/settings";
 
 /** Launch defaults, as in prisma/seed.ts. */
 export const TEST_SETTINGS = {
@@ -10,7 +11,12 @@ export const TEST_SETTINGS = {
   floor: "0.30",
   midpointRatio: "0.5479452054794521",
   baseSteepness: "0.03",
+  refLife: 365,
+  minLifespanDays: 60,
+  maxLifespanDays: 1095,
   idleDiscountCap: "0.05",
+  capitalRate: "0.12",
+  holdCost: "0",
   depositPerPair: "5000",
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
@@ -59,10 +65,12 @@ export const photos = () => [new File([PNG as BlobPart], "c.png", { type: "image
 export const day = (n: number) =>
   new Date(Date.parse("2026-01-01T12:00:00+05:30") + n * 86_400_000);
 
+/** An available shoe, listed under the settings version active now. */
 export async function makeShoe(
   merchantId: string,
-  overrides: { value?: string; lifespanDays?: number } = {},
+  overrides: { value?: string; lifespanDays?: number; initialWear?: string } = {},
 ) {
+  const settings = await getActiveSettings();
   return db.shoe.create({
     data: {
       merchantId,
@@ -73,6 +81,9 @@ export async function makeShoe(
       pickupAddress: "Shop, 12 Galle Road, Colombo 03",
       value: overrides.value ?? "6000",
       lifespanDays: overrides.lifespanDays ?? 365,
+      initialWear: overrides.initialWear ?? "0",
+      wear: overrides.initialWear ?? "0",
+      settingsId: settings.id,
       status: "AVAILABLE",
     },
   });

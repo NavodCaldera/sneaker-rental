@@ -14,7 +14,7 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
 ## Every run
 
 1. `npx tsc --noEmit`, lint, `npx vitest run`, `npx playwright test`. Report exact failures with output.
-2. **Pricing acceptance table (§9):** confirm each row has a passing test, list any still `it.todo` and why (e.g. scenario inputs missing from `docs/`).
+2. **Pricing acceptance table** (`docs/pricing-spec.md` §11): confirm every row, including the 90-day and 800-day scenarios, has a passing test in `src/lib/pricing/__tests__/acceptance.test.ts`. No `it.todo`, no skips, no loosened tolerances or changed expected values.
 3. **E2E journeys:**
    - 5.1 Merchant lists a shoe → curve preview shows 28.92 / 8.68 for the seeded 6,000 LKR / L = 365 shoe → publishes → Available.
    - 5.2 Borrower builds a 4-pair bundle → sees bundle daily cost and 20,000 deposit → checks out (mock gateway) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
@@ -25,11 +25,14 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
    - [ ] No JS `number`/`parseFloat`/`Float` for money or wear. Decimal everywhere.
    - [ ] Rounding (`toFixed`, `roundMoney`, `toDecimalPlaces`) only at display or charge boundaries.
    - [ ] Discounts and φ apply to one rental item only. The next item starts from the curve.
-   - [ ] No hard-coded settings values (0.10, 5000, 3 days, 4 pairs) outside PricingSettings defaults and seed.
+   - [ ] Charged amounts come from `chargedAmounts` (platform share rounded, merchant gets the remainder).
+   - [ ] A listed shoe is priced with its own settings snapshot (`shoeCurve`), never `getActiveSettings()` + `curveParams` directly.
+   - [ ] Wear-ledger days are inclusive and a handoff day belongs to the giver (receiver starts the next day).
+   - [ ] No hard-coded settings values (0.10, 5000, 3 days, 4 pairs, 60 / 1095 lifespan limits) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] MVP scope respected (§10). No unrequested Phase 2/3 features.
    - [ ] Agents stayed in their owned directories.
 
 ## Output
 
-A short verdict, **PASS** or **BLOCK**, then failures with file:line and output, then checklist results, then which agent should fix each item. Don't approve with failing or skipped tests unless they're the documented `it.todo` scenario tests.
+A short verdict, **PASS** or **BLOCK**, then failures with file:line and output, then checklist results, then which agent should fix each item. Don't approve with failing or skipped tests.

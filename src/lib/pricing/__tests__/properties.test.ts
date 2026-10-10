@@ -9,8 +9,8 @@ import {
   curveIncome,
   curveParams,
   curvePoints,
-  estimateItem,
   incomeBetween,
+  lifetimeCollected,
   priceAt,
   remainingValue,
   splitCharge,
@@ -58,10 +58,16 @@ describe.each(shapes)("curve V = %d, L = %d", (V, L) => {
     expect(total.minus(p.R).abs().lt("1e-25")).toBe(true);
   });
 
-  it("remainingValue(w) + F(w) = R", () => {
+  it("remainingValue(w) + F(w) = R, and R − collected with catch-up", () => {
     const w = L / 3;
-    expect(remainingValue(p, w).plus(curveIncome(p, w)).minus(p.R).abs().lt(EPS)).toBe(true);
-    expect(remainingValue(p, L).abs().lt("1e-25")).toBe(true);
+    const collected = curveIncome(p, w);
+    expect(remainingValue(p, w, 0, S).plus(collected).minus(p.R).abs().lt(EPS)).toBe(true);
+    expect(remainingValue(p, L, 0, S).abs().lt("1e-25")).toBe(true);
+    const lessCollected = collected.times("0.9");
+    expect(
+      remainingValue(p, w, lessCollected, { catchUp: true }).eq(p.R.minus(lessCollected)),
+    ).toBe(true);
+    expect(remainingValue(p, w, p.R.plus(1), { catchUp: true }).eq(0)).toBe(true);
   });
 });
 
@@ -85,36 +91,24 @@ describe("charges", () => {
     expect(next.income.eq(p.K.times(IQ(p, 150).minus(IQ(p, 100))))).toBe(true);
   });
 
-  it("split shares always sum to the charge", () => {
+  it("exact split shares always sum to the amount", () => {
     for (const amount of ["0", "0.01", "2866.1142780659993", "123456.789"]) {
       const { merchant, platform } = splitCharge(S, amount);
       expect(merchant.plus(platform).eq(amount)).toBe(true);
     }
   });
 
-  it("merchant-funded discount comes out of the merchant share only", () => {
-    const { income, undiscounted } = incomeBetween(p, 0, 100, "0.05");
-    const platformPromo = splitCharge(S, income, { undiscounted, fundedBy: "platform" });
-    const merchantIdle = splitCharge(S, income, { undiscounted, fundedBy: "merchant" });
-    const fullPlatform = splitCharge(S, undiscounted).platform;
-    expect(merchantIdle.platform.eq(fullPlatform)).toBe(true);
-    expect(merchantIdle.merchant.plus(merchantIdle.platform).eq(income)).toBe(true);
-    expect(platformPromo.platform.lt(fullPlatform)).toBe(true);
-  });
-
-  it("catch-up φ is 1 with nothing collected short of the curve, and 1 at end of life", () => {
+  it("catch-up φ is 1 with nothing collected short of the curve, 1 at end of life, never negative", () => {
     const collected = curveIncome(p, 100);
     expect(catchUpPhi(p, collected, 100).minus(1).abs().lt(EPS)).toBe(true);
     expect(catchUpPhi(p, p.R, 365).eq(1)).toBe(true);
+    expect(catchUpPhi(p, p.R.times(2), 100).eq(0)).toBe(true);
   });
 
-  it("estimate splits wear across the bundle: 4 pairs × 10 days = 2.5 wear-days each", () => {
-    const one = estimateItem(p, 0, 10, 1);
-    const four = estimateItem(p, 0, 10, 4);
-    expect(one.wearAdded.eq(10)).toBe(true);
-    expect(four.wearAdded.eq("2.5")).toBe(true);
-    expect(four.charge.lt(one.charge)).toBe(true);
-    expect(estimateItem(p, 364, 10, 1).wearAdded.eq(1)).toBe(true);
+  it("a second-hand shoe has collected F(w₀) before its first rental, so φ starts at 1", () => {
+    const collected = lifetimeCollected(p, 120, 0);
+    expect(collected.eq(curveIncome(p, 120))).toBe(true);
+    expect(catchUpPhi(p, collected, 120).minus(1).abs().lt(EPS)).toBe(true);
   });
 
   it("bundle daily cost of four identical new pairs equals one pair's price", () => {
@@ -126,27 +120,45 @@ describe("charges", () => {
   it("rejects invalid input", () => {
     expect(() => curveParams(0, 365, S)).toThrow(RangeError);
     expect(() => curveParams(6000, 0, S)).toThrow(RangeError);
+    expect(() => curveParams(6000, 59, S)).toThrow(RangeError);
     expect(() => incomeBetween(p, 0, 10, 1)).toThrow(RangeError);
     expect(() => incomeBetween(p, 0, 10, -0.1)).toThrow(RangeError);
     expect(() => incomeBetween(p, 10, 5)).toThrow(RangeError);
     expect(() => Q(p, -1)).toThrow(RangeError);
     expect(() => IQ(p, -1)).toThrow(RangeError);
-    expect(() => estimateItem(p, 0, 10, 0)).toThrow(RangeError);
     expect(() => curvePoints(p, 1)).toThrow(RangeError);
   });
 });
 
 describe("chargedAmounts", () => {
-  it("rounds charge and merchant share; platform share is the remainder", async () => {
+  it("rounds the charge and the platform share; the merchant gets the remainder", async () => {
     const { chargedAmounts } = await import("..");
     const r = chargedAmounts(S, "2866.1142780659993");
     expect(r.charge.toFixed(2)).toBe("2866.11");
     expect(r.merchantShare.toFixed(2)).toBe("2627.27");
     expect(r.platformShare.toFixed(2)).toBe("238.84");
-    // A case where rounding both shares separately would drift by a cent.
+    expect(r.discountGiven.eq(0)).toBe(true);
+    // 0.06 → platform 0.005 rounds to 0.01; merchant gets the remaining 0.05.
+    const tiny = chargedAmounts(S, "0.06");
+    expect(tiny.platformShare.toFixed(2)).toBe("0.01");
+    expect(tiny.merchantShare.toFixed(2)).toBe("0.05");
     for (const x of ["0.05", "10.015", "333.335", "1.005"]) {
       const a = chargedAmounts(S, x);
       expect(a.merchantShare.plus(a.platformShare).eq(a.charge)).toBe(true);
     }
+  });
+
+  it("merchant-funded discount comes out of the merchant share only", async () => {
+    const { chargedAmounts } = await import("..");
+    const p = curveParams(6000, 365, S);
+    const { income, undiscounted } = incomeBetween(p, 0, 100, "0.05");
+    const promo = chargedAmounts(S, income, { undiscounted, fundedBy: "platform" });
+    const idle = chargedAmounts(S, income, { undiscounted, fundedBy: "merchant" });
+    const full = chargedAmounts(S, undiscounted);
+    expect(idle.charge.eq(promo.charge)).toBe(true);
+    expect(idle.platformShare.eq(full.platformShare)).toBe(true);
+    expect(idle.merchantShare.plus(idle.platformShare).eq(idle.charge)).toBe(true);
+    expect(promo.platformShare.lt(full.platformShare)).toBe(true);
+    expect(idle.discountGiven.eq(full.charge.minus(idle.charge))).toBe(true);
   });
 });

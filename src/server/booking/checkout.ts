@@ -1,13 +1,20 @@
 import "server-only";
 import { z } from "zod";
 import type { RentalItemStatus } from "@/generated/prisma/client";
-import { D, roundMoney, toD } from "@/lib/decimal";
-import { bundleDailyCost, curveParams, estimateItem, priceAt } from "@/lib/pricing";
-import { atEndOfLife } from "@/lib/wear-ledger";
+import { D, toD } from "@/lib/decimal";
+import { type PricingSettings, bundleDailyCost, shownPrice } from "@/lib/pricing";
+import {
+  type LedgerItem,
+  type LedgerShoe,
+  atEndOfLife,
+  estimate as ledgerEstimate,
+} from "@/lib/wear-ledger";
+import { type PricedShoe, nextPhi, shoeCurve } from "../catalogue/pricing";
 import { db } from "../db";
 import { requestDelivery } from "../logistics/requests";
 import { PaymentError, authorizeRental } from "../payments";
-import { type SettingsRow, getActiveSettings, toPricingSettings } from "../settings";
+import { type SettingsRow, getActiveSettings } from "../settings";
+import { asOfToday } from "./holdings";
 
 export class BookingError extends Error {}
 
@@ -46,9 +53,23 @@ export type BundleQuote = {
   problems: string[];
 };
 
+function ledgerShoe(id: string, shoe: PricedShoe): LedgerShoe {
+  const { params, settings, collected } = shoeCurve(shoe);
+  return {
+    id,
+    curve: params,
+    wear: toD(shoe.wear),
+    collected,
+    lostToDiscounts: new D(0),
+    catchUp: settings.catchUp,
+  };
+}
+
 /**
  * Prices a bundle: today's price per pair, the bundle's daily cost (each pair accrues 1/n
- * per day across all pairs held), the pre-auth estimate for the planned days and the deposit.
+ * per day across all pairs held), the pre-auth estimate and the deposit. The estimate runs
+ * the wear ledger on copies of the shoes over the planned days, counting the pairs the
+ * borrower already holds as held throughout (pricing-spec.md "Booking").
  */
 export async function quoteBundle(
   borrowerId: string | null,
@@ -57,11 +78,17 @@ export async function quoteBundle(
   settingsRow?: SettingsRow,
 ): Promise<BundleQuote> {
   const row = settingsRow ?? (await getActiveSettings());
-  const settings = toPricingSettings(row);
-  const held = borrowerId ? await pairsHeld(borrowerId) : 0;
+  const heldItems = borrowerId
+    ? await db.rentalItem.findMany({
+        where: { rental: { borrowerId }, status: { in: HELD_STATUSES } },
+        include: { shoe: { include: { settings: true } } },
+      })
+    : [];
+  const held = heldItems.length;
   const shoes = await db.shoe.findMany({
     where: { id: { in: shoeIds } },
     include: {
+      settings: true,
       photos: { where: { kind: "FRONT" }, take: 1 },
       merchant: { select: { verified: true } },
       rentalItems: {
@@ -79,33 +106,44 @@ export async function quoteBundle(
     );
   }
 
-  const lines: QuoteLine[] = shoeIds.flatMap((id) => {
-    const shoe = shoes.find((s) => s.id === id);
-    if (!shoe) return [];
-    const params = curveParams(toD(shoe.value), shoe.lifespanDays, settings);
+  const listed = shoeIds.flatMap((id) => shoes.filter((s) => s.id === id));
+
+  // Planned days: from today through today + plannedDays − 1, both inclusive.
+  const first = asOfToday();
+  const last = first + plannedDays - 1;
+  const ledgerShoes = new Map<string, LedgerShoe>();
+  const settingsByKey = new Map<string, PricingSettings>();
+  const ledgerItems: LedgerItem[] = [];
+  const plan = (key: string, shoe: PricedShoe) => {
+    ledgerShoes.set(key, ledgerShoe(key, shoe));
+    settingsByKey.set(key, shoeCurve(shoe).settings);
+    ledgerItems.push({ id: key, borrowerId: "me", shoeId: key, start: first, end: last });
+  };
+  for (const h of heldItems) plan(`held:${h.id}`, h.shoe);
+  for (const shoe of listed) plan(`new:${shoe.id}`, shoe);
+  const invoice = ledgerEstimate(ledgerItems, ledgerShoes, (key) => settingsByKey.get(key)!, {
+    maxPairs: Math.max(row.maxPairsPerBundle, totalPairs),
+  });
+  const estimateFor = (shoeId: string) => invoice.lines.find((l) => l.shoeId === `new:${shoeId}`)!;
+
+  const lines: QuoteLine[] = listed.map((shoe) => {
+    const { params } = shoeCurve(shoe);
     const wear = toD(shoe.wear);
     const problem = lineProblem(shoe, borrowerId);
     if (problem) problems.push(`${shoe.brand} ${shoe.model}: ${problem}`);
-    return [
-      {
-        shoeId: shoe.id,
-        brand: shoe.brand,
-        model: shoe.model,
-        size: shoe.size,
-        photoId: shoe.photos[0]?.id,
-        mode: shoe.status === "WITH_BORROWER" ? ("handoff" as const) : ("deliver" as const),
-        priceToday: priceAt(params, wear).toString(),
-        wear: wear.toString(),
-        lifespanDays: shoe.lifespanDays,
-        estimate: estimateItem(
-          params,
-          wear,
-          plannedDays,
-          Math.max(totalPairs, 1),
-        ).charge.toString(),
-        problem,
-      },
-    ];
+    return {
+      shoeId: shoe.id,
+      brand: shoe.brand,
+      model: shoe.model,
+      size: shoe.size,
+      photoId: shoe.photos[0]?.id,
+      mode: shoe.status === "WITH_BORROWER" ? ("handoff" as const) : ("deliver" as const),
+      priceToday: shownPrice(params, wear, 0, nextPhi(shoe)).toString(),
+      wear: wear.toString(),
+      lifespanDays: shoe.lifespanDays,
+      estimate: estimateFor(shoe.id).charge.toFixed(2),
+      problem,
+    };
   });
 
   const estimate = lines.reduce((sum, l) => sum.plus(l.estimate), new D(0));
@@ -116,7 +154,7 @@ export async function quoteBundle(
     maxPairs: row.maxPairsPerBundle,
     plannedDays,
     dailyCost: bundleDailyCost(lines.map((l) => l.priceToday)).toString(),
-    estimate: roundMoney(estimate).toFixed(2),
+    estimate: estimate.toFixed(2),
     deposit: toD(row.depositPerPair).times(lines.length).toFixed(2),
     problems,
   };

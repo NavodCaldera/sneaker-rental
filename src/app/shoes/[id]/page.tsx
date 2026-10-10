@@ -3,11 +3,11 @@ import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { Card } from "@/components/ui";
+import { D } from "@/lib/decimal";
 import { formatLKR, formatWear } from "@/lib/format";
 import { getCurrentUser } from "@/server/auth/session";
 import { getListing } from "@/server/catalogue";
-import { curvePreview, shoePricing } from "@/server/catalogue/pricing";
-import { getActiveSettings, toPricingSettings } from "@/server/settings";
+import { shoeCurvePreview, shoePricing } from "@/server/catalogue/pricing";
 import { getBundle } from "@/server/booking/bundle";
 import { RentPanel } from "./rent-panel";
 
@@ -18,16 +18,10 @@ export async function generateMetadata({ params }: PageProps<"/shoes/[id]">): Pr
 
 export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
   const { id } = await params;
-  const [shoe, user, settingsRow, bundle] = await Promise.all([
-    getListing(id),
-    getCurrentUser(),
-    getActiveSettings(),
-    getBundle(),
-  ]);
+  const [shoe, user, bundle] = await Promise.all([getListing(id), getCurrentUser(), getBundle()]);
   if (!shoe) notFound();
-  const settings = toPricingSettings(settingsRow);
-  const pricing = shoePricing(shoe, settings);
-  const preview = curvePreview(shoe.value.toString(), shoe.lifespanDays, settings);
+  const pricing = shoePricing(shoe);
+  const preview = shoeCurvePreview(shoe);
   const [main, ...rest] = shoe.photos;
 
   return (
@@ -75,7 +69,8 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
         <div className="text-sm">
           <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />
           <p className="mt-1 text-subtle">
-            Worn {formatWear(shoe.wear.toString())} of {shoe.lifespanDays} wear-days · grade{" "}
+            Worn {formatWear(shoe.wear.toString())} of {shoe.lifespanDays} wear-days ·{" "}
+            {new D(pricing.lifeLeft).times(100).toFixed(0)}% of life left · grade{" "}
             {shoe.latestGrade ?? "—"}
           </p>
         </div>

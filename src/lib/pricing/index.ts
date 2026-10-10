@@ -11,15 +11,20 @@ export {
   IQ,
   priceAt,
   Q,
+  shownPrice,
   targetIncome,
+  validateListing,
 } from "./curve";
 export {
+  assertDiscount,
+  breakEvenIdleDays,
   bundleDailyCost,
   catchUpPhi,
   chargedAmounts,
   type DiscountFunding,
-  estimateItem,
+  idleCostPerDay,
   incomeBetween,
+  lifetimeCollected,
   remainingValue,
   splitCharge,
 } from "./charges";

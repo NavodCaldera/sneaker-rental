@@ -2,14 +2,12 @@ import "server-only";
 import { z } from "zod";
 import { D } from "@/lib/decimal";
 import type { PhotoKind, Prisma, ShoeStatus } from "@/generated/prisma/client";
+import { validateListing } from "@/lib/pricing";
 import { db } from "../db";
+import { type SettingsRow, getActiveSettings, toPricingSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
 
 export class CatalogueError extends Error {}
-
-/** OPEN DECISION: minimum and maximum lifespan a merchant may declare (§10). */
-export const LIFESPAN_MIN_DAYS = 30;
-export const LIFESPAN_MAX_DAYS = 1500;
 
 export const LISTING_PHOTOS: { kind: PhotoKind; label: string }[] = [
   { kind: "FRONT", label: "Front" },
@@ -20,33 +18,51 @@ export const LISTING_PHOTOS: { kind: PhotoKind; label: string }[] = [
 ];
 
 const MONEY_FORMAT = /^\d+(\.\d{1,2})?$/;
+const WEAR_FORMAT = /^\d+(\.\d{1,2})?$/;
 
 export const CATEGORIES = ["Running", "Lifestyle", "Basketball", "Skate", "Training", "Other"];
 
-export const shoeSchema = z.object({
-  brand: z.string().trim().min(1, "Enter the brand").max(60),
-  model: z.string().trim().min(1, "Enter the model").max(80),
-  size: z.string().trim().min(1, "Enter the size").max(20),
-  category: z.enum(CATEGORIES as [string, ...string[]]),
-  description: z.string().trim().max(1000).optional().or(z.literal("")),
-  pickupAddress: z.string().trim().min(5, "Enter the pickup address").max(300),
-  value: z
-    .string()
-    .trim()
-    .regex(/^\d+(\.\d{1,2})?$/, "Enter the value in LKR, up to 2 decimals")
-    .refine(
-      // Zod runs this even when the format check failed, so re-check before parsing.
-      (v) => MONEY_FORMAT.test(v) && new D(v).gt(0) && new D(v).lte(10_000_000),
-      "Value must be between 1 and 10,000,000",
-    ),
-  lifespanDays: z.coerce
-    .number()
-    .int("Whole days only")
-    .min(LIFESPAN_MIN_DAYS, `At least ${LIFESPAN_MIN_DAYS} wear-days`)
-    .max(LIFESPAN_MAX_DAYS, `At most ${LIFESPAN_MAX_DAYS} wear-days`),
-});
+/**
+ * Listing form. Lifespan limits come from settings (OPEN DECISION, §10), so the schema is
+ * built per settings version.
+ */
+export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLifespanDays">) =>
+  z
+    .object({
+      brand: z.string().trim().min(1, "Enter the brand").max(60),
+      model: z.string().trim().min(1, "Enter the model").max(80),
+      size: z.string().trim().min(1, "Enter the size").max(20),
+      category: z.enum(CATEGORIES as [string, ...string[]]),
+      description: z.string().trim().max(1000).optional().or(z.literal("")),
+      pickupAddress: z.string().trim().min(5, "Enter the pickup address").max(300),
+      value: z
+        .string()
+        .trim()
+        .regex(MONEY_FORMAT, "Enter the value in LKR, up to 2 decimals")
+        .refine(
+          // Zod runs this even when the format check failed, so re-check before parsing.
+          (v) => MONEY_FORMAT.test(v) && new D(v).gt(0) && new D(v).lte(10_000_000),
+          "Value must be between 1 and 10,000,000",
+        ),
+      lifespanDays: z.coerce
+        .number()
+        .int("Whole days only")
+        .min(limits.minLifespanDays, `At least ${limits.minLifespanDays} wear-days`)
+        .max(limits.maxLifespanDays, `At most ${limits.maxLifespanDays} wear-days`),
+      /** Wear already used if listed second-hand (w₀) */
+      initialWear: z
+        .string()
+        .trim()
+        .optional()
+        .transform((v) => v || "0")
+        .refine((v) => WEAR_FORMAT.test(v), "Enter wear-days, up to 2 decimals"),
+    })
+    .refine((s) => !WEAR_FORMAT.test(s.initialWear) || new D(s.initialWear).lt(s.lifespanDays), {
+      message: "Wear used must be less than the lifespan",
+      path: ["initialWear"],
+    });
 
-export type ShoeInput = z.infer<typeof shoeSchema>;
+export type ShoeInput = z.infer<ReturnType<typeof shoeSchema>>;
 
 export async function getMerchantForUser(userId: string) {
   const merchant = await db.merchant.findUnique({ where: { userId } });
@@ -54,12 +70,27 @@ export async function getMerchantForUser(userId: string) {
   return merchant;
 }
 
-/** Creates a Draft listing with its five listing photos (§5.1 step 2). */
+/** The active settings' limits must accept the listing. */
+function checkListing(value: string, lifespanDays: number, settings: SettingsRow) {
+  try {
+    validateListing(value, lifespanDays, toPricingSettings(settings));
+  } catch (e) {
+    if (e instanceof RangeError) throw new CatalogueError(e.message);
+    throw e;
+  }
+}
+
+/**
+ * Creates a Draft listing with its five listing photos (§5.1 step 2). A second-hand pair
+ * starts at its declared wear w₀.
+ */
 export async function createShoe(
   merchantId: string,
   input: ShoeInput,
   photos: Partial<Record<PhotoKind, File>>,
 ) {
+  const settings = await getActiveSettings();
+  checkListing(input.value, input.lifespanDays, settings);
   for (const { kind, label } of LISTING_PHOTOS) checkPhoto(photos[kind] as File, label);
   const saved = [];
   for (const { kind } of LISTING_PHOTOS) {
@@ -69,7 +100,9 @@ export async function createShoe(
     data: {
       ...input,
       description: input.description || null,
+      wear: input.initialWear,
       merchantId,
+      settingsId: settings.id,
       photos: { create: saved },
     },
   });
@@ -84,10 +117,15 @@ async function ownShoe(merchantId: string, shoeId: string) {
   return shoe;
 }
 
-/** Draft → Available. Needs a verified merchant with a payout account, and all five photos. */
+/**
+ * Draft → Available. Needs a verified merchant with a payout account, and all five photos.
+ * From now on the shoe is priced with the settings version active at publishing.
+ */
 export async function publishShoe(merchantId: string, shoeId: string) {
   const shoe = await ownShoe(merchantId, shoeId);
   if (shoe.status !== "DRAFT") throw new CatalogueError("Only drafts can be published");
+  const settings = await getActiveSettings();
+  checkListing(shoe.value.toString(), shoe.lifespanDays, settings);
   const merchant = await db.merchant.findUniqueOrThrow({ where: { id: merchantId } });
   if (!merchant.verified)
     throw new CatalogueError("Your business must be verified before publishing");
@@ -98,7 +136,12 @@ export async function publishShoe(merchantId: string, shoeId: string) {
   }
   return db.shoe.update({
     where: { id: shoeId },
-    data: { status: "AVAILABLE", publishedAt: new Date(), latestGrade: shoe.latestGrade ?? "A" },
+    data: {
+      status: "AVAILABLE",
+      publishedAt: new Date(),
+      latestGrade: shoe.latestGrade ?? "A",
+      settingsId: settings.id,
+    },
   });
 }
 
@@ -118,7 +161,7 @@ export async function listMerchantShoes(merchantId: string) {
   return db.shoe.findMany({
     where: { merchantId },
     orderBy: { createdAt: "desc" },
-    include: { photos: { where: { kind: "FRONT" }, take: 1 } },
+    include: { photos: { where: { kind: "FRONT" }, take: 1 }, settings: true },
   });
 }
 
@@ -126,6 +169,7 @@ export async function getMerchantShoe(merchantId: string, shoeId: string) {
   const shoe = await db.shoe.findFirst({
     where: { id: shoeId, merchantId },
     include: {
+      settings: true,
       photos: { orderBy: { createdAt: "asc" } },
       rentalItems: {
         orderBy: { createdAt: "desc" },
@@ -162,6 +206,7 @@ export async function browseShoes(filters: BrowseFilters) {
     include: {
       photos: { where: { kind: "FRONT" }, take: 1 },
       merchant: { select: { businessName: true } },
+      settings: true,
     },
   });
 }
@@ -185,6 +230,7 @@ export async function getListing(shoeId: string) {
   return db.shoe.findFirst({
     where: { id: shoeId, status: { notIn: ["DRAFT", "RETIRED", "SOLD"] } },
     include: {
+      settings: true,
       photos: {
         where: { kind: { in: LISTING_PHOTOS.map((p) => p.kind) } },
         orderBy: { createdAt: "asc" },

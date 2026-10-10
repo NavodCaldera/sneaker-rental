@@ -66,7 +66,7 @@ For a 6,000 LKR shoe with L = 365 this gives K = 28.92 LKR per wear-day when new
 
 **What this means for merchants:** a longer declared lifespan gives a lower daily price and more rentals, but if the shoe wears out early the merchant loses the uncollected income. That built-in cost keeps lifespan claims honest, and §6 adds a lifespan accuracy score.
 
-The full derivation and worked examples are in the Rental Pricing Formula Guide (v2) and `rental_pricing_engine.py`.
+The full derivation and worked examples are in the Rental Pricing Formula Guide (v2) and `rental_pricing_engine.py`. In this repo they are merged into [pricing-spec.md](pricing-spec.md).
 
 ## 4. Revenue model and money flows
 

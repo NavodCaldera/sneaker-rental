@@ -132,6 +132,14 @@ export function NewShoeForm({
               required
             />
           </Field>
+          <Field
+            label="Wear already used (wear-days)"
+            name="initialWear"
+            error={errors.initialWear}
+            hint="Leave empty for a new pair. For a pre-worn pair, the days it has been worn: rentals start further down the curve."
+          >
+            <Input name="initialWear" inputMode="decimal" placeholder="0" />
+          </Field>
         </Card>
 
         <Card>

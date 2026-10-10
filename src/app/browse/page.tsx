@@ -5,7 +5,6 @@ import { Badge, Button, EmptyState, Input, PageHeader, Select } from "@/componen
 import { formatLKR, formatWear } from "@/lib/format";
 import { browseFacets, browseShoes } from "@/server/catalogue";
 import { shoePricing } from "@/server/catalogue/pricing";
-import { getActiveSettings, toPricingSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "Browse" };
 
@@ -21,11 +20,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
     category: one(sp.category),
     q: one(sp.q),
   };
-  const [shoes, facets, settings] = await Promise.all([
-    browseShoes(filters),
-    browseFacets(),
-    getActiveSettings().then(toPricingSettings),
-  ]);
+  const [shoes, facets] = await Promise.all([browseShoes(filters), browseFacets()]);
 
   return (
     <main>
@@ -74,7 +69,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
       ) : (
         <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {shoes.map((shoe) => {
-            const pricing = shoePricing(shoe, settings);
+            const pricing = shoePricing(shoe);
             return (
               <li key={shoe.id}>
                 <Link

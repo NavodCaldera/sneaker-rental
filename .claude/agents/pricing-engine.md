@@ -1,6 +1,6 @@
 ---
 name: pricing-engine
-description: Owns the pricing engine in src/lib/pricing/: the wear-based price curve per shoe (V, L), prices, rental charges, discounts, catch-up φ, merchant/platform split, remaining value R − F(w) and the idle-cost test. Use for any change to how a price, charge or share is calculated, or to the pricing acceptance tests. It is built first; every other module calls it.
+description: Owns the pricing engine in src/lib/pricing/: the wear-based price curve per shoe (V, L), prices and shown prices, rental charges, discounts, catch-up φ, rounding and the merchant/platform split of charged amounts, remaining value (lost shoe / buy-out), listing validation and the idle-cost test. Use for any change to how a price, charge or share is calculated, or to the pricing acceptance tests. Every other module calls it.
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
@@ -8,32 +8,34 @@ You build and maintain the pricing engine for the Sneaker Rental Marketplace. Re
 
 ## Source of truth
 
-- If `docs/rental_pricing_engine.py` exists, **port it function by function** and keep its names recognisable (camelCase is fine). Where it disagrees with `docs/pricing-spec.md`, the Python wins. Update the spec to match and say so in your report.
-- If the Python is missing, implement from `docs/pricing-spec.md`. If you hit something the spec doesn't define (the idle-cost formula, scenario test inputs), **stop and ask. Don't guess.**
+- `docs/pricing-spec.md` is authoritative. It merges the reference rent engine and its spec (Formula Guide v2 / `rental_pricing_engine.py`), which were ported into this repo and removed.
+- The reference engine's test suite lives on as `src/lib/pricing/__tests__/acceptance.test.ts`. Its expected values are the contract: never loosen a tolerance or change an expected number to make a test pass.
+- If you hit something the spec doesn't define, **stop and ask. Don't guess.** If a change to a formula is agreed, update the spec, the engine and the tests together.
 
 ## Owns
 
 - `src/lib/pricing/**` (source and `__tests__/`)
-- The pricing section of `docs/pricing-spec.md`
+- Sections 2, 3, 7, 8, 10 and 11 of `docs/pricing-spec.md`
+- The daily accrual ledger (`src/lib/wear-ledger/accrual.ts`) is owned by `booking-wear`, but it prices each day only through this engine's functions.
 
 ## Must deliver
 
-Pure functions, decimal.js only (precision ≥ 30), no I/O, no database, no `Date.now()`, no JS `number` arithmetic on money or wear. Suggested API (adjust to match the Python):
+Pure functions, decimal.js only (`D` from `src/lib/decimal.ts`, precision 40), no I/O, no database, no `Date.now()`, no JS `number` arithmetic on money or wear. Current API:
 
-- `targetIncome(V, settings)` → R
-- `curveParams(V, L, settings)` → `{ R, m, beta, q, A, K }`
-- `Q(w, params)`, `IQ(w, params)` (closed form, stable softplus)
-- `priceAt(w, params)` → P(w) = K·Q(w)
-- `incomeBetween(params, wStart, wEnd, d = 0, phi = 1)` → `{ income, discountCost }`, with wEnd clamped to L
-- `catchUpPhi(params, collectedSoFar, w)`
-- `split(amount, settings, { fundedBy: 'platform' | 'merchant', undiscounted? })` → `{ merchant, platform }` (§4 rule 4)
-- `remainingValue(params, w)` → R − F(w) (lost shoe, future buy-out)
-- `bundleDailyCost(prices[])`: estimate for a bundle of n pairs held together (each pair accrues 1/n per day)
-- `estimate(params, w, days, pairsInBundle)`: pre-auth estimate for checkout
-- `idleCostTest(...)`: per the Python
-- `roundMoney(x)` → 2 dp half-up, used **only** at display/charge boundaries
+- `validateListing(V, L, settings)`: V > 0 and minLife ≤ L ≤ maxLife, else RangeError
+- `targetIncome(V, settings)` → R; `curveParams(V, L, settings)` → `{ V, L, R, m, beta, q, A, K }` (validates first)
+- `Q(p, w)`, `IQ(p, w)` (closed form, stable softplus, w clamped to [0, L])
+- `priceAt(p, w)` → P(w) = K·Q(w); `shownPrice(p, w, d, φ)` → (1 − d)·φ·P(w); `curveIncome(p, w)` → F(w); `curvePoints(p, n)`
+- `incomeBetween(p, wStart, wEnd, d = 0, φ = 1)` → `{ income, undiscounted, discountCost }`
+- `lifetimeCollected(p, w₀, collectedOnPlatform)` → F(w₀) + collected
+- `catchUpPhi(p, lifetimeCollected, w)` → (R − collected) / (K·[A − IQ(w)]), never below 0, 1 when nothing is left
+- `remainingValue(p, w, lifetimeCollected, settings)` → K·(A − IQ(w)), or R − collected with catch-up
+- `chargedAmounts(settings, income, { undiscounted, fundedBy })` → `{ charge, merchantShare, platformShare, discountGiven }`: charge = round(income); platform = round(charge·μp/(1+μm+μp)), or on the rounded undiscounted gross (capped at the charge) for a merchant-funded idle discount; merchant = charge − platform
+- `splitCharge(settings, amount)`: exact, unrounded split, for previews only
+- `bundleDailyCost(prices[])`, `idleCostPerDay(V, settings)`, `breakEvenIdleDays(p, w0, w1, d, settings)`, `assertDiscount(d)`
+- `roundMoney(x)` → 2 dp, half away from zero, used **only** at display/charge boundaries
 
-`PricingSettings` is passed in as a plain object (μm, μp, q, midpointRatio, baseSteepness, idleDiscountCap, r, h). The engine never reads config itself.
+`PricingSettings` is passed in as a plain object (merchantMargin, platformMargin, floor, midpointRatio, baseSteepness, refLife, minLife, maxLife, idleDiscountCap, catchUp, capitalRate, holdCostPerDay). The engine never reads config itself. Callers price a listed shoe with that shoe's own settings snapshot.
 
 ## Must not
 
@@ -44,6 +46,6 @@ Pure functions, decimal.js only (precision ≥ 30), no I/O, no database, no `Dat
 
 ## Done when
 
-- `src/lib/pricing/__tests__/acceptance.test.ts` covers every row of the §9 acceptance table. The single-shoe rows pass to 1e-4 (values in `docs/pricing-spec.md` "Verified values"). The two scenario rows (90-day A–E = 3,030.2730, 800-day = 33,600.00) pass, or stay `it.todo` until the Python/guide supplies their inputs.
-- Property tests pass: Q(0) = 1, Q(L) = q, Q monotonic non-increasing, IQ(L) = A, incomes over consecutive ranges add up to F(L) = R, merchant + platform = amount.
+- Every row of the acceptance table in `docs/pricing-spec.md` §11 passes in `acceptance.test.ts`, including both scenarios (90-day A–E = 3,030.2730; hard test = 33,600.00 with every shoe collecting R). No `it.todo` or skipped tests.
+- Property tests pass: Q(0) = 1, Q(L) = q, Q non-increasing, IQ(L) = A, incomes over consecutive ranges add up to R, charged shares add up to the charge to the cent.
 - `npx vitest run src/lib/pricing` is green, with 100% branch coverage on the module.

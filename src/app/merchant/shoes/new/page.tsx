@@ -1,18 +1,15 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/server/auth/session";
-import {
-  CATEGORIES,
-  LIFESPAN_MAX_DAYS,
-  LIFESPAN_MIN_DAYS,
-  LISTING_PHOTOS,
-} from "@/server/catalogue";
+import { CATEGORIES, LISTING_PHOTOS } from "@/server/catalogue";
+import { getActiveSettings } from "@/server/settings";
 import { NewShoeForm } from "./new-shoe-form";
 
 export const metadata: Metadata = { title: "Add shoe" };
 
 export default async function NewShoePage() {
   await requireUser("MERCHANT");
+  const settings = await getActiveSettings();
   return (
     <main>
       <PageHeader
@@ -22,8 +19,8 @@ export default async function NewShoePage() {
       <NewShoeForm
         categories={CATEGORIES}
         photoSlots={LISTING_PHOTOS}
-        lifespanMin={LIFESPAN_MIN_DAYS}
-        lifespanMax={LIFESPAN_MAX_DAYS}
+        lifespanMin={settings.minLifespanDays}
+        lifespanMax={settings.maxLifespanDays}
       />
     </main>
   );
