@@ -6,9 +6,13 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type Role } from "../src/generated/prisma/client";
 import { hashPassword } from "../src/server/auth/password";
+import { LocalDiskStorage, storageDir } from "../src/server/storage/local";
 
 const db = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
+  adapter: new PrismaPg({
+    connectionString: process.env.DATABASE_URL!,
+    max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+  }),
 });
 
 /** Launch defaults (CLAUDE.md). */
@@ -28,6 +32,31 @@ export const DEFAULT_SETTINGS = {
 };
 
 const PASSWORD = "password123";
+
+const storage = new LocalDiskStorage(storageDir());
+const PHOTO_KINDS = ["FRONT", "SIDE", "SOLE", "INSIDE", "BOX"] as const;
+const COLOURS = [
+  "#e8572a",
+  "#2457b3",
+  "#1f7a4d",
+  "#7a3fb3",
+  "#a15c00",
+  "#c0352b",
+  "#0e7490",
+  "#4d4d4d",
+];
+
+/** Placeholder listing photo: a simple sneaker silhouette with the model and view name. */
+function placeholderPhoto(brand: string, model: string, kind: string, colour: string) {
+  const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <rect width="400" height="400" fill="#f3f3f1"/>
+  <path d="M60 250 Q70 190 130 180 L190 150 Q215 140 230 165 L250 195 Q300 205 340 225 Q355 235 345 255 L60 255 Z" fill="${colour}"/>
+  <rect x="55" y="255" width="295" height="22" rx="8" fill="#ffffff" stroke="#d0cfc9"/>
+  <text x="200" y="320" text-anchor="middle" font-family="sans-serif" font-size="20" fill="#161616">${esc(brand)} ${esc(model)}</text>
+  <text x="200" y="348" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#6b6a65">${kind.toLowerCase()} view · sample photo</text>
+</svg>`;
+}
 
 const users: { email: string; name: string; role: Role; businessName?: string }[] = [
   { email: "admin@sneakers.test", name: "Admin", role: "ADMIN" },
@@ -182,7 +211,20 @@ async function main() {
     const shoes = shoesByMerchant[u.email];
     if (!shoes || !user.merchant) continue;
     if ((await db.shoe.count({ where: { merchantId: user.merchant.id } })) > 0) continue;
-    for (const s of shoes) {
+    for (const [i, s] of shoes.entries()) {
+      const colour = COLOURS[(i + (u.email.startsWith("sole") ? 4 : 0)) % COLOURS.length];
+      const photos = [];
+      for (const kind of PHOTO_KINDS) {
+        const storageKey = `seed/${s.brand}-${s.model}-${s.lifespanDays}-${kind}.svg`.replace(
+          /[^\w./-]/g,
+          "_",
+        );
+        await storage.put(
+          storageKey,
+          Buffer.from(placeholderPhoto(s.brand, s.model, kind, colour)),
+        );
+        photos.push({ kind, storageKey, contentType: "image/svg+xml" });
+      }
       await db.shoe.create({
         data: {
           ...s,
@@ -191,11 +233,28 @@ async function main() {
           status: "AVAILABLE",
           latestGrade: "A",
           publishedAt: new Date(),
+          photos: { create: photos },
         },
       });
     }
     console.log(`Seeded ${shoes.length} shoes for ${u.businessName}`);
   }
+  // Backfill placeholder photos for any shoe seeded before photos existed.
+  const bare = await db.shoe.findMany({ where: { photos: { none: {} } } });
+  for (const [i, s] of bare.entries()) {
+    for (const kind of PHOTO_KINDS) {
+      const storageKey = `seed/${s.id}-${kind}.svg`;
+      await storage.put(
+        storageKey,
+        Buffer.from(placeholderPhoto(s.brand, s.model, kind, COLOURS[i % COLOURS.length])),
+      );
+      await db.photo.create({
+        data: { kind, storageKey, contentType: "image/svg+xml", shoeId: s.id },
+      });
+    }
+  }
+  if (bare.length) console.log(`Added placeholder photos to ${bare.length} shoes`);
+
   console.log(`Seed complete. Dev password for all accounts: ${PASSWORD}`);
 }
 

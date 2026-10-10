@@ -11,6 +11,8 @@
   --danger: #c0352b;
   --info: #2457b3;
   --accent: #e8572a;
+  /* Chart line: validated with the dataviz palette checks (light + dark) */
+  --chart: #e8572a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +27,7 @@
     --danger: #f06a5f;
     --info: #79a6ff;
     --accent: #ff7a4d;
+    --chart: #e45f30;
   }
 }
 
@@ -39,6 +42,7 @@
   --color-danger: var(--danger);
   --color-info: var(--info);
   --color-accent: var(--accent);
+  --color-chart: var(--chart);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
