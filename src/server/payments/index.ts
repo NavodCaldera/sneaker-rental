@@ -254,3 +254,30 @@ export async function markLost(itemId: string, now = new Date()) {
 export async function rentalPayments(rentalId: string) {
   return db.payment.findMany({ where: { rentalId }, orderBy: { createdAt: "asc" } });
 }
+
+/**
+ * §4 rule 6: the trip fee passes through to the ride-hailing app and we keep the booking
+ * fee. Charged to the borrower's rental when the trip is delivered, if the borrower pays.
+ */
+export async function chargeDeliveryFee(deliveryId: string) {
+  const delivery = await db.delivery.findUniqueOrThrow({
+    where: { id: deliveryId },
+    include: { rentalItem: { include: { rental: true } } },
+  });
+  if (delivery.paidBy !== "BORROWER") return null;
+  const total = toD(delivery.quote ?? 0).plus(toD(delivery.bookingFee ?? 0));
+  if (total.lte(0)) return null;
+  const rental = delivery.rentalItem.rental;
+  const key = `delivery:${delivery.id}`;
+  return recordPayment(
+    {
+      kind: "CAPTURE",
+      rentalId: rental.id,
+      rentalItemId: delivery.rentalItemId,
+      amount: total.toFixed(2),
+      key,
+      note: `Delivery fee (${delivery.type.toLowerCase()})`,
+    },
+    () => gateway().capture(rental.preAuthRef ?? "", total.toFixed(2), key),
+  );
+}
