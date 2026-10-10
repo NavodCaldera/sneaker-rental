@@ -12,11 +12,23 @@ Next.js (App Router) + TypeScript · PostgreSQL + Prisma · decimal.js for every
 
 Versions: Next 16.4, React 19.3, Prisma 7.10 (config in `prisma.config.ts`, client generated to `src/generated/prisma`, uses the `@prisma/adapter-pg` driver adapter), Vitest 5, Playwright 1.64. Next 16 differs from older versions, so read @AGENTS.md before writing Next.js code.
 
-Shared decimal helper: `src/lib/decimal.ts` (`D`, `roundMoney`). Use it rather than creating new Decimal configs.
+Shared decimal helper: `src/lib/decimal.ts` (`D`, `toD`, `roundMoney`). Use it rather than creating new Decimal configs. Convert Prisma Decimals with `toD`, never via `Number()`.
+
+Conventions:
+
+- **Cache Components is off** (`next.config.ts`). Pages that read the session render dynamically. Don't add `"use cache"`.
+- **Auth:** call `requireUser(...roles)` from `src/server/auth/session.ts` at the top of every page, server action and route handler that needs a user. It redirects on failure. Sessions are random tokens in an httpOnly cookie, stored as SHA-256 hashes.
+- **Server code** lives in `src/server/<module>/`, imports `server-only`, and uses `db` from `src/server/db.ts`. Pages call services; services hold the business logic and are integration-tested.
+- **Prisma 7:** `prisma migrate dev` does not regenerate the client, so use `npm run db:migrate` (migrate + generate).
+- **Settings:** read with `getActiveSettings()` and pass `toPricingSettings(row)` to the pricing engine.
+
+## Databases
+
+Development uses Prisma's local Postgres (`npx prisma dev --name sneaker-rental --detach`, port 51214). Tests use a second one (`--name sneaker-rental-test`, port 51218) that the test runs wipe. Both URLs are in `.env`. Seed accounts all use password `password123`: admin@, kicks@ / sole@ (merchants), amaya@ / ravi@ / nimal@ (borrowers), all `@sneakers.test`.
 
 ## Commands
 
-`npm run dev` · `npm run check` (typecheck + lint + unit tests) · `npm test` · `npm run e2e` · `npm run db:migrate` · `npm run db:seed` · `npm run format`
+`npm run dev` · `npm run check` (typecheck + lint + unit tests) · `npm test` (unit) · `npm run test:int` (integration, test DB) · `npm run e2e` (Playwright on port 3100, test DB) · `npm run db:migrate` · `npm run db:seed` · `npm run format`
 
 ## Hard rules (§9)
 

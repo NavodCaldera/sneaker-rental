@@ -1,0 +1,61 @@
+import "server-only";
+import { z } from "zod";
+import type { PricingSettings as PricingSettingsRow } from "@/generated/prisma/client";
+import { type PricingSettings } from "@/lib/pricing";
+import { db } from "../db";
+
+export type SettingsRow = PricingSettingsRow;
+
+/** The active settings row: the latest with effectiveFrom ≤ now. */
+export async function getActiveSettings(now = new Date()): Promise<SettingsRow> {
+  const row = await db.pricingSettings.findFirst({
+    where: { effectiveFrom: { lte: now } },
+    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+  });
+  if (!row) throw new Error("No pricing settings found. Run `npm run db:seed`.");
+  return row;
+}
+
+/** Map a stored row to the pricing engine's input (Decimal strings, never JS numbers). */
+export function toPricingSettings(row: SettingsRow): PricingSettings {
+  return {
+    merchantMargin: row.merchantMargin.toString(),
+    platformMargin: row.platformMargin.toString(),
+    floor: row.floor.toString(),
+    midpointRatio: row.midpointRatio.toString(),
+    baseSteepness: row.baseSteepness.toString(),
+  };
+}
+
+const ratio = z
+  .string()
+  .trim()
+  .regex(/^\d+(\.\d+)?$/, "Enter a decimal number");
+const money = z
+  .string()
+  .trim()
+  .regex(/^\d+(\.\d{1,2})?$/, "Enter an amount with up to 2 decimals");
+
+export const settingsSchema = z.object({
+  merchantMargin: ratio,
+  platformMargin: ratio,
+  floor: ratio,
+  midpointRatio: ratio,
+  baseSteepness: ratio,
+  idleDiscountCap: ratio,
+  depositPerPair: money,
+  maxPairsPerBundle: z.coerce.number().int().min(1).max(10),
+  disputeWindowDays: z.coerce.number().int().min(0).max(30),
+  freeReturnHours: z.coerce.number().int().min(0).max(168),
+  deliveryBookingFee: money.optional().or(z.literal("")),
+  catchUpEnabled: z.boolean(),
+});
+
+export type SettingsInput = z.infer<typeof settingsSchema>;
+
+/** Settings are append-only: each change is a new row, so past rentals keep their history. */
+export async function updateSettings(input: SettingsInput, adminId: string) {
+  return db.pricingSettings.create({
+    data: { ...input, deliveryBookingFee: input.deliveryBookingFee || null, createdById: adminId },
+  });
+}
