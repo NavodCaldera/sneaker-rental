@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  experimental: {
+    // Five listing photos of up to 5 MB each, plus multipart overhead.
+    serverActions: { bodySizeLimit: "30mb" },
+  },
   serverExternalPackages: ["@prisma/client", "pg"],
 };
 

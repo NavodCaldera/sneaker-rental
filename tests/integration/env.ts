@@ -8,3 +8,4 @@ if (url === process.env.DATABASE_URL) {
   throw new Error("TEST_DATABASE_URL must differ from DATABASE_URL: the test run wipes it");
 }
 process.env.DATABASE_URL = url;
+process.env.STORAGE_DIR = ".data/test-uploads-int";

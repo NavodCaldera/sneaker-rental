@@ -16,7 +16,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
-  timeout: 60_000,
+  timeout: 90_000,
+  // The dev server compiles each route on first visit, which can take several seconds.
+  expect: { timeout: 15_000 },
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "on-first-retry",
@@ -24,7 +26,11 @@ export default defineConfig({
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     // Borrowers and drivers are on phones (see frontend agent).
-    { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /mobile\.spec\.ts|home\.spec\.ts/ },
+    {
+      name: "mobile",
+      use: { ...devices["Pixel 7"] },
+      testMatch: /mobile\.spec\.ts|home\.spec\.ts/,
+    },
   ],
   webServer: {
     command: `npx next dev --port ${PORT}`,
