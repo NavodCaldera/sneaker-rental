@@ -22,16 +22,17 @@ You build and maintain the pricing engine for the Sneaker Rental Marketplace. Re
 
 Pure functions, decimal.js only (`D` from `src/lib/decimal.ts`, precision 40), no I/O, no database, no `Date.now()`, no JS `number` arithmetic on money or wear. Current API:
 
-- `validateListing(V, L, settings)`: V > 0 and minLife ≤ L ≤ maxLife, else RangeError
-- `targetIncome(V, settings)` → R; `curveParams(V, L, settings)` → `{ V, L, R, m, beta, q, A, K }` (validates first)
+- `validateListing(V, L, limits)`: V > 0 and minLife ≤ L ≤ maxLife, else RangeError. Called at listing time with the merchant's limits; `curveParams` only requires V > 0 and L > 0, so admin-extended shoes stay priceable
+- `targetIncome(V, settings)` → R; `curveParams(V, L, settings)` → `{ V, L, R, m, beta, q, A, K }`
 - `Q(p, w)`, `IQ(p, w)` (closed form, stable softplus, w clamped to [0, L])
 - `priceAt(p, w)` → P(w) = K·Q(w); `shownPrice(p, w, d, φ)` → (1 − d)·φ·P(w); `curveIncome(p, w)` → F(w); `curvePoints(p, n)`
 - `incomeBetween(p, wStart, wEnd, d = 0, φ = 1)` → `{ income, undiscounted, discountCost }`
 - `lifetimeCollected(p, w₀, collectedOnPlatform)` → F(w₀) + collected
 - `catchUpPhi(p, lifetimeCollected, w)` → (R − collected) / (K·[A − IQ(w)]), never below 0, 1 when nothing is left
 - `remainingValue(p, w, lifetimeCollected, settings)` → K·(A − IQ(w)), or R − collected with catch-up
-- `chargedAmounts(settings, income, { undiscounted, fundedBy })` → `{ charge, merchantShare, platformShare, discountGiven }`: charge = round(income); platform = round(charge·μp/(1+μm+μp)), or on the rounded undiscounted gross (capped at the charge) for a merchant-funded idle discount; merchant = charge − platform
-- `splitCharge(settings, amount)`: exact, unrounded split, for previews only
+- `merchantTarget(p, w₀, settings, merchantFundedDiscounts)` → (1 + μm)·V·(1 − IQ(w₀)/A) − discounts; `merchantOutstanding(target, merchantCollected)` → never below 0
+- `chargedAmounts(income, { merchantOutstanding, undiscounted })` → `{ charge, merchantShare, platformShare, discountGiven }`: charge = round(income); **merchant first**: merchant = min(charge, round(outstanding)); platform = charge − merchant
+- `splitCharge(settings, amount)`: exact proportional split (the lifetime ratio), for previews only
 - `bundleDailyCost(prices[])`, `idleCostPerDay(V, settings)`, `breakEvenIdleDays(p, w0, w1, d, settings)`, `assertDiscount(d)`
 - `roundMoney(x)` → 2 dp, half away from zero, used **only** at display/charge boundaries
 

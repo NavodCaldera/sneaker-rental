@@ -64,7 +64,7 @@ These are still open (business-model.md §10). Each one is a setting or an adapt
 | Deposit size                                    | `/admin/settings` (5,000 per pair now)                                              |
 | Delivery booking fee, who pays for return trips | `/admin/settings`; `paidBy` on each delivery (free returns: platform)               |
 | Handoffs without merchant cleaning              | Allowed now, in a sealed bag with a cleaning kit                                    |
-| Min / max declared lifespan                     | `/admin/settings` (60–1,095 wear-days)                                              |
+| Min / max declared lifespan                     | `/admin/settings` (6–24 months); longer per merchant on `/admin/merchants`          |
 | Catch-up pricing φ                              | `/admin/settings` (off)                                                             |
 | Ride-hailing app and API                        | `src/server/logistics/provider.ts` (manual provider)                                |
 | Payment gateway and pre-auth                    | `src/server/payments/gateway.ts` (mock); pre-auth top-up for long rentals not built |

@@ -63,7 +63,7 @@ test("an unverified merchant can't publish until an admin verifies them", async 
   await page.goto("/admin/merchants");
   const card = page
     .locator("div", { hasText: "Brand New Shop" })
-    .filter({ has: page.getByRole("button") })
+    .filter({ has: page.getByRole("button", { name: /^(Verify|Revoke)$/ }) })
     .last();
   await expect(card.getByText("Pending")).toBeVisible();
   await card.getByRole("button", { name: "Verify" }).click();

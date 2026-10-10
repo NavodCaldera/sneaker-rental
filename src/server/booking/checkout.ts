@@ -2,14 +2,14 @@ import "server-only";
 import { z } from "zod";
 import type { RentalItemStatus } from "@/generated/prisma/client";
 import { D, toD } from "@/lib/decimal";
-import { type PricingSettings, bundleDailyCost, shownPrice } from "@/lib/pricing";
+import { bundleDailyCost, shownPrice } from "@/lib/pricing";
 import {
   type LedgerItem,
   type LedgerShoe,
   atEndOfLife,
   estimate as ledgerEstimate,
 } from "@/lib/wear-ledger";
-import { type PricedShoe, nextPhi, shoeCurve } from "../catalogue/pricing";
+import { type PricedShoe, merchantOwed, nextPhi, shoeCurve } from "../catalogue/pricing";
 import { db } from "../db";
 import { requestDelivery } from "../logistics/requests";
 import { PaymentError, authorizeRental } from "../payments";
@@ -112,16 +112,16 @@ export async function quoteBundle(
   const first = asOfToday();
   const last = first + plannedDays - 1;
   const ledgerShoes = new Map<string, LedgerShoe>();
-  const settingsByKey = new Map<string, PricingSettings>();
+  const owedByKey = new Map<string, D>();
   const ledgerItems: LedgerItem[] = [];
   const plan = (key: string, shoe: PricedShoe) => {
     ledgerShoes.set(key, ledgerShoe(key, shoe));
-    settingsByKey.set(key, shoeCurve(shoe).settings);
+    owedByKey.set(key, merchantOwed(shoe).outstanding);
     ledgerItems.push({ id: key, borrowerId: "me", shoeId: key, start: first, end: last });
   };
   for (const h of heldItems) plan(`held:${h.id}`, h.shoe);
   for (const shoe of listed) plan(`new:${shoe.id}`, shoe);
-  const invoice = ledgerEstimate(ledgerItems, ledgerShoes, (key) => settingsByKey.get(key)!, {
+  const invoice = ledgerEstimate(ledgerItems, ledgerShoes, (key) => owedByKey.get(key)!, {
     maxPairs: Math.max(row.maxPairsPerBundle, totalPairs),
   });
   const estimateFor = (shoeId: string) => invoice.lines.find((l) => l.shoeId === `new:${shoeId}`)!;

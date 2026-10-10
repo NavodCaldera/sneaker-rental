@@ -48,7 +48,11 @@ export function targetIncome(V: Decimal.Value, settings: PricingSettings): D {
   return ONE.plus(settings.merchantMargin).plus(settings.platformMargin).times(V);
 }
 
-/** A listing's value must be positive and its lifespan within the settings' limits. */
+/**
+ * A new listing's value must be positive and its lifespan within the limits that apply to
+ * the merchant (settings, or a longer maximum an admin granted). Checked when a shoe is
+ * listed, not when it is priced, so an extended shoe keeps its curve.
+ */
 export function validateListing(
   V: Decimal.Value,
   L: Decimal.Value,
@@ -68,9 +72,10 @@ export function curveParams(
   L: Decimal.Value,
   settings: PricingSettings,
 ): CurveParams {
-  validateListing(V, L, settings);
   const v = new D(V);
   const l = new D(L);
+  if (!v.gt(0)) throw new RangeError("Declared value must be greater than 0");
+  if (!l.gt(0)) throw new RangeError("Lifespan must be greater than 0");
 
   const q = new D(settings.floor);
   const m = new D(settings.midpointRatio).times(l);

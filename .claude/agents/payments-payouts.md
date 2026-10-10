@@ -18,11 +18,12 @@ You build payments and payouts. Read `CLAUDE.md`, `docs/pricing-spec.md` (§7 "C
 2. **Checkout:** pre-authorise the estimate (booking runs it through the wear ledger) and hold the deposit (`depositPerPair × pairs`).
 3. **Charge at return** (§4 rule 1): on close-out, capture the final charge booking stored on the item. Never recompute it. Release the deposit once the condition check passes and no dispute is open. Capturing more than the pre-authorised estimate (an extended rental) needs a top-up; how depends on the gateway (OPEN DECISION).
 4. **Damage:** if damage is flagged within 24 h and upheld by an admin, capture from the deposit.
-5. **Lost shoe** (§4 rule 3): charge `remainingValue(p, w, lifetimeCollected, settings)` priced with the shoe's own settings snapshot (`shoeCurve`): K·(A − IQ(w)), or R − collected with catch-up. Round and split it with `chargedAmounts`, capture the deposit first and the card for the rest, and lock the account.
-6. **Rounding and split:** every charged amount comes from `chargedAmounts`: charge rounded to 2 dp, platform share rounded, merchant share = charge − platform share. Discount funding (§4 rule 4): platform promos reduce both shares in proportion; for a merchant idle discount pass `fundedBy: "merchant"` and the undiscounted gross, so the platform share is taken on the gross and the discount comes out of the merchant share only.
-7. **Payout ledger:** each closed RentalItem's merchant share becomes payable 3 days (`disputeWindowDays`) after close, unless a Dispute is open. A weekly batch pays every eligible share per merchant to their payout account. Record Payout rows with references and status.
-8. **Disputes:** either side opens one within 3 days of close. It holds that item's payout until an admin decides (uphold → adjust/capture; reject → release).
-9. **Idempotency:** every gateway call and webhook has an idempotency key, and duplicate webhooks are no-ops.
+5. **Lost shoe** (§4 rule 3): charge `remainingValue(p, w, lifetimeCollected, settings)` priced with the shoe's own settings snapshot (`shoeCurve`): K·(A − IQ(w)), or R − collected with catch-up. Round and split it merchant first with `chargedAmounts` (new pair: 7,200 → merchant 6,600, platform 600), capture the deposit first and the card for the rest, and lock the account.
+6. **Merchant first:** every charged amount comes from `chargedAmounts`: charge rounded to 2 dp; the merchant's share fills what they are still owed of their target ((1 + μm) × V for a new pair, `merchantOwed`), and the platform gets the rest. The platform earns on a shoe only after its merchant is paid in full. Platform promotions leave the merchant's target alone (the platform bears them); merchant idle discounts lower it. Keep `Shoe.merchantCollected` in step.
+7. **Refunds** (upheld dispute): up to the item's charge. Up to that item's merchant share comes off the merchant's payout and `merchantCollected` (`merchantPartOfRefund`); the rest is the platform's cost.
+8. **Payout ledger:** each closed RentalItem's merchant share becomes payable 3 days (`disputeWindowDays`) after close, unless a Dispute is open. A weekly batch pays every eligible share per merchant to their payout account. Record Payout rows with references and status.
+9. **Disputes:** either side opens one within 3 days of close. It holds that item's payout until an admin decides (uphold → adjust/capture; reject → release).
+10. **Idempotency:** every gateway call and webhook has an idempotency key, and duplicate webhooks are no-ops.
 
 ## Must not
 

@@ -8,6 +8,7 @@ import type Decimal from "decimal.js";
 import { D } from "../../decimal";
 import {
   DEFAULT_PRICING_SETTINGS as S,
+  IQ,
   type PricingSettings,
   breakEvenIdleDays,
   catchUpPhi,
@@ -16,9 +17,12 @@ import {
   idleCostPerDay,
   incomeBetween,
   lifetimeCollected,
+  merchantTarget,
   priceAt,
   remainingValue,
   roundMoney,
+  splitCharge,
+  validateListing,
 } from "..";
 import {
   type LedgerItem,
@@ -35,10 +39,13 @@ function near(actual: Decimal, expected: Decimal.Value, tol: Decimal.Value = "1e
 }
 
 const MAX = { maxPairs: 4 };
-const settingsFor = () => S;
+/** Merchant targets of the shoes made in each test, for the merchant-first split. */
+const targets = new Map<string, D>();
+const owedFor = (shoeId: string) => targets.get(shoeId)!;
 
 function newShoe(id: string, V: number, L: number, w0: Decimal.Value = 0, s = S): LedgerShoe {
   const curve = curveParams(V, L, s);
+  targets.set(id, merchantTarget(curve, w0, s));
   return {
     id,
     curve,
@@ -95,14 +102,34 @@ describe("single shoe", () => {
     expect(roundMoney(income).toFixed(2)).toBe("2866.11");
   });
 
-  it("split of 2,866.11: merchant 2,627.27, platform 238.84; cents always add up", () => {
-    const a = chargedAmounts(S, "2866.11");
-    expect(a.merchantShare.toFixed(2)).toBe("2627.27");
-    expect(a.platformShare.toFixed(2)).toBe("238.84");
+  it("lifetime ratio of 2,866.11 (brief §9): merchant 2,627.27, platform 238.84", () => {
+    // Over a shoe's whole life the merchant receives 110/120 of R; rentals pay merchant first.
+    const { merchant, platform } = splitCharge(S, "2866.11");
+    expect(roundMoney(merchant).toFixed(2)).toBe("2627.27");
+    expect(roundMoney(platform).toFixed(2)).toBe("238.84");
+  });
+
+  it("merchant first: a charge fills what the merchant is owed, the platform gets the rest", () => {
+    const owed = (o: string) => chargedAmounts("2866.11", { merchantOutstanding: o });
+    expect(owed("6600").merchantShare.toFixed(2)).toBe("2866.11");
+    expect(owed("6600").platformShare.toFixed(2)).toBe("0.00");
+    expect(owed("1000.004").merchantShare.toFixed(2)).toBe("1000.00");
+    expect(owed("1000.004").platformShare.toFixed(2)).toBe("1866.11");
+    expect(owed("0").platformShare.toFixed(2)).toBe("2866.11");
+    expect(owed("-5").merchantShare.toFixed(2)).toBe("0.00");
     for (const amt of ["0.01", "0.05", "1.99", "123.45", "9999.99"]) {
-      const { charge, merchantShare, platformShare } = chargedAmounts(S, amt);
+      const { charge, merchantShare, platformShare } = chargedAmounts(amt, {
+        merchantOutstanding: "50.555",
+      });
       expect(merchantShare.plus(platformShare).eq(charge)).toBe(true);
     }
+  });
+
+  it("merchant target: (1 + μm) · V new; for a second-hand pair, the share still collectable", () => {
+    expect(merchantTarget(shoe, 0, S).eq(6600)).toBe(true);
+    const b = curveParams(8000, 365, S);
+    near(merchantTarget(b, 50, S), new D(8800).times(new D(1).minus(IQ(b, 50).div(b.A))), "1e-25");
+    expect(merchantTarget(shoe, 0, S, "100").eq(6500)).toBe(true);
   });
 
   it("remaining value at wear 100 is 7,200 − 2,866.1143; idle cost 1.9726 a day", () => {
@@ -116,9 +143,15 @@ describe("single shoe", () => {
     near(breakEvenIdleDays(shoe, 0, 30, "0.10", S), "44.0", "0.1"); // 43.94
   });
 
-  it("guards: lifespan outside limits, value ≤ 0, discount outside [0, 1)", () => {
-    expect(() => curveParams(6000, 10, S)).toThrow(/Lifespan/);
-    expect(() => curveParams(6000, 1096, S)).toThrow(/Lifespan/);
+  it("guards: lifespan outside 6–24 months at listing, value ≤ 0, discount outside [0, 1)", () => {
+    expect(() => validateListing(6000, 182, S)).toThrow(/between 183 and 730/);
+    expect(() => validateListing(6000, 731, S)).toThrow(/Lifespan/);
+    expect(() => validateListing(6000, 183, S)).not.toThrow();
+    expect(() => validateListing(6000, 730, S)).not.toThrow();
+    // An admin-extended limit, and a shoe listed under one is still priced later.
+    expect(() => validateListing(6000, 1095, { minLife: 183, maxLife: 1095 })).not.toThrow();
+    expect(curveParams(6000, 1095, S).K.gt(0)).toBe(true);
+    expect(() => validateListing(0, 365, S)).toThrow(/value/);
     expect(() => curveParams(0, 365, S)).toThrow(/value/);
     expect(() => incomeBetween(shoe, 0, 1, 1)).toThrow(/Discount/);
   });
@@ -147,7 +180,7 @@ describe("ledger scenarios", () => {
       item("e", "cust", "E", 36, 90),
     ];
     const { results } = runLedger(items, shoes, 1, 90, MAX);
-    const inv = buildInvoice(results.values(), settingsFor);
+    const inv = buildInvoice(results.values(), owedFor);
     near(inv.totalUnrounded, "3030.2730", "1e-4", "total");
     const expected: Record<string, string> = {
       a: "554.0527",
@@ -230,6 +263,21 @@ describe("ledger scenarios", () => {
       expect(sh.wear.eq(365), `${sh.id} wear`).toBe(true);
       near(sh.collected, sh.curve.R, "1e-20", `${sh.id} collected`);
     }
+    // Merchant first: each merchant gets 1.1 V, the platform 0.1 V, and the platform earns
+    // nothing on a shoe until its merchant is paid in full.
+    const inv = buildInvoice(results.values(), owedFor);
+    near(inv.merchantTotal, "30800", "0.05", "merchants");
+    near(inv.platformTotal, "2800", "0.05", "platform");
+    expect(inv.lines.find((l) => l.itemId === "U1|S1")!.platformShare.eq(0)).toBe(true);
+    for (const sh of shoes.values()) {
+      const paid = inv.lines
+        .filter((l) => l.shoeId === sh.id)
+        .reduce((t, l) => t.plus(l.merchantShare), new D(0));
+      expect(paid.eq(sh.curve.V.times("1.1")), `${sh.id} merchant paid ${paid}`).toBe(true);
+    }
+    // S1's merchant is filled during U10's rental (6,454.15 paid before it).
+    const crossing = inv.lines.find((l) => l.itemId === "U10|S1")!;
+    expect(crossing.merchantShare.toFixed(2)).toBe("145.85");
   });
 
   it("discounts never stack through the ledger; catch-up restores R", () => {
@@ -258,51 +306,58 @@ describe("ledger scenarios", () => {
       item("2", "U2", "X", 61, 160, "0.1"),
       item("3", "U3", "X", 161, 365, "0.1"),
     ];
-    runLedger(items, shoes, 1, 365, MAX);
+    const { results } = runLedger(items, shoes, 1, 365, MAX);
     near(shoes.get("X")!.collected, 6480, "1e-20");
+    // Merchant first: all 6,480 goes to the merchant, still 120 short of 6,600.
+    const inv = buildInvoice(results.values(), owedFor);
+    expect(inv.merchantTotal.toFixed(2)).toBe("6480.00");
+    expect(inv.platformTotal.toFixed(2)).toBe("0.00");
   });
 
-  it("merchant-funded 5% idle discount: same charge, platform share on the undiscounted charge", () => {
+  it("a merchant-funded 5% idle discount lowers the merchant's target; a promotion the platform's take", () => {
     const run = (fundedBy: "platform" | "merchant") => {
       const shoes = shoesMap([newShoe("A", 6000, 365)]);
-      const it: LedgerItem = { ...item("a", "B", "A", 1, 30, "0.05"), discountFundedBy: fundedBy };
-      return buildInvoice(runLedger([it], shoes, 1, 30, MAX).results.values(), settingsFor)
-        .lines[0];
+      const items: LedgerItem[] = [
+        { ...item("a", "B", "A", 1, 30, "0.05"), discountFundedBy: fundedBy },
+        item("b", "C", "A", 31, 365),
+      ];
+      return buildInvoice(runLedger(items, shoes, 1, 365, MAX).results.values(), owedFor);
     };
-    const shared = run("platform");
-    const merchant = run("merchant");
-    expect(shared.charge.eq(merchant.charge)).toBe(true);
+    const promo = run("platform");
+    const idle = run("merchant");
+    const cost = idle.lines[0].gross.minus(idle.lines[0].amount);
+    expect(promo.total.eq(idle.total)).toBe(true);
+    near(promo.merchantTotal, 6600, "0.01", "promotion: merchant whole");
+    near(promo.platformTotal, new D(600).minus(cost), "0.01", "promotion: platform pays");
+    near(idle.merchantTotal, new D(6600).minus(cost), "0.01", "idle: merchant pays");
+    near(idle.platformTotal, 600, "0.01", "idle: platform whole");
     expect(
-      merchant.platformShare.eq(chargedAmounts(S, roundMoney(merchant.gross)).platformShare),
+      idle.lines[0].discountGiven.eq(roundMoney(idle.lines[0].gross).minus(idle.lines[0].charge)),
     ).toBe(true);
-    expect(merchant.merchantShare.plus(merchant.platformShare).eq(merchant.charge)).toBe(true);
-    expect(merchant.platformShare.gt(shared.platformShare)).toBe(true);
-    expect(merchant.discountGiven.eq(roundMoney(merchant.gross).minus(merchant.charge))).toBe(true);
   });
 
   it("worked example: A days 1–10, B days 6–10 → 216.89 + 95.81 = 312.70", () => {
     const shoes = shoesMap([newShoe("A", 6000, 365), newShoe("B", 8000, 365, 50)]);
     const items = [item("a", "C", "A", 1, 10), item("b", "C", "B", 6, 10)];
-    const inv = buildInvoice(runLedger(items, shoes, 1, 10, MAX).results.values(), settingsFor);
+    const inv = buildInvoice(runLedger(items, shoes, 1, 10, MAX).results.values(), owedFor);
     const [a, b] = inv.lines;
     expect(a.wearEnd.eq("7.5")).toBe(true);
     expect(b.wearEnd.eq("52.5")).toBe(true);
     expect(a.charge.toFixed(2)).toBe("216.89");
     expect(b.charge.toFixed(2)).toBe("95.81");
-    expect(a.merchantShare.toFixed(2)).toBe("198.82");
-    expect(a.platformShare.toFixed(2)).toBe("18.07");
-    expect(b.merchantShare.toFixed(2)).toBe("87.83");
-    expect(b.platformShare.toFixed(2)).toBe("7.98");
+    // Merchant first: neither merchant has reached their target, so all of it is theirs.
+    expect(a.merchantShare.toFixed(2)).toBe("216.89");
+    expect(b.merchantShare.toFixed(2)).toBe("95.81");
     expect(inv.total.toFixed(2)).toBe("312.70");
-    expect(inv.merchantTotal.toFixed(2)).toBe("286.65");
-    expect(inv.platformTotal.toFixed(2)).toBe("26.05");
+    expect(inv.merchantTotal.toFixed(2)).toBe("312.70");
+    expect(inv.platformTotal.toFixed(2)).toBe("0.00");
   });
 
   it("4 pairs held one day: each gains 0.25 wear-day; total ≈ one new pair-day", () => {
     const ids = ["P", "Q", "R", "S"];
     const shoes = shoesMap(ids.map((id) => newShoe(id, 6000, 365)));
     const items = ids.map((sh) => item(sh, "B", sh, 1, 1));
-    const inv = buildInvoice(runLedger(items, shoes, 1, 1, MAX).results.values(), settingsFor);
+    const inv = buildInvoice(runLedger(items, shoes, 1, 1, MAX).results.values(), owedFor);
     near(inv.totalUnrounded, incomeBetween(shoe, 0, "0.25").income.times(4), "1e-25", "exact");
     near(inv.totalUnrounded, incomeBetween(shoe, 0, 1).income, "0.01", "about one pair-day");
     for (const l of inv.lines) expect(l.wearAdded.eq("0.25")).toBe(true);
@@ -311,9 +366,9 @@ describe("ledger scenarios", () => {
   it("estimate equals the final charge when the plan is kept, and leaves shoe state unchanged", () => {
     const shoes = shoesMap([newShoe("A", 6000, 365), newShoe("B", 8000, 365, 50)]);
     const items = [item("a", "C", "A", 10, 40), item("b", "C", "B", 20, 30, "0.05")];
-    const est = estimate(items, shoes, settingsFor, MAX);
+    const est = estimate(items, shoes, owedFor, MAX);
     expect(shoes.get("A")!.wear.eq(0)).toBe(true);
-    const fin = buildInvoice(runLedger(items, shoes, 10, 40, MAX).results.values(), settingsFor);
+    const fin = buildInvoice(runLedger(items, shoes, 10, 40, MAX).results.values(), owedFor);
     expect(est.total.eq(fin.total)).toBe(true);
   });
 

@@ -8,12 +8,15 @@ import {
   curveParams,
   curvePoints,
   lifetimeCollected,
+  merchantOutstanding,
+  merchantTarget,
   priceAt,
   remainingValue,
   shownPrice,
   splitCharge,
 } from "@/lib/pricing";
 import { lifeLeft, wearRemaining } from "@/lib/wear-ledger";
+import type { Tx } from "../db";
 import { type SettingsRow, toPricingSettings } from "../settings";
 
 type Num = { toString(): string };
@@ -25,6 +28,7 @@ export type PricedShoe = {
   wear: Num;
   initialWear: Num;
   collectedSoFar: Num;
+  merchantCollected: Num;
   settings: SettingsRow;
 };
 
@@ -50,6 +54,28 @@ export function nextPhi(shoe: PricedShoe): D {
 }
 
 /**
+ * Merchant first (pricing-spec.md §7): the merchant's target over the shoe's life and what
+ * they are still owed. `merchantFundedDiscounts` lowers the target (idle discounts).
+ */
+export function merchantOwed(
+  shoe: PricedShoe,
+  merchantFundedDiscounts: Decimal.Value = 0,
+): { target: D; outstanding: D } {
+  const { params, settings } = shoeCurve(shoe);
+  const target = merchantTarget(params, toD(shoe.initialWear), settings, merchantFundedDiscounts);
+  return { target, outstanding: merchantOutstanding(target, toD(shoe.merchantCollected)) };
+}
+
+/** Cost of merchant-funded discounts on a shoe's closed rentals (they lower its target). */
+export async function merchantFundedDiscounts(tx: Tx, shoeId: string): Promise<D> {
+  const { _sum } = await tx.rentalItem.aggregate({
+    where: { shoeId, status: { in: ["CLOSED", "LOST"] }, discountFunding: "MERCHANT" },
+    _sum: { discountCost: true },
+  });
+  return toD(_sum.discountCost ?? 0);
+}
+
+/**
  * View models for prices shown in the catalogue. Every number comes from the pricing
  * engine; this file only shapes it. Values are unrounded Decimal strings; the UI rounds
  * for display.
@@ -62,6 +88,8 @@ export type ShoePricing = {
   remainingValue: string;
   wearRemaining: string;
   lifeLeft: string;
+  merchantTarget: string;
+  merchantCollected: string;
 };
 
 export function shoePricing(shoe: PricedShoe): ShoePricing {
@@ -75,6 +103,8 @@ export function shoePricing(shoe: PricedShoe): ShoePricing {
     remainingValue: remainingValue(p, wear, collected, settings).toString(),
     wearRemaining: wearRemaining(wear, p.L).toString(),
     lifeLeft: lifeLeft(wear, p.L).toString(),
+    merchantTarget: merchantOwed(shoe).target.toString(),
+    merchantCollected: shoe.merchantCollected.toString(),
   };
 }
 

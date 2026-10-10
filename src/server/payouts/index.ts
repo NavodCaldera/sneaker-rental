@@ -27,13 +27,26 @@ type ItemForPayout = {
   disputes: { status: string; resolution: string | null; amount: { toString(): string } | null }[];
 };
 
-/** Merchant share plus upheld deposit charges, minus upheld refunds. */
+/** The part of a refund the merchant bears: up to that rental's merchant share. */
+export function merchantPartOfRefund(
+  refund: { toString(): string },
+  merchantShare: { toString(): string },
+) {
+  return D.min(toD(refund), toD(merchantShare));
+}
+
+/**
+ * Merchant share plus upheld deposit charges, minus the merchant's part of upheld refunds
+ * (the platform bears any refund beyond this rental's merchant share).
+ */
 export function payableAmount(item: ItemForPayout) {
-  let amount = toD(item.merchantShare ?? 0);
+  const share = toD(item.merchantShare ?? 0);
+  let amount = share;
   for (const d of item.disputes) {
     if (d.status !== "UPHELD" || !d.amount) continue;
     if (d.resolution === "CHARGE_DEPOSIT") amount = amount.plus(toD(d.amount));
-    if (d.resolution === "REFUND_BORROWER") amount = amount.minus(toD(d.amount));
+    if (d.resolution === "REFUND_BORROWER")
+      amount = amount.minus(merchantPartOfRefund(d.amount, share));
   }
   return amount;
 }

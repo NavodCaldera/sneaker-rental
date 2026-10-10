@@ -61,6 +61,8 @@ model Merchant {
   businessName          String
   payoutAccount         String?
   verified              Boolean  @default(false)
+  /// Longer maximum lifespan an admin granted on request (wear-days); null = settings max
+  maxLifespanDays       Int?
   /// Wear at retirement ÷ declared L, averaged (Phase 2 ranking input)
   lifespanAccuracyScore Decimal? @db.Decimal(20, 16)
   createdAt             DateTime @default(now())
@@ -111,6 +113,9 @@ model Shoe {
   /// Charged on the platform so far, after discounts (excludes F(w₀))
   collectedSoFar  Decimal    @default(0) @db.Decimal(28, 12)
   lostToDiscounts Decimal    @default(0) @db.Decimal(28, 12)
+  /// Merchant shares charged so far, net of refunds. Rent goes to the merchant until this
+  /// reaches their target (merchant first), then to the platform.
+  merchantCollected Decimal  @default(0) @db.Decimal(14, 2)
   /// Settings version the shoe is priced with: snapshotted when listed, so its curve
   /// never changes under a running rental
   settingsId      String
@@ -172,9 +177,10 @@ model PricingSettings {
   baseSteepness      Decimal  @db.Decimal(20, 16)
   /// Lifespan the base curve was tuned for: β = baseSteepness · refLife / L
   refLife            Int      @default(365)
-  /// OPEN DECISION: lifespan a merchant may declare (wear-days)
-  minLifespanDays    Int      @default(60)
-  maxLifespanDays    Int      @default(1095)
+  /// Lifespan a merchant may declare, in wear-days: 6 to 24 months. An admin can grant a
+  /// merchant a longer maximum (Merchant.maxLifespanDays).
+  minLifespanDays    Int      @default(183)
+  maxLifespanDays    Int      @default(730)
   idleDiscountCap    Decimal  @db.Decimal(20, 16)
   /// Capital rate r (yearly) and hold cost h (LKR per idle day) for the idle-cost test
   capitalRate        Decimal  @default(0.12) @db.Decimal(20, 16)
@@ -252,8 +258,8 @@ model RentalItem {
   /// When the pair reached this borrower, and when it reached the next holder
   startDate         DateTime?
   endDate           DateTime?
-  /// Wear-ledger days, both inclusive (Asia/Colombo calendar dates). A handoff day
-  /// belongs to the giver; the receiver's first day is the day after.
+  /// Wear-ledger days, both inclusive (Asia/Colombo calendar dates): first = delivery day,
+  /// last = the day the borrower ended the rental (waiting for pickup is free).
   firstDay          DateTime?        @db.Date
   lastDay           DateTime?        @db.Date
   returnRequestedAt DateTime?

@@ -12,7 +12,6 @@ import { D } from "../decimal";
 import {
   type CurveParams,
   type DiscountFunding,
-  type PricingSettings,
   IQ,
   assertDiscount,
   catchUpPhi,
@@ -209,17 +208,23 @@ export interface Invoice {
   platformTotal: D;
 }
 
-/** Round and split each accrued item with chargedAmounts(), using each shoe's settings. */
+/**
+ * Round and split each accrued item merchant-first with chargedAmounts().
+ * `merchantOutstandingFor(shoeId)` is what the shoe's merchant is still owed before these
+ * items; it is carried from one item to the next for the same shoe, in accrual order.
+ * A merchant-funded discount lowers the merchant's target by its cost.
+ */
 export function buildInvoice(
   results: Iterable<ItemAccrual>,
-  settingsFor: (shoeId: string) => PricingSettings,
+  merchantOutstandingFor: (shoeId: string) => Decimal.Value,
 ): Invoice {
+  const outstanding = new Map<string, D>();
   const lines: InvoiceLine[] = [];
   for (const r of results) {
-    const amounts = chargedAmounts(settingsFor(r.shoeId), r.amount, {
-      undiscounted: r.gross,
-      fundedBy: r.discountFundedBy,
-    });
+    let owed = outstanding.get(r.shoeId) ?? new D(merchantOutstandingFor(r.shoeId));
+    if (r.discountFundedBy === "merchant") owed = D.max(0, owed.minus(r.gross.minus(r.amount)));
+    const amounts = chargedAmounts(r.amount, { merchantOutstanding: owed, undiscounted: r.gross });
+    outstanding.set(r.shoeId, owed.minus(amounts.merchantShare));
     lines.push({ ...r, ...amounts });
   }
   const sum = (f: (l: InvoiceLine) => D) => lines.reduce((t, l) => t.plus(f(l)), new D(0));
@@ -239,15 +244,18 @@ export function buildInvoice(
 export function estimate(
   items: LedgerItem[],
   shoes: Map<string, LedgerShoe>,
-  settingsFor: (shoeId: string) => PricingSettings,
+  merchantOutstandingFor: (shoeId: string) => Decimal.Value,
   options: { maxPairs: number },
 ): Invoice {
-  if (items.length === 0) return buildInvoice([], settingsFor);
+  if (items.length === 0) return buildInvoice([], merchantOutstandingFor);
   if (items.some((it) => it.end === null)) {
     throw new Error("An estimate needs a planned last day for every item");
   }
   const copy = new Map([...shoes].map(([k, v]) => [k, { ...v }]));
   const from = Math.min(...items.map((it) => it.start));
   const to = Math.max(...items.map((it) => it.end as number));
-  return buildInvoice(runLedger(items, copy, from, to, options).results.values(), settingsFor);
+  return buildInvoice(
+    runLedger(items, copy, from, to, options).results.values(),
+    merchantOutstandingFor,
+  );
 }

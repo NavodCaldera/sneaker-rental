@@ -120,7 +120,7 @@ describe("charges", () => {
   it("rejects invalid input", () => {
     expect(() => curveParams(0, 365, S)).toThrow(RangeError);
     expect(() => curveParams(6000, 0, S)).toThrow(RangeError);
-    expect(() => curveParams(6000, 59, S)).toThrow(RangeError);
+    expect(() => curveParams(6000, -1, S)).toThrow(RangeError);
     expect(() => incomeBetween(p, 0, 10, 1)).toThrow(RangeError);
     expect(() => incomeBetween(p, 0, 10, -0.1)).toThrow(RangeError);
     expect(() => incomeBetween(p, 10, 5)).toThrow(RangeError);
@@ -130,35 +130,36 @@ describe("charges", () => {
   });
 });
 
-describe("chargedAmounts", () => {
-  it("rounds the charge and the platform share; the merchant gets the remainder", async () => {
-    const { chargedAmounts } = await import("..");
-    const r = chargedAmounts(S, "2866.1142780659993");
+describe("chargedAmounts (merchant first)", () => {
+  it("rounds the charge once; the merchant's share is capped at what they are owed", async () => {
+    const { chargedAmounts, merchantOutstanding } = await import("..");
+    const r = chargedAmounts("2866.1142780659993", { merchantOutstanding: "6600" });
     expect(r.charge.toFixed(2)).toBe("2866.11");
-    expect(r.merchantShare.toFixed(2)).toBe("2627.27");
-    expect(r.platformShare.toFixed(2)).toBe("238.84");
+    expect(r.merchantShare.toFixed(2)).toBe("2866.11");
+    expect(r.platformShare.toFixed(2)).toBe("0.00");
     expect(r.discountGiven.eq(0)).toBe(true);
-    // 0.06 → platform 0.005 rounds to 0.01; merchant gets the remaining 0.05.
-    const tiny = chargedAmounts(S, "0.06");
-    expect(tiny.platformShare.toFixed(2)).toBe("0.01");
-    expect(tiny.merchantShare.toFixed(2)).toBe("0.05");
+    // The rental that completes the merchant's target: the platform gets the rest.
+    const owed = merchantOutstanding("6600", "5000");
+    expect(owed.eq(1600)).toBe(true);
+    const crossing = chargedAmounts("2000.004", { merchantOutstanding: owed });
+    expect(crossing.merchantShare.toFixed(2)).toBe("1600.00");
+    expect(crossing.platformShare.toFixed(2)).toBe("400.00");
+    expect(merchantOutstanding("6600", "7000").eq(0)).toBe(true);
     for (const x of ["0.05", "10.015", "333.335", "1.005"]) {
-      const a = chargedAmounts(S, x);
+      const a = chargedAmounts(x, { merchantOutstanding: "3.333" });
       expect(a.merchantShare.plus(a.platformShare).eq(a.charge)).toBe(true);
     }
   });
 
-  it("merchant-funded discount comes out of the merchant share only", async () => {
+  it("reports the discount given against the rounded undiscounted charge", async () => {
     const { chargedAmounts } = await import("..");
     const p = curveParams(6000, 365, S);
     const { income, undiscounted } = incomeBetween(p, 0, 100, "0.05");
-    const promo = chargedAmounts(S, income, { undiscounted, fundedBy: "platform" });
-    const idle = chargedAmounts(S, income, { undiscounted, fundedBy: "merchant" });
-    const full = chargedAmounts(S, undiscounted);
-    expect(idle.charge.eq(promo.charge)).toBe(true);
-    expect(idle.platformShare.eq(full.platformShare)).toBe(true);
-    expect(idle.merchantShare.plus(idle.platformShare).eq(idle.charge)).toBe(true);
-    expect(promo.platformShare.lt(full.platformShare)).toBe(true);
-    expect(idle.discountGiven.eq(full.charge.minus(idle.charge))).toBe(true);
+    const a = chargedAmounts(income, { merchantOutstanding: "6600", undiscounted });
+    expect(
+      a.discountGiven.eq(
+        chargedAmounts(undiscounted, { merchantOutstanding: 0 }).charge.minus(a.charge),
+      ),
+    ).toBe(true);
   });
 });

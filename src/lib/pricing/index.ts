@@ -25,6 +25,8 @@ export {
   idleCostPerDay,
   incomeBetween,
   lifetimeCollected,
+  merchantOutstanding,
+  merchantTarget,
   remainingValue,
   splitCharge,
 } from "./charges";

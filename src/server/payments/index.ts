@@ -3,7 +3,7 @@ import type { PaymentKind } from "@/generated/prisma/client";
 import { D, roundMoney, toD } from "@/lib/decimal";
 import { chargedAmounts, remainingValue } from "@/lib/pricing";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
-import { shoeCurve } from "../catalogue/pricing";
+import { merchantFundedDiscounts, merchantOwed, shoeCurve } from "../catalogue/pricing";
 import { db } from "../db";
 import { getActiveSettings } from "../settings";
 import { type GatewayResult, gateway } from "./gateway";
@@ -154,9 +154,9 @@ export async function captureFromDeposit(
 
 /**
  * §4 rule 3 / §6: a lost or unreturned pair. The borrower pays what the shoe had left to
- * earn (K · (A − IQ(w)), or R − collected with catch-up), split as normal; the deposit is
- * captured first and the card is charged the rest. The merchant is made whole, the shoe is
- * retired and the account locked.
+ * earn (K · (A − IQ(w)), or R − collected with catch-up), split merchant first; the deposit
+ * is captured first and the card is charged the rest. The merchant is made whole, the shoe
+ * is retired and the account locked.
  */
 export async function markLost(itemId: string, now = new Date()) {
   const settingsRow = await getActiveSettings(now);
@@ -172,7 +172,10 @@ export async function markLost(itemId: string, now = new Date()) {
     const { params, settings, collected } = shoeCurve(item.shoe);
     const wStart = toD(item.shoe.wear);
     const owed = remainingValue(params, wStart, collected, settings);
-    const { charge, merchantShare, platformShare } = chargedAmounts(settings, owed);
+    const { outstanding } = merchantOwed(item.shoe, await merchantFundedDiscounts(tx, item.shoeId));
+    const { charge, merchantShare, platformShare } = chargedAmounts(owed, {
+      merchantOutstanding: outstanding,
+    });
 
     await tx.rentalItem.update({
       where: { id: item.id },
@@ -196,6 +199,7 @@ export async function markLost(itemId: string, now = new Date()) {
       data: {
         wear: params.L.toString(),
         collectedSoFar: toD(item.shoe.collectedSoFar).plus(owed).toString(),
+        merchantCollected: toD(item.shoe.merchantCollected).plus(merchantShare).toFixed(2),
         status: "RETIRED",
         retiredAt: now,
       },

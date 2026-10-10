@@ -1,7 +1,9 @@
 import { D } from "@/lib/decimal";
 import { validateListing } from "@/lib/pricing";
 import { getCurrentUser } from "@/server/auth/session";
+import { listingLimits } from "@/server/catalogue";
 import { curvePreview } from "@/server/catalogue/pricing";
+import { db } from "@/server/db";
 import { getActiveSettings, toPricingSettings } from "@/server/settings";
 
 /** Live curve preview for the add-shoe form: GET ?value=6000&lifespan=365 */
@@ -19,9 +21,15 @@ export async function GET(req: Request) {
   if (!/^\d+$/.test(lifespan)) {
     return Response.json({ error: "Lifespan must be whole wear-days" }, { status: 400 });
   }
-  const settings = toPricingSettings(await getActiveSettings());
+  const row = await getActiveSettings();
+  const settings = toPricingSettings(row);
+  const merchant = await db.merchant.findUnique({ where: { userId: user.id } });
+  const limits = listingLimits(row, merchant ?? { maxLifespanDays: null });
   try {
-    validateListing(value, lifespan, settings);
+    validateListing(value, lifespan, {
+      minLife: limits.minLifespanDays,
+      maxLife: limits.maxLifespanDays,
+    });
   } catch (e) {
     if (e instanceof RangeError) return Response.json({ error: e.message }, { status: 400 });
     throw e;

@@ -4,7 +4,7 @@ import { D } from "@/lib/decimal";
 import type { PhotoKind, Prisma, ShoeStatus } from "@/generated/prisma/client";
 import { validateListing } from "@/lib/pricing";
 import { db } from "../db";
-import { type SettingsRow, getActiveSettings, toPricingSettings } from "../settings";
+import { type SettingsRow, getActiveSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
 
 export class CatalogueError extends Error {}
@@ -70,10 +70,39 @@ export async function getMerchantForUser(userId: string) {
   return merchant;
 }
 
-/** The active settings' limits must accept the listing. */
-function checkListing(value: string, lifespanDays: number, settings: SettingsRow) {
+/** Lifespan is declared in wear-days; limits are set in months (1 month = 365 / 12 days). */
+export function monthsToDays(months: number) {
+  return Math.ceil((months * 365) / 12);
+}
+
+/** Whole months for display (183 → 6, 730 → 24). */
+export function daysToMonths(days: number) {
+  return Math.round((days * 12) / 365);
+}
+
+export type LifespanLimits = Pick<SettingsRow, "minLifespanDays" | "maxLifespanDays">;
+
+/**
+ * Lifespan a merchant may declare: 6–24 months from settings, or up to a longer maximum an
+ * admin granted that merchant on request.
+ */
+export function listingLimits(
+  settings: LifespanLimits,
+  merchant: { maxLifespanDays: number | null },
+): LifespanLimits {
+  return {
+    minLifespanDays: settings.minLifespanDays,
+    maxLifespanDays: Math.max(settings.maxLifespanDays, merchant.maxLifespanDays ?? 0),
+  };
+}
+
+/** The limits that apply to this merchant must accept the listing. */
+function checkListing(value: string, lifespanDays: number, limits: LifespanLimits) {
   try {
-    validateListing(value, lifespanDays, toPricingSettings(settings));
+    validateListing(value, lifespanDays, {
+      minLife: limits.minLifespanDays,
+      maxLife: limits.maxLifespanDays,
+    });
   } catch (e) {
     if (e instanceof RangeError) throw new CatalogueError(e.message);
     throw e;
@@ -90,7 +119,8 @@ export async function createShoe(
   photos: Partial<Record<PhotoKind, File>>,
 ) {
   const settings = await getActiveSettings();
-  checkListing(input.value, input.lifespanDays, settings);
+  const merchant = await db.merchant.findUniqueOrThrow({ where: { id: merchantId } });
+  checkListing(input.value, input.lifespanDays, listingLimits(settings, merchant));
   for (const { kind, label } of LISTING_PHOTOS) checkPhoto(photos[kind] as File, label);
   const saved = [];
   for (const { kind } of LISTING_PHOTOS) {
@@ -125,8 +155,8 @@ export async function publishShoe(merchantId: string, shoeId: string) {
   const shoe = await ownShoe(merchantId, shoeId);
   if (shoe.status !== "DRAFT") throw new CatalogueError("Only drafts can be published");
   const settings = await getActiveSettings();
-  checkListing(shoe.value.toString(), shoe.lifespanDays, settings);
   const merchant = await db.merchant.findUniqueOrThrow({ where: { id: merchantId } });
+  checkListing(shoe.value.toString(), shoe.lifespanDays, listingLimits(settings, merchant));
   if (!merchant.verified)
     throw new CatalogueError("Your business must be verified before publishing");
   if (!merchant.payoutAccount) throw new CatalogueError("Add a payout account before publishing");
@@ -255,6 +285,27 @@ export async function listMerchants() {
 
 export async function setMerchantVerified(merchantId: string, verified: boolean) {
   return db.merchant.update({ where: { id: merchantId }, data: { verified } });
+}
+
+/**
+ * On a merchant's request, an admin lets them declare lifespans up to `months` (beyond the
+ * 24-month default), or removes the extension with null. Shoes already listed keep their
+ * lifespan either way.
+ */
+export async function setLifespanExtension(merchantId: string, months: number | null) {
+  if (months !== null) {
+    const settings = await getActiveSettings();
+    if (!Number.isInteger(months) || monthsToDays(months) <= settings.maxLifespanDays) {
+      throw new CatalogueError(
+        `An extension must be more than ${daysToMonths(settings.maxLifespanDays)} months`,
+      );
+    }
+    if (months > 120) throw new CatalogueError("At most 120 months");
+  }
+  return db.merchant.update({
+    where: { id: merchantId },
+    data: { maxLifespanDays: months === null ? null : monthsToDays(months) },
+  });
 }
 
 /** Headline numbers for the merchant dashboard. */

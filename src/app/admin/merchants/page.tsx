@@ -3,7 +3,9 @@ import { revalidatePath } from "next/cache";
 import { Badge, Button, Card, PageHeader } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
-import { listMerchants, setMerchantVerified } from "@/server/catalogue";
+import { daysToMonths, listMerchants, setMerchantVerified } from "@/server/catalogue";
+import { getActiveSettings } from "@/server/settings";
+import { LifespanForm } from "./lifespan-form";
 
 export const metadata: Metadata = { title: "Merchants" };
 
@@ -16,12 +18,13 @@ async function toggleVerified(merchantId: string, verified: boolean) {
 
 export default async function AdminMerchants() {
   await requireUser("ADMIN");
-  const merchants = await listMerchants();
+  const [merchants, settings] = await Promise.all([listMerchants(), getActiveSettings()]);
+  const standardMonths = daysToMonths(settings.maxLifespanDays);
   return (
     <main>
       <PageHeader
         title="Merchants"
-        description="Verify businesses before their shoes can be published."
+        description={`Verify businesses before their shoes can be published. Shoes may last ${daysToMonths(settings.minLifespanDays)}–${standardMonths} months; on a merchant's request you can allow longer.`}
       />
       <div className="grid gap-3">
         {merchants.map((m) => (
@@ -41,6 +44,13 @@ export default async function AdminMerchants() {
               </div>
               <div className="text-xs text-subtle">
                 Payout account: {m.payoutAccount ?? "not set"}
+              </div>
+              <div className="mt-2">
+                <LifespanForm
+                  merchantId={m.id}
+                  months={m.maxLifespanDays ? daysToMonths(m.maxLifespanDays) : null}
+                  standardMonths={standardMonths}
+                />
               </div>
             </div>
             <form action={toggleVerified.bind(null, m.id, !m.verified)}>

@@ -149,7 +149,8 @@ describe("disputes (§6)", () => {
         amount: "999999",
         decision: "Too much",
       }),
-    ).rejects.toThrow(/merchant's share/);
+    ).rejects.toThrow(/this rental's charge/);
+    const before = await db.shoe.findUniqueOrThrow({ where: { id: item.shoeId } });
     await decideDispute(admin.id, dispute.id, {
       resolution: "REFUND_BORROWER",
       amount: "50",
@@ -162,6 +163,10 @@ describe("disputes (§6)", () => {
 
     const { results } = await runPayoutBatch(day(20));
     expect(results[0].amount).toBe(item.merchantShare!.minus(50).toFixed(2));
+    // Merchant first: the refund lowers the merchant's running total, so later rentals of
+    // this shoe pay it back to them before the platform earns.
+    const after = await db.shoe.findUniqueOrThrow({ where: { id: item.shoeId } });
+    expect(after.merchantCollected.toFixed(2)).toBe(before.merchantCollected.minus(50).toFixed(2));
   });
 
   it("only the borrower or merchant can open one, within the window, one at a time", async () => {

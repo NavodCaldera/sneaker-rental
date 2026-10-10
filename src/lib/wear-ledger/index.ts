@@ -4,7 +4,8 @@
  *
  * A wear-day is one calendar day a pair is held. On each day a borrower holds n pairs,
  * each pair gets 1/n wear-day. Holding periods are calendar days in Asia/Colombo and both
- * the first and the last day count; an open holding (lastDay = null) counts as held.
+ * the first day (delivery) and the last day (the day the borrower ends the rental) count;
+ * an open holding (lastDay = null) counts as held.
  */
 import type Decimal from "decimal.js";
 import { D } from "../decimal";
@@ -58,13 +59,14 @@ export function dayNumber(isoDate: string): Day {
 }
 
 /**
- * Days for a direct handoff delivered at `at`: the handoff day belongs to the borrower
- * handing over (their last day), and the receiver's first day is the next day. A shoe
- * is never held by two items on the same day.
+ * First day for a borrower receiving a pair by direct handoff: the delivery day, unless the
+ * borrower handing over still held it that day (they ended the rental that same day), in
+ * which case the next day. A shoe is never held by two items on the same day. The giver's
+ * last day is the day they ended the rental; waiting days in between are nobody's.
  */
-export function handoffDays(at: Date): { giverLastDay: Day; receiverFirstDay: Day } {
-  const day = colomboDay(at);
-  return { giverLastDay: day, receiverFirstDay: day + 1 };
+export function receiverFirstDay(deliveredAt: Date, giverLastDay: Day | null): Day {
+  const day = colomboDay(deliveredAt);
+  return giverLastDay === null ? day : Math.max(day, giverLastDay + 1);
 }
 
 function covers(h: Holding, day: Day) {

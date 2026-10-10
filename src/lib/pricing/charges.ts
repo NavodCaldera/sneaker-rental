@@ -80,8 +80,9 @@ function platformFraction(settings: PricingSettings): D {
 }
 
 /**
- * Exact (unrounded) split of an amount between merchant and platform, for previews such
- * as "you earn over its life". Charged amounts use chargedAmounts() instead.
+ * Exact (unrounded) proportional split of an amount, for previews such as "you earn over
+ * its life": over a shoe's whole life the merchant receives (1 + μm) / (1 + μm + μp) of R.
+ * Charged amounts are split merchant-first with chargedAmounts() instead.
  */
 export function splitCharge(
   settings: PricingSettings,
@@ -92,30 +93,47 @@ export function splitCharge(
 }
 
 /**
+ * What the merchant is owed over the shoe's life (pricing-spec.md "Merchant first"):
+ * their share of everything still collectable when listed, (1 + μm) · V · (1 − IQ(w₀) / A),
+ * which is (1 + μm) · V for a new pair, less merchant-funded discounts given so far.
+ */
+export function merchantTarget(
+  p: CurveParams,
+  initialWear: Decimal.Value,
+  settings: PricingSettings,
+  merchantFundedDiscounts: Decimal.Value = 0,
+): D {
+  const collectable = ONE.minus(IQ(p, initialWear).div(p.A));
+  return ONE.plus(settings.merchantMargin)
+    .times(p.V)
+    .times(collectable)
+    .minus(merchantFundedDiscounts);
+}
+
+/** What the merchant is still owed: target − merchant shares already charged, never < 0. */
+export function merchantOutstanding(target: Decimal.Value, merchantCollected: Decimal.Value): D {
+  return D.max(0, new D(target).minus(merchantCollected));
+}
+
+/**
  * Charged amounts for one item, rounded to 2 dp (pricing-spec.md "Closing an item"):
- * - charged = round(income), the only rounding of the charge;
- * - platform share = round(charged · μp / (1 + μm + μp)); the merchant gets the rest, so
- *   the two always add up to the cent;
- * - merchant-funded idle discount (§4 rule 4): the platform share is taken on the rounded
- *   undiscounted charge, so the discount comes out of the merchant's share only;
- * - discountGiven = round(undiscounted) − charged.
+ * - charge = round(income), the only rounding of the charge;
+ * - merchant first: merchantShare = min(charge, round(merchantOutstanding)); the platform
+ *   gets the rest, so the two always add up to the cent. The platform earns only once the
+ *   merchant has been paid their whole target;
+ * - discountGiven = round(undiscounted) − charge.
  */
 export function chargedAmounts(
-  settings: PricingSettings,
   income: Decimal.Value,
-  options: { undiscounted?: Decimal.Value; fundedBy?: DiscountFunding } = {},
+  options: { merchantOutstanding: Decimal.Value; undiscounted?: Decimal.Value },
 ): { charge: D; merchantShare: D; platformShare: D; discountGiven: D } {
   const charge = roundMoney(income);
   const gross = roundMoney(options.undiscounted ?? income);
-  const fraction = platformFraction(settings);
-  const platformShare =
-    options.fundedBy === "merchant"
-      ? D.min(charge, roundMoney(gross.times(fraction)))
-      : roundMoney(charge.times(fraction));
+  const merchantShare = D.min(charge, roundMoney(D.max(0, options.merchantOutstanding)));
   return {
     charge,
-    merchantShare: charge.minus(platformShare),
-    platformShare,
+    merchantShare,
+    platformShare: charge.minus(merchantShare),
     discountGiven: gross.minus(charge),
   };
 }

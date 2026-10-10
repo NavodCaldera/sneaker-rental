@@ -23,8 +23,8 @@ export const DEFAULT_SETTINGS = {
   midpointRatio: "0.5479452054794521", // 200 / 365
   baseSteepness: "0.03",
   refLife: 365,
-  minLifespanDays: 60, // OPEN DECISION
-  maxLifespanDays: 1095, // OPEN DECISION
+  minLifespanDays: 183, // 6 months
+  maxLifespanDays: 730, // 24 months; admins can extend per merchant
   idleDiscountCap: "0.05",
   capitalRate: "0.12",
   holdCost: "0",

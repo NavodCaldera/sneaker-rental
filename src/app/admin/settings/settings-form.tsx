@@ -28,10 +28,14 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
     ],
   },
   {
-    title: "Listings (OPEN DECISION: lifespan limits)",
+    title: "Listings: lifespan limits",
     fields: [
-      { name: "minLifespanDays", label: "Shortest lifespan (wear-days)", hint: "60" },
-      { name: "maxLifespanDays", label: "Longest lifespan (wear-days)", hint: "1095" },
+      { name: "minLifespanDays", label: "Shortest lifespan (wear-days)", hint: "183 = 6 months" },
+      {
+        name: "maxLifespanDays",
+        label: "Longest lifespan (wear-days)",
+        hint: "730 = 24 months. Extend single merchants on the Merchants page.",
+      },
     ],
   },
   {

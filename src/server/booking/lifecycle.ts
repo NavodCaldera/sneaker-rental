@@ -7,11 +7,11 @@ import {
   colomboDay,
   dateToDay,
   dayToDate,
-  handoffDays,
+  receiverFirstDay,
   wearAdded,
   wearEnd,
 } from "@/lib/wear-ledger";
-import { shoeCurve } from "../catalogue/pricing";
+import { merchantFundedDiscounts, merchantOwed, shoeCurve } from "../catalogue/pricing";
 import { type Tx, db } from "../db";
 import { requestDelivery } from "../logistics/requests";
 import { settleItems } from "../payments";
@@ -41,7 +41,13 @@ export async function endRental(borrowerId: string, itemId: string, now = new Da
       now.getTime() - item.startDate.getTime() <= settings.freeReturnHours * 3_600_000;
     await tx.rentalItem.update({
       where: { id: item.id },
-      data: { status: "RETURNING", returnRequestedAt: now, freeReturn },
+      // Charging and wear stop today: waiting for the driver is free (pricing-spec.md §5).
+      data: {
+        status: "RETURNING",
+        returnRequestedAt: now,
+        lastDay: dayToDate(colomboDay(now)),
+        freeReturn,
+      },
     });
 
     const next = await tx.rentalItem.findFirst({
@@ -96,10 +102,10 @@ export async function onDeliveryPickedUp(tx: Tx, delivery: Delivery) {
 }
 
 /**
- * Delivery arrived. The holding starts on the delivery date for the receiving borrower and
- * ends for the borrower handing over (handoff) or returning (collect). Both the first and
- * the last day count; a handoff day belongs to the giver and the receiver starts the next
- * day (pricing-spec.md "Special events").
+ * Delivery arrived. The holding starts on the delivery date for the receiving borrower (the
+ * day after, if the borrower handing over ended their rental that same day). The returning
+ * or handing-over borrower's last day was set when they ended the rental; the delivery time
+ * is recorded as `endDate` (pricing-spec.md §5).
  */
 export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) {
   const item = await tx.rentalItem.findUniqueOrThrow({ where: { id: delivery.rentalItemId } });
@@ -113,16 +119,21 @@ export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) 
       await tx.shoe.update({ where: { id: item.shoeId }, data: { status: "WITH_BORROWER" } });
       break;
     case "HANDOFF": {
-      const days = handoffDays(at);
+      let giverLastDay: number | null = null;
       if (delivery.fromRentalItemId) {
-        await tx.rentalItem.update({
+        const giver = await tx.rentalItem.findUniqueOrThrow({
           where: { id: delivery.fromRentalItemId },
-          data: { endDate: at, lastDay: dayToDate(days.giverLastDay) },
+        });
+        giverLastDay = giver.lastDay ? dateToDay(giver.lastDay) : colomboDay(at);
+        await tx.rentalItem.update({
+          where: { id: giver.id },
+          data: { endDate: at, lastDay: dayToDate(giverLastDay) },
         });
       }
+      const firstDay = receiverFirstDay(at, giverLastDay);
       await tx.rentalItem.update({
         where: { id: item.id },
-        data: { status: "ACTIVE", startDate: at, firstDay: dayToDate(days.receiverFirstDay) },
+        data: { status: "ACTIVE", startDate: at, firstDay: dayToDate(firstDay) },
       });
       await tx.shoe.update({ where: { id: item.shoeId }, data: { status: "WITH_BORROWER" } });
       break;
@@ -130,7 +141,7 @@ export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) 
     case "COLLECT":
       await tx.rentalItem.update({
         where: { id: item.id },
-        data: { endDate: at, lastDay: today },
+        data: { endDate: at, lastDay: item.lastDay ?? today },
       });
       await tx.shoe.update({ where: { id: item.shoeId }, data: { status: "CLEANING" } });
       break;
@@ -303,9 +314,16 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
     toD(item.discount),
     phi,
   );
-  const { charge, merchantShare, platformShare } = chargedAmounts(settings, income, {
+  // Merchant first: the merchant's share fills up to their target, the platform gets the
+  // rest. A merchant-funded discount lowers the merchant's target by its cost.
+  const ownDiscount = item.discountFunding === "MERCHANT" ? discountCost : toD(0);
+  const { outstanding } = merchantOwed(
+    item.shoe,
+    (await merchantFundedDiscounts(tx, item.shoeId)).plus(ownDiscount),
+  );
+  const { charge, merchantShare, platformShare } = chargedAmounts(income, {
+    merchantOutstanding: outstanding,
     undiscounted,
-    fundedBy: item.discountFunding === "MERCHANT" ? "merchant" : "platform",
   });
 
   const closed = await tx.rentalItem.update({
@@ -330,6 +348,7 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
       wear: wEnd.toString(),
       collectedSoFar: toD(item.shoe.collectedSoFar).plus(income).toString(),
       lostToDiscounts: toD(item.shoe.lostToDiscounts).plus(discountCost).toString(),
+      merchantCollected: toD(item.shoe.merchantCollected).plus(merchantShare).toFixed(2),
     },
   });
 
