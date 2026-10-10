@@ -1,7 +1,9 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Data model: docs/business-model.md §8.
+// Money and wear are Decimal, never Float (CLAUDE.md rule 2).
+//   Charged / shown amounts:   @db.Decimal(14, 2)
+//   Unrounded money:           @db.Decimal(28, 12)
+//   Wear (wear-days):          @db.Decimal(28, 12)
+//   Ratios (margins, φ, d):    @db.Decimal(20, 16)
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +12,441 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── Identity ──────────────────────────────────────────────────────────────
+
+enum Role {
+  MERCHANT
+  BORROWER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  role         Role
+  name         String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  verified     Boolean  @default(false)
+  /// Locked after a lost shoe (§6)
+  locked       Boolean  @default(false)
+  /// Trusted borrower tier (Phase 2; stored now, no logic yet)
+  tier         Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  merchant         Merchant?
+  sessions         Session[]
+  rentals          Rental[]
+  conditionReports ConditionReport[]
+  disputesOpened   Dispute[]         @relation("DisputeOpenedBy")
+  disputesDecided  Dispute[]         @relation("DisputeDecidedBy")
+}
+
+model Session {
+  /// SHA-256 of the cookie token; the raw token is never stored
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Merchant {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  businessName          String
+  payoutAccount         String?
+  verified              Boolean  @default(false)
+  /// Wear at retirement ÷ declared L, averaged (Phase 2 ranking input)
+  lifespanAccuracyScore Decimal? @db.Decimal(20, 16)
+  createdAt             DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shoes   Shoe[]
+  payouts Payout[]
+}
+
+// ─── Catalogue ─────────────────────────────────────────────────────────────
+
+enum ShoeStatus {
+  DRAFT
+  AVAILABLE
+  RESERVED
+  OUT_FOR_DELIVERY
+  WITH_BORROWER
+  IN_HANDOFF
+  CLEANING
+  RETIRED
+  SOLD
+}
+
+enum Grade {
+  A
+  B
+  C
+  D
+}
+
+model Shoe {
+  id              String     @id @default(cuid())
+  merchantId      String
+  brand           String
+  model           String
+  size            String
+  category        String
+  description     String?
+  pickupAddress   String
+  /// Declared value V (LKR)
+  value           Decimal    @db.Decimal(14, 2)
+  /// Expected lifespan L (wear-days)
+  lifespanDays    Int
+  /// Accumulated wear w (wear-days)
+  wear            Decimal    @default(0) @db.Decimal(28, 12)
+  collectedSoFar  Decimal    @default(0) @db.Decimal(28, 12)
+  lostToDiscounts Decimal    @default(0) @db.Decimal(28, 12)
+  status          ShoeStatus @default(DRAFT)
+  latestGrade     Grade?
+  publishedAt     DateTime?
+  retiredAt       DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  merchant         Merchant          @relation(fields: [merchantId], references: [id])
+  photos           Photo[]
+  rentalItems      RentalItem[]
+  conditionReports ConditionReport[]
+
+  @@index([status, size, brand])
+  @@index([merchantId])
+}
+
+enum PhotoKind {
+  FRONT
+  SIDE
+  SOLE
+  INSIDE
+  BOX
+  CONDITION
+  DRIVER_PICKUP
+  DRIVER_DROPOFF
+}
+
+model Photo {
+  id                String    @id @default(cuid())
+  kind              PhotoKind
+  storageKey        String
+  contentType       String
+  shoeId            String?
+  conditionReportId String?
+  deliveryId        String?
+  createdAt         DateTime  @default(now())
+
+  shoe            Shoe?            @relation(fields: [shoeId], references: [id], onDelete: Cascade)
+  conditionReport ConditionReport? @relation(fields: [conditionReportId], references: [id], onDelete: Cascade)
+  delivery        Delivery?        @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([shoeId])
+}
+
+// ─── Settings ──────────────────────────────────────────────────────────────
+
+/// Append-only: the active row is the latest with effectiveFrom ≤ now.
+model PricingSettings {
+  id                 String   @id @default(cuid())
+  effectiveFrom      DateTime @default(now())
+  merchantMargin     Decimal  @db.Decimal(20, 16)
+  platformMargin     Decimal  @db.Decimal(20, 16)
+  floor              Decimal  @db.Decimal(20, 16)
+  midpointRatio      Decimal  @db.Decimal(20, 16)
+  baseSteepness      Decimal  @db.Decimal(20, 16)
+  idleDiscountCap    Decimal  @db.Decimal(20, 16)
+  /// Capital rate r and hold cost h for the idle-cost test (Phase 2)
+  capitalRate        Decimal? @db.Decimal(20, 16)
+  holdCost           Decimal? @db.Decimal(20, 16)
+  depositPerPair     Decimal  @db.Decimal(14, 2)
+  maxPairsPerBundle  Int
+  disputeWindowDays  Int
+  freeReturnHours    Int
+  /// OPEN DECISION: booking fee amount (null = not set yet)
+  deliveryBookingFee Decimal? @db.Decimal(14, 2)
+  /// Catch-up pricing (OPEN DECISION; off at launch)
+  catchUpEnabled     Boolean  @default(false)
+  createdById        String?
+  createdAt          DateTime @default(now())
+
+  @@index([effectiveFrom])
+}
+
+// ─── Booking ───────────────────────────────────────────────────────────────
+
+enum RentalStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+model Rental {
+  id              String       @id @default(cuid())
+  borrowerId      String
+  status          RentalStatus @default(PENDING_PAYMENT)
+  deliveryAddress String
+  /// Pre-authorised estimate for the whole bundle
+  estimate        Decimal      @db.Decimal(14, 2)
+  depositAmount   Decimal      @db.Decimal(14, 2)
+  /// Gateway reference of the deposit hold
+  depositHoldRef  String?
+  preAuthRef      String?
+  createdAt       DateTime     @default(now())
+  closedAt        DateTime?
+
+  borrower User         @relation(fields: [borrowerId], references: [id])
+  items    RentalItem[]
+  payments Payment[]
+
+  @@index([borrowerId, status])
+}
+
+enum RentalItemStatus {
+  /// Booked, waiting for the delivery from the merchant
+  AWAITING_DELIVERY
+  /// Reserved while another borrower holds the pair (direct handoff queue)
+  WAITING_HANDOFF
+  /// With the borrower; the wear clock is running
+  ACTIVE
+  /// Borrower ended it; collection or handoff in progress
+  RETURNING
+  CLOSED
+  CANCELLED
+  LOST
+}
+
+enum DiscountFunding {
+  PLATFORM
+  MERCHANT
+}
+
+model RentalItem {
+  id                String           @id @default(cuid())
+  rentalId          String
+  shoeId            String
+  status            RentalItemStatus @default(AWAITING_DELIVERY)
+  /// Holding period [startDate, endDate): delivery date → condition recorded by receiver
+  startDate         DateTime?
+  endDate           DateTime?
+  returnRequestedAt DateTime?
+  wearStart         Decimal?         @db.Decimal(28, 12)
+  wearEnd           Decimal?         @db.Decimal(28, 12)
+  discount          Decimal          @default(0) @db.Decimal(20, 16)
+  discountFunding   DiscountFunding?
+  phi               Decimal          @default(1) @db.Decimal(20, 16)
+  /// Unrounded charge and discount cost from the pricing engine
+  chargeExact       Decimal?         @db.Decimal(28, 12)
+  discountCost      Decimal?         @db.Decimal(28, 12)
+  /// Charged amounts (2 dp)
+  charge            Decimal?         @db.Decimal(14, 2)
+  merchantShare     Decimal?         @db.Decimal(14, 2)
+  platformShare     Decimal?         @db.Decimal(14, 2)
+  /// Free return within freeReturnHours of delivery (wrong size/fit)
+  freeReturn        Boolean          @default(false)
+  closedAt          DateTime?
+  /// closedAt + dispute window; merchant share is payable after this
+  payableAt         DateTime?
+  payoutId          String?
+  createdAt         DateTime         @default(now())
+
+  rental           Rental            @relation(fields: [rentalId], references: [id])
+  shoe             Shoe              @relation(fields: [shoeId], references: [id])
+  payout           Payout?           @relation(fields: [payoutId], references: [id])
+  deliveries       Delivery[]        @relation("DeliveryTo")
+  outgoing         Delivery[]        @relation("DeliveryFrom")
+  conditionReports ConditionReport[]
+  disputes         Dispute[]
+  payments         Payment[]
+
+  @@index([shoeId, status])
+  @@index([status, payableAt])
+}
+
+// ─── Logistics ─────────────────────────────────────────────────────────────
+
+enum DeliveryType {
+  /// Merchant → borrower
+  DELIVER
+  /// Borrower → merchant
+  COLLECT
+  /// Borrower → next borrower (sealed bag + cleaning kit)
+  HANDOFF
+}
+
+enum DeliveryStatus {
+  REQUESTED
+  QUOTED
+  BOOKED
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+  FAILED
+}
+
+enum PartyPays {
+  BORROWER
+  MERCHANT
+  PLATFORM
+}
+
+model Delivery {
+  id                   String         @id @default(cuid())
+  type                 DeliveryType
+  status               DeliveryStatus @default(REQUESTED)
+  provider             String
+  externalRef          String?
+  /// Item receiving the shoe (DELIVER, HANDOFF) or returning it (COLLECT)
+  rentalItemId         String
+  /// For HANDOFF: the item handing the shoe over
+  fromRentalItemId     String?
+  fromAddress          String
+  toAddress            String
+  /// Provider's quoted trip fee (passes through to the provider)
+  quote                Decimal?       @db.Decimal(14, 2)
+  /// Platform booking fee kept by us
+  bookingFee           Decimal?       @db.Decimal(14, 2)
+  /// OPEN DECISION: who pays for return trips
+  paidBy               PartyPays      @default(BORROWER)
+  /// SHA-256 of the courier link token
+  courierTokenHash     String?        @unique
+  courierTokenExpiry   DateTime?
+  sealedBagConfirmed   Boolean        @default(false)
+  cleaningKitConfirmed Boolean        @default(false)
+  bookedAt             DateTime?
+  pickedUpAt           DateTime?
+  deliveredAt          DateTime?
+  /// Append-only trip log: [{ at, status, note }]
+  tripLog              Json           @default("[]")
+  createdAt            DateTime       @default(now())
+
+  rentalItem     RentalItem  @relation("DeliveryTo", fields: [rentalItemId], references: [id])
+  fromRentalItem RentalItem? @relation("DeliveryFrom", fields: [fromRentalItemId], references: [id])
+  photos         Photo[]
+
+  @@index([status])
+  @@index([rentalItemId])
+}
+
+// ─── Condition ─────────────────────────────────────────────────────────────
+
+enum ConditionStage {
+  /// Borrower confirms on receipt (starts the clock)
+  RECEIPT
+  /// Merchant or next borrower records on return / handoff (closes the item)
+  RETURN
+}
+
+model ConditionReport {
+  id           String         @id @default(cuid())
+  shoeId       String
+  rentalItemId String?
+  recordedById String
+  stage        ConditionStage
+  grade        Grade
+  notes        String?
+  damageFlag   Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+
+  shoe       Shoe        @relation(fields: [shoeId], references: [id])
+  rentalItem RentalItem? @relation(fields: [rentalItemId], references: [id])
+  recordedBy User        @relation(fields: [recordedById], references: [id])
+  photos     Photo[]
+
+  @@index([shoeId])
+}
+
+// ─── Payments, payouts, disputes ───────────────────────────────────────────
+
+enum PaymentKind {
+  PREAUTH
+  PREAUTH_VOID
+  CAPTURE
+  DEPOSIT_HOLD
+  DEPOSIT_RELEASE
+  DEPOSIT_CAPTURE
+  REFUND
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  rentalId       String
+  rentalItemId   String?
+  kind           PaymentKind
+  status         PaymentStatus @default(PENDING)
+  amount         Decimal       @db.Decimal(14, 2)
+  gateway        String
+  gatewayRef     String?
+  idempotencyKey String        @unique
+  note           String?
+  createdAt      DateTime      @default(now())
+
+  rental     Rental      @relation(fields: [rentalId], references: [id])
+  rentalItem RentalItem? @relation(fields: [rentalItemId], references: [id])
+
+  @@index([rentalId])
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model Payout {
+  id         String       @id @default(cuid())
+  merchantId String
+  amount     Decimal      @db.Decimal(14, 2)
+  status     PayoutStatus @default(PENDING)
+  /// Batch key, e.g. the ISO week "2026-W41"
+  batchKey   String
+  reference  String?
+  createdAt  DateTime     @default(now())
+  paidAt     DateTime?
+
+  merchant Merchant     @relation(fields: [merchantId], references: [id])
+  items    RentalItem[]
+
+  @@unique([merchantId, batchKey])
+}
+
+enum DisputeStatus {
+  OPEN
+  UPHELD
+  REJECTED
+}
+
+model Dispute {
+  id           String        @id @default(cuid())
+  rentalItemId String
+  openedById   String
+  reason       String
+  status       DisputeStatus @default(OPEN)
+  /// Damage amount captured from the deposit when upheld
+  amount       Decimal?      @db.Decimal(14, 2)
+  decision     String?
+  decidedById  String?
+  createdAt    DateTime      @default(now())
+  decidedAt    DateTime?
+
+  rentalItem RentalItem @relation(fields: [rentalItemId], references: [id])
+  openedBy   User       @relation("DisputeOpenedBy", fields: [openedById], references: [id])
+  decidedBy  User?      @relation("DisputeDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([status])
 }
