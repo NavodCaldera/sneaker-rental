@@ -1,3 +1,4 @@
+import { D } from "@/lib/decimal";
 import { getCurrentUser } from "@/server/auth/session";
 import { LIFESPAN_MAX_DAYS, LIFESPAN_MIN_DAYS } from "@/server/catalogue";
 import { curvePreview } from "@/server/catalogue/pricing";
@@ -12,7 +13,7 @@ export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const value = params.get("value") ?? "";
   const lifespan = params.get("lifespan") ?? "";
-  if (!/^\d+(\.\d{1,2})?$/.test(value) || Number(value) <= 0) {
+  if (!/^\d+(\.\d{1,2})?$/.test(value) || new D(value).lte(0)) {
     return Response.json({ error: "Enter a value" }, { status: 400 });
   }
   const days = Number(lifespan);

@@ -71,3 +71,22 @@ export function wearEnd(
 ): D {
   return D.min(new D(wearStart).plus(added), lifespan);
 }
+
+/** Wear actually added once the cap at L is applied: wearEnd − wStart. */
+export function cappedWearAdded(
+  wearStart: Decimal.Value,
+  added: Decimal.Value,
+  lifespan: Decimal.Value,
+): D {
+  return wearEnd(wearStart, added, lifespan).minus(wearStart);
+}
+
+/** Wear-days left before the pair reaches end of life (never negative). */
+export function wearRemaining(wear: Decimal.Value, lifespan: Decimal.Value): D {
+  return D.max(new D(lifespan).minus(wear), 0);
+}
+
+/** True once a pair's wear has reached its lifespan. */
+export function atEndOfLife(wear: Decimal.Value, lifespan: Decimal.Value): boolean {
+  return new D(wear).gte(lifespan);
+}

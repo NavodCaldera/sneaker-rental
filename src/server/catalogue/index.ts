@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { D } from "@/lib/decimal";
 import type { PhotoKind, Prisma, ShoeStatus } from "@/generated/prisma/client";
 import { db } from "../db";
 import { checkPhoto, savePhoto } from "../storage";
@@ -18,6 +19,8 @@ export const LISTING_PHOTOS: { kind: PhotoKind; label: string }[] = [
   { kind: "BOX", label: "Box" },
 ];
 
+const MONEY_FORMAT = /^\d+(\.\d{1,2})?$/;
+
 export const CATEGORIES = ["Running", "Lifestyle", "Basketball", "Skate", "Training", "Other"];
 
 export const shoeSchema = z.object({
@@ -32,7 +35,8 @@ export const shoeSchema = z.object({
     .trim()
     .regex(/^\d+(\.\d{1,2})?$/, "Enter the value in LKR, up to 2 decimals")
     .refine(
-      (v) => Number(v) > 0 && Number(v) <= 10_000_000,
+      // Zod runs this even when the format check failed, so re-check before parsing.
+      (v) => MONEY_FORMAT.test(v) && new D(v).gt(0) && new D(v).lte(10_000_000),
       "Value must be between 1 and 10,000,000",
     ),
   lifespanDays: z.coerce
@@ -205,4 +209,27 @@ export async function listMerchants() {
 
 export async function setMerchantVerified(merchantId: string, verified: boolean) {
   return db.merchant.update({ where: { id: merchantId }, data: { verified } });
+}
+
+/** Headline numbers for the merchant dashboard. */
+export async function merchantSummary(merchantId: string) {
+  const [byStatus, earned, paid] = await Promise.all([
+    db.shoe.groupBy({ by: ["status"], where: { merchantId }, _count: true }),
+    db.rentalItem.aggregate({
+      where: { shoe: { merchantId }, status: { in: ["CLOSED", "LOST"] } },
+      _sum: { merchantShare: true },
+      _count: true,
+    }),
+    db.payout.aggregate({ where: { merchantId, status: "PAID" }, _sum: { amount: true } }),
+  ]);
+  const count = (s: string[]) =>
+    byStatus.filter((r) => s.includes(r.status)).reduce((n, r) => n + r._count, 0);
+  return {
+    available: count(["AVAILABLE"]),
+    out: count(["RESERVED", "OUT_FOR_DELIVERY", "WITH_BORROWER", "IN_HANDOFF"]),
+    cleaning: count(["CLEANING"]),
+    rentalsClosed: earned._count,
+    earned: earned._sum.merchantShare?.toFixed(2) ?? "0.00",
+    paidOut: paid._sum.amount?.toFixed(2) ?? "0.00",
+  };
 }

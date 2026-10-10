@@ -34,12 +34,14 @@ Conventions:
 
 ## Hard rules (§9)
 
-1. **Prices and wear come only from the pricing engine (`src/lib/pricing/`) and the wear ledger (`src/lib/wear-ledger/`).** No other module computes a price, a charge, a share or a wear value.
+1. **Prices and wear come only from the pricing engine (`src/lib/pricing/`) and the wear ledger (`src/lib/wear-ledger/`).** No other module computes a price, a charge, a share or a wear value. Adding up engine outputs (a shoe's collected total, payment and payout sums) is bookkeeping and is fine; deriving a new price, share or wear figure is not. Charged amounts come from `chargedAmounts()`.
 2. **Keep values unrounded; round only what is shown or charged, to 2 decimals.** No JS `number` for money or wear. Use decimal.js in code and `Decimal` in Prisma.
 3. **Discounts never stack.** Always start from the curve price at the shoe's current wear.
 4. **Exact curve ratios:** m = 200·L/365, β = 0.03·365/L, q = 0.30.
 
 ## Build order
+
+Status: steps 0–8 are done (MVP complete). The step branches are on GitHub.
 
 pricing engine → schema and roles → catalogue → booking and wear ledger → payments → logistics → payouts and disputes → polish
 

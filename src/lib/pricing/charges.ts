@@ -1,5 +1,5 @@
 import type Decimal from "decimal.js";
-import { D } from "../decimal";
+import { D, roundMoney } from "../decimal";
 import { type CurveParams, IQ, curveIncome } from "./curve";
 import type { PricingSettings } from "./settings";
 
@@ -90,4 +90,20 @@ export function estimateItem(
 export function bundleDailyCost(prices: Decimal.Value[]): D {
   if (prices.length === 0) return new D(0);
   return prices.reduce<D>((sum, price) => sum.plus(price), new D(0)).div(prices.length);
+}
+
+/**
+ * Charged amounts for one item, rounded to 2 dp (CLAUDE.md rule 2): the charge and the
+ * merchant share are rounded; the platform share is the remainder, so the two always add
+ * up to the charge to the cent.
+ */
+export function chargedAmounts(
+  settings: PricingSettings,
+  income: Decimal.Value,
+  options: { undiscounted?: Decimal.Value; fundedBy?: DiscountFunding } = {},
+): { charge: D; merchantShare: D; platformShare: D } {
+  const split = splitCharge(settings, income, options);
+  const charge = roundMoney(income);
+  const merchantShare = roundMoney(split.merchant);
+  return { charge, merchantShare, platformShare: charge.minus(merchantShare) };
 }

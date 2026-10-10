@@ -16,6 +16,7 @@ export {
 export {
   bundleDailyCost,
   catchUpPhi,
+  chargedAmounts,
   type DiscountFunding,
   estimateItem,
   incomeBetween,

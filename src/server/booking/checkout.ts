@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { RentalItemStatus } from "@/generated/prisma/client";
 import { D, roundMoney, toD } from "@/lib/decimal";
 import { bundleDailyCost, curveParams, estimateItem, priceAt } from "@/lib/pricing";
+import { atEndOfLife } from "@/lib/wear-ledger";
 import { db } from "../db";
 import { requestDelivery } from "../logistics/requests";
 import { PaymentError, authorizeRental } from "../payments";
@@ -131,7 +132,7 @@ type ShoeForLine = {
 
 function lineProblem(shoe: ShoeForLine, borrowerId: string | null): string | undefined {
   if (!shoe.merchant.verified) return "not available";
-  if (toD(shoe.wear).gte(shoe.lifespanDays)) return "at end of life";
+  if (atEndOfLife(shoe.wear.toString(), shoe.lifespanDays)) return "at end of life";
   if (shoe.status === "AVAILABLE") return undefined;
   if (shoe.status !== "WITH_BORROWER") return "no longer available";
   if (shoe.rentalItems.some((i) => i.status === "WAITING_HANDOFF")) return "already reserved next";
