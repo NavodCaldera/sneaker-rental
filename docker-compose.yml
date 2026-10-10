@@ -1,0 +1,17 @@
+# Optional: a dedicated Postgres for this project, on port 5433 so it doesn't clash with a native install.
+# Use with DATABASE_URL="postgresql://postgres:postgres@localhost:5433/sneaker_rental?schema=public"
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sneaker_rental
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+volumes:
+  pgdata:
