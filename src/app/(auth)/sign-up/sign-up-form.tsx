@@ -2,7 +2,8 @@
 
 import { PasswordInput } from "@/components/password-input";
 import { useActionState, useState } from "react";
-import { Alert, Button, Field, Input, cx } from "@/components/ui";
+import { Alert, Button, Field, Input, Textarea, cx } from "@/components/ui";
+import { ADDRESS_LABEL, ADDRESS_REASON } from "@/lib/address";
 import { signUpAction, type FormState } from "@/server/auth/actions";
 
 export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWER" }) {
@@ -53,6 +54,22 @@ export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWE
       </Field>
       <Field label="Phone" name="phone" error={errors.phone}>
         <Input name="phone" type="tel" autoComplete="tel" placeholder="+94 77 123 4567" />
+      </Field>
+      <Field
+        label={ADDRESS_LABEL[role]}
+        name="address"
+        error={errors.address}
+        hint={ADDRESS_REASON[role]}
+      >
+        <Textarea
+          name="address"
+          autoComplete="street-address"
+          rows={2}
+          required
+          minLength={10}
+          maxLength={300}
+          placeholder="No. 12, Flower Road, Colombo 07"
+        />
       </Field>
       <Field label="Password" name="password" error={errors.password} hint="At least 8 characters">
         <PasswordInput name="password" autoComplete="new-password" required minLength={8} />

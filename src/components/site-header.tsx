@@ -10,6 +10,7 @@ const NAV: Record<Role, { href: string; label: string }[]> = {
     { href: "/bundle", label: "Bundle" },
     { href: "/rentals", label: "My rentals" },
     { href: "/wallet", label: "Wallet" },
+    { href: "/account", label: "Account" },
   ],
   MERCHANT: [
     { href: "/merchant", label: "My shoes" },

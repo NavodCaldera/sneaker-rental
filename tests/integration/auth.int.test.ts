@@ -6,6 +6,7 @@ import {
   registerUser,
   signUpSchema,
   startSession,
+  updateAddress,
   userForToken,
 } from "@/server/auth/service";
 import { getActiveSettings, toPricingSettings, updateSettings } from "@/server/settings";
@@ -21,14 +22,41 @@ describe("sign-up and sign-in", () => {
       email: "  Kasun@Shop.LK ",
       password: "longenough",
       businessName: "Colombo Kicks",
+      address: "Colombo Kicks, 12 Galle Road, Colombo 03",
     });
     const user = await registerUser(input);
     expect(user.email).toBe("kasun@shop.lk");
     expect(user.passwordHash).not.toContain("longenough");
     expect(await db.merchant.count({ where: { userId: user.id } })).toBe(1);
+    expect(user.address).toBe("Colombo Kicks, 12 Galle Road, Colombo 03");
 
     const signedIn = await authenticate("KASUN@shop.lk", "longenough");
     expect(signedIn.id).toBe(user.id);
+  });
+
+  it("asks customers and merchants for one address, and lets them change it", async () => {
+    const base = { name: "A B", email: "a@b.lk", password: "12345678" };
+    const error = (data: object) =>
+      signUpSchema.safeParse(data).error?.flatten().fieldErrors.address;
+    expect(error({ ...base, role: "BORROWER" })).toBeDefined();
+    expect(error({ ...base, role: "BORROWER", address: "Colombo" })).toEqual([
+      "Enter your full address: street and town",
+    ]);
+    expect(
+      error({ ...base, role: "MERCHANT", businessName: "Shop", address: "12 Galle Road, Colombo" }),
+    ).toBeUndefined();
+
+    const user = await registerUser(
+      signUpSchema.parse({ ...base, role: "BORROWER", address: "  21/3 Hill Street, Dehiwala " }),
+    );
+    expect(user.address).toBe("21/3 Hill Street, Dehiwala");
+    await updateAddress(user.id, "17 Temple Road, Nugegoda");
+    expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).address).toBe(
+      "17 Temple Road, Nugegoda",
+    );
+    await expect(updateAddress(user.id, "short")).rejects.toThrow(/full address/);
+    const token = (await startSession(user.id)).token;
+    expect((await userForToken(token))?.address).toBe("17 Temple Road, Nugegoda");
   });
 
   it("requires a business name for merchants and rejects public admin sign-up", () => {
@@ -52,6 +80,7 @@ describe("sign-up and sign-in", () => {
       name: "Amaya",
       email: "amaya@test.lk",
       password: "password123",
+      address: "No. 8, Flower Road, Colombo 07",
     });
     const user = await registerUser(input);
     await expect(registerUser(input)).rejects.toThrow(AuthError);

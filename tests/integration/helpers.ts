@@ -50,7 +50,7 @@ let cachedHash: string | undefined;
  */
 export async function makeUser(
   role: Role,
-  overrides: { email?: string; name?: string; tokens?: string } = {},
+  overrides: { email?: string; name?: string; tokens?: string; address?: string | null } = {},
 ) {
   cachedHash ??= await hashPassword("password123");
   counter += 1;
@@ -60,6 +60,15 @@ export async function makeUser(
       name: overrides.name ?? `${role.toLowerCase()} ${counter}`,
       email: overrides.email ?? `${role.toLowerCase()}${counter}@test.local`,
       passwordHash: cachedHash,
+      // Every customer and merchant has one address; admins have none.
+      address:
+        overrides.address !== undefined
+          ? overrides.address
+          : role === "MERCHANT"
+            ? `Shop ${counter}, 12 Galle Road, Colombo 03`
+            : role === "BORROWER"
+              ? `${counter} Flower Road, Colombo 07`
+              : null,
       verified: true,
       merchant:
         role === "MERCHANT"
@@ -109,7 +118,6 @@ export async function makeShoe(
       model: "Pegasus 41",
       size: "UK 9",
       category: "Running",
-      pickupAddress: "Shop, 12 Galle Road, Colombo 03",
       value: overrides.value ?? "6000",
       lifespanDays: overrides.lifespanDays ?? 365,
       initialWear: overrides.initialWear ?? "0",

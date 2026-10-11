@@ -68,23 +68,47 @@ function placeholderPhoto(brand: string, model: string, kind: string, colour: st
 </svg>`;
 }
 
-const users: { email: string; name: string; role: Role; businessName?: string }[] = [
+const users: {
+  email: string;
+  name: string;
+  role: Role;
+  businessName?: string;
+  /** The account's one address (customers and merchants) */
+  address?: string;
+}[] = [
   { email: "admin@sneakers.test", name: "Admin", role: "ADMIN" },
   {
     email: "kicks@sneakers.test",
     name: "Kasun Perera",
     role: "MERCHANT",
     businessName: "Colombo Kicks",
+    address: "Colombo Kicks, 12 Galle Road, Colombo 03",
   },
   {
     email: "sole@sneakers.test",
     name: "Dilani Fernando",
     role: "MERCHANT",
     businessName: "Sole Republic",
+    address: "Sole Republic, 45 Duplication Road, Colombo 04",
   },
-  { email: "amaya@sneakers.test", name: "Amaya Silva", role: "BORROWER" },
-  { email: "ravi@sneakers.test", name: "Ravi Jayasuriya", role: "BORROWER" },
-  { email: "nimal@sneakers.test", name: "Nimal Wickrama", role: "BORROWER" },
+  {
+    email: "amaya@sneakers.test",
+    name: "Amaya Silva",
+    role: "BORROWER",
+    address: "No. 8, Flower Road, Colombo 07",
+  },
+  {
+    email: "ravi@sneakers.test",
+    name: "Ravi Jayasuriya",
+    role: "BORROWER",
+    address: "21/3 Hill Street, Dehiwala",
+  },
+  {
+    email: "nimal@sneakers.test",
+    name: "Nimal Wickrama",
+    role: "BORROWER",
+    address: "17 Temple Road, Nugegoda",
+  },
 ];
 
 type SeedShoe = {
@@ -210,6 +234,7 @@ async function main() {
         verified: true,
         passwordHash,
         phone: "+94 77 000 0000",
+        address: u.address ?? null,
         merchant: u.businessName
           ? {
               create: {
@@ -222,6 +247,11 @@ async function main() {
       },
       include: { merchant: true },
     });
+
+    // Accounts seeded before addresses existed get theirs (never overwrites one set since).
+    if (u.address && !user.address) {
+      await db.user.update({ where: { id: user.id }, data: { address: u.address } });
+    }
 
     // Borrowers start with tokens so they can book (1 token = 1 LKR).
     if (u.role === "BORROWER") {
@@ -260,7 +290,6 @@ async function main() {
           ...s,
           merchantId: user.merchant.id,
           settingsId: settings.id,
-          pickupAddress: `${u.businessName}, 12 Galle Road, Colombo 03`,
           status: "AVAILABLE",
           latestGrade: "A",
           publishedAt: new Date(),

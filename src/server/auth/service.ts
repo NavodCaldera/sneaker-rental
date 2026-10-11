@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
+import { addressSchema } from "@/lib/address";
 import type { Role, User } from "@/generated/prisma/client";
 import { db } from "../db";
 import { hashPassword, verifyPassword } from "./password";
@@ -13,6 +14,8 @@ export const signUpSchema = z
     name: z.string().trim().min(2, "Enter your name"),
     email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email")),
     phone: z.string().trim().max(30).optional().or(z.literal("")),
+    /** The account's one address (deliveries and collections, or pickups and returns) */
+    address: addressSchema,
     password: z.string().min(8, "Use at least 8 characters"),
     businessName: z.string().trim().optional().or(z.literal("")),
   })
@@ -36,11 +39,22 @@ export async function registerUser(input: SignUpInput): Promise<User> {
       name: input.name,
       email: input.email,
       phone: input.phone || null,
+      address: input.address,
       passwordHash: await hashPassword(input.password),
       merchant:
         input.role === "MERCHANT" ? { create: { businessName: input.businessName! } } : undefined,
     },
   });
+}
+
+/**
+ * Change the account's one address. Trips already booked keep the address they were booked
+ * with; every trip booked from now on uses the new one.
+ */
+export async function updateAddress(userId: string, address: string) {
+  const parsed = addressSchema.safeParse(address);
+  if (!parsed.success) throw new AuthError(parsed.error.issues[0].message);
+  return db.user.update({ where: { id: userId }, data: { address: parsed.data } });
 }
 
 export async function authenticate(email: string, password: string): Promise<User> {
@@ -75,7 +89,7 @@ export async function endSession(token: string) {
   await db.session.deleteMany({ where: { id: hashToken(token) } });
 }
 
-export type SessionUser = Pick<User, "id" | "role" | "name" | "email" | "verified">;
+export type SessionUser = Pick<User, "id" | "role" | "name" | "email" | "verified" | "address">;
 
 export async function userForToken(token: string, now = new Date()): Promise<SessionUser | null> {
   const session = await db.session.findUnique({
@@ -83,8 +97,8 @@ export async function userForToken(token: string, now = new Date()): Promise<Ses
     include: { user: true },
   });
   if (!session || session.expiresAt <= now || session.user.locked) return null;
-  const { id, role, name, email, verified } = session.user;
-  return { id, role, name, email, verified };
+  const { id, role, name, email, verified, address } = session.user;
+  return { id, role, name, email, verified, address };
 }
 
 export function homeFor(role: Role): string {

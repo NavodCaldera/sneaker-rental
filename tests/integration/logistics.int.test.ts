@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
+import { updateAddress } from "@/server/auth/service";
 import { checkout } from "@/server/booking/checkout";
 import { endRental, recordCondition } from "@/server/booking/lifecycle";
 import {
@@ -22,7 +23,6 @@ async function bookedRental() {
   const ctx = await setup();
   const shoe = await makeShoe(ctx.merchantId);
   const rental = await checkout(ctx.borrower.id, [shoe.id], {
-    deliveryAddress: "22 Flower Rd",
     plannedDays: 14,
   });
   const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
@@ -30,12 +30,37 @@ async function bookedRental() {
   return { ...ctx, shoe, rental, item, delivery };
 }
 
+describe("addresses: one per account", () => {
+  it("trips use the account's address when they are booked; a customer without one can't book", async () => {
+    const { merchant, merchantId, borrower } = await setup();
+    const shoe = await makeShoe(merchantId);
+    const nowhere = await makeUser("BORROWER", { address: null });
+    await expect(checkout(nowhere.id, [shoe.id], { plannedDays: 5 }, day(-1))).rejects.toThrow(
+      /Add your delivery address/,
+    );
+
+    const rental = await checkout(borrower.id, [shoe.id], { plannedDays: 5 }, day(-1));
+    const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
+    await arrive(await deliveryFor(item.id, "DELIVER"), day(0));
+    // The customer moves mid-rental: the collection comes from the new address.
+    await updateAddress(borrower.id, "99 New Lane, Kandy");
+    await endRental(borrower.id, item.id, day(5));
+    const collect = await deliveryFor(item.id, "COLLECT");
+    expect([collect.fromAddress, collect.toAddress]).toEqual([
+      "99 New Lane, Kandy",
+      merchant.address,
+    ]);
+    expect((await deliveryFor(item.id, "DELIVER")).toAddress).toBe(borrower.address);
+  });
+});
+
 describe("manual provider: quote → book → courier pickup → drop-off", () => {
   it("moves the shoe and starts the clock; the trip fee is the receiver's to pay the driver", async () => {
-    const { shoe, rental, item, delivery } = await bookedRental();
+    const { merchant, borrower, shoe, rental, item, delivery } = await bookedRental();
     expect(delivery.status).toBe("REQUESTED");
-    expect(delivery.fromAddress).toMatch(/Galle Road/);
-    expect(delivery.toAddress).toBe("22 Flower Rd");
+    // From the merchant's account address to the customer's.
+    expect(delivery.fromAddress).toBe(merchant.address);
+    expect(delivery.toAddress).toBe(borrower.address);
 
     await setQuote(delivery.id, "450");
     const token = await bookDelivery(delivery.id, "admin", day(0));
@@ -118,20 +143,10 @@ describe("handoff trips", () => {
     const { borrower, merchantId } = await setup();
     const next = await makeUser("BORROWER");
     const shoe = await makeShoe(merchantId);
-    const r1 = await checkout(
-      borrower.id,
-      [shoe.id],
-      { deliveryAddress: "First home", plannedDays: 10 },
-      day(-1),
-    );
+    const r1 = await checkout(borrower.id, [shoe.id], { plannedDays: 10 }, day(-1));
     const item1 = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r1.id } });
     await arrive(await deliveryFor(item1.id, "DELIVER"), day(0));
-    const r2 = await checkout(
-      next.id,
-      [shoe.id],
-      { deliveryAddress: "Second home", plannedDays: 10 },
-      day(1),
-    );
+    const r2 = await checkout(next.id, [shoe.id], { plannedDays: 10 }, day(1));
     const item2 = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r2.id } });
 
     await endRental(borrower.id, item1.id, day(10));

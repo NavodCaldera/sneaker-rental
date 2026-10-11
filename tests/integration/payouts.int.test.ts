@@ -22,7 +22,6 @@ async function closedRental(
   const borrower = await makeUser("BORROWER");
   const shoe = await makeShoe(ctx.merchantId);
   const rental = await checkout(borrower.id, [shoe.id], {
-    deliveryAddress: "Home 123",
     plannedDays: heldDays,
   });
   const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });

@@ -35,7 +35,6 @@ const input = shoeSchema(LIMITS).parse({
   model: "Pegasus 41",
   size: "UK 9",
   category: "Running",
-  pickupAddress: "12 Galle Road, Colombo",
   value: "6000",
   lifespanDays: "365",
   condition: "NEW",
@@ -153,6 +152,13 @@ describe("listing a shoe", () => {
     expect(shoePricing(stored).priceNew.startsWith("9.64")).toBe(true); // 28.92 / 3
   });
 
+  it("pairs are picked up from the merchant's one address: no address, no listing", async () => {
+    const { merchant } = await makeUser("MERCHANT", { address: null });
+    await expect(createShoe(merchant!.id, input, allPhotos())).rejects.toThrow(
+      /pickup address in your account/,
+    );
+  });
+
   it("lists a second-hand pair at its declared wear", async () => {
     const { merchant } = await makeUser("MERCHANT");
     const shoe = await createShoe(
@@ -220,7 +226,7 @@ describe("browsing and prices", () => {
     const unverified = await makeUser("MERCHANT");
     await db.merchant.update({ where: { id: unverified.merchant!.id }, data: { verified: false } });
     const { id: settingsId } = await getActiveSettings();
-    const base = { ...input, pickupAddress: input.pickupAddress, description: null, settingsId };
+    const base = { ...input, description: null, settingsId };
     await db.shoe.createMany({
       data: [
         { ...base, merchantId: verified.merchant!.id, status: "AVAILABLE", size: "UK 9" },

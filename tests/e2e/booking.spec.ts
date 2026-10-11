@@ -31,7 +31,7 @@ test("5.2 borrower builds a 4-pair bundle and checks out", async ({ page }) => {
     .click();
   await expect(page.getByText("Daily cost (4 pairs held)")).toBeVisible();
 
-  await page.getByLabel("Delivery address").fill("22 Flower Road, Colombo 07");
+  await expect(page.getByText("No. 8, Flower Road, Colombo 07")).toBeVisible();
   await page.getByRole("button", { name: "Check out" }).click();
   await expect(page).toHaveURL(/\/rentals\?booked=1/);
   await expect(page.getByText("On its way")).toHaveCount(4);

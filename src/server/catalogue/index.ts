@@ -34,7 +34,6 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
       size: z.string().trim().min(1, "Enter the size").max(20),
       category: z.enum(CATEGORIES as [string, ...string[]]),
       description: z.string().trim().max(1000).optional().or(z.literal("")),
-      pickupAddress: z.string().trim().min(5, "Enter the pickup address").max(300),
       value: z
         .string()
         .trim()
@@ -141,7 +140,14 @@ export async function createShoe(
   photos: Partial<Record<PhotoKind, File>>,
 ) {
   const settings = await getActiveSettings();
-  const merchant = await db.merchant.findUniqueOrThrow({ where: { id: merchantId } });
+  const merchant = await db.merchant.findUniqueOrThrow({
+    where: { id: merchantId },
+    include: { user: true },
+  });
+  // Pairs are picked up from, and returned to, the merchant's one address.
+  if (!merchant.user.address) {
+    throw new CatalogueError("Add your pickup address in your account before listing");
+  }
   checkListing(input.value, input.lifespanDays, listingLimits(settings, merchant));
   for (const { kind, label } of LISTING_PHOTOS) checkPhoto(photos[kind] as File, label);
   const saved = [];
@@ -179,8 +185,14 @@ export async function publishShoe(merchantId: string, shoeId: string) {
   const shoe = await ownShoe(merchantId, shoeId);
   if (shoe.status !== "DRAFT") throw new CatalogueError("Only drafts can be published");
   const settings = await getActiveSettings();
-  const merchant = await db.merchant.findUniqueOrThrow({ where: { id: merchantId } });
+  const merchant = await db.merchant.findUniqueOrThrow({
+    where: { id: merchantId },
+    include: { user: true },
+  });
   checkListing(shoe.value.toString(), shoe.lifespanDays, listingLimits(settings, merchant));
+  if (!merchant.user.address) {
+    throw new CatalogueError("Add your pickup address in your account before publishing");
+  }
   if (!merchant.verified)
     throw new CatalogueError("Your business must be verified before publishing");
   if (!merchant.payoutAccount) throw new CatalogueError("Add a payout account before publishing");

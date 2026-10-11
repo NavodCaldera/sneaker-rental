@@ -7,6 +7,7 @@ import { flushEmails, notify } from "../notify";
 import { finishRentalIfDone, releaseRent, unlockPairValue } from "../payments";
 import { getActiveSettings } from "../settings";
 import { pairLocked, rentLockedFor, walletBalance } from "../wallet";
+import { customerAddress } from "./addresses";
 import { BookingError } from "./errors";
 import { replan } from "./plan";
 
@@ -147,8 +148,8 @@ export async function handOffIfWaiting(tx: Tx, shoeId: string) {
     type: "HANDOFF",
     rentalItemId: next.id,
     fromRentalItemId: giver.id,
-    fromAddress: giver.rental.deliveryAddress,
-    toAddress: next.rental.deliveryAddress,
+    fromAddress: await customerAddress(tx, giver.rental.borrowerId),
+    toAddress: await customerAddress(tx, next.rental.borrowerId),
   });
 }
 

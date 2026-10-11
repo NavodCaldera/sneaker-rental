@@ -148,7 +148,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
           <Alert>{quote.problems[0]}</Alert>
         ) : (
           <Card>
-            <CheckoutForm plannedDays={plannedDays} />
+            <CheckoutForm plannedDays={plannedDays} address={user.address} />
           </Card>
         )}
       </aside>

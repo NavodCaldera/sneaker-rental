@@ -28,8 +28,6 @@ import {
 beforeEach(resetDb);
 afterEach(() => setGatewayForTests(undefined));
 
-const address = { deliveryAddress: "1 Flower Rd" };
-
 async function balances(userId: string) {
   const b = await walletBalance(userId);
   return {
@@ -40,7 +38,7 @@ async function balances(userId: string) {
 }
 
 async function rentOne(borrowerId: string, shoeId: string, plannedDays = 30) {
-  const rental = await checkout(borrowerId, [shoeId], { ...address, plannedDays });
+  const rental = await checkout(borrowerId, [shoeId], { plannedDays });
   const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
   return { rental, item };
 }
@@ -59,9 +57,9 @@ describe("tokens: top up, lock the value and rent estimate at booking, charge th
       "8866.11",
     ]);
     expect(quote.shortfall).toBe("8866.11");
-    await expect(
-      checkout(borrower.id, [shoe.id], { ...address, plannedDays: 100 }),
-    ).rejects.toThrow(/Top up 8866.11 tokens/);
+    await expect(checkout(borrower.id, [shoe.id], { plannedDays: 100 })).rejects.toThrow(
+      /Top up 8866.11 tokens/,
+    );
 
     await topUp(borrower.id, "8866.11", "form-1");
     await topUp(borrower.id, "8866.11", "form-1"); // double submit: charged once
@@ -158,7 +156,7 @@ describe("deposits: each pair's full value stays locked while it is out (pricing
     const [a, b] = await Promise.all([makeShoe(merchantId), makeShoe(merchantId)]);
     const quote = await quoteBundle(borrower.id, [a.id, b.id], 30);
     await fund(borrower.id, new D(quote.required).plus(1000).toFixed(2));
-    const rental = await checkout(borrower.id, [a.id, b.id], { ...address, plannedDays: 30 });
+    const rental = await checkout(borrower.id, [a.id, b.id], { plannedDays: 30 });
     const items = await db.rentalItem.findMany({ where: { rentalId: rental.id } });
     for (const i of items) expect((await pairLocked(i.id)).toFixed(2)).toBe("6000.00");
     // Deposits 12,000 + the rent estimate locked; nothing charged.
@@ -211,7 +209,7 @@ describe("lost pair (§4 rule 3)", () => {
     expect((await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).status).toBe("RETIRED");
     expect((await db.user.findUniqueOrThrow({ where: { id: borrower.id } })).locked).toBe(true);
     await expect(
-      checkout(borrower.id, [(await makeShoe(merchantId)).id], { ...address, plannedDays: 1 }),
+      checkout(borrower.id, [(await makeShoe(merchantId)).id], { plannedDays: 1 }),
     ).rejects.toThrow(/locked/);
   });
 
@@ -270,7 +268,7 @@ describe("short balances", () => {
     const { merchantId } = await setup();
     const borrower = await makeUser("BORROWER", { tokens: "100" });
     await expect(
-      checkout(borrower.id, [(await makeShoe(merchantId)).id], { ...address, plannedDays: 5 }),
+      checkout(borrower.id, [(await makeShoe(merchantId)).id], { plannedDays: 5 }),
     ).rejects.toThrow(BookingError);
     expect(await db.rental.count()).toBe(0);
     expect((await db.shoe.findFirstOrThrow()).status).toBe("AVAILABLE");

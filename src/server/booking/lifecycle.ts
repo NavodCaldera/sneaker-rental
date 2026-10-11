@@ -24,6 +24,7 @@ import { collectRent, finishRentalIfDone, settleItems } from "../payments";
 import { type SettingsRow, getActiveSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
 import { walletBalance } from "../wallet";
+import { customerAddress, merchantAddress } from "./addresses";
 import { BookingError } from "./errors";
 import { loadHoldings } from "./holdings";
 import { replan } from "./plan";
@@ -135,8 +136,8 @@ export async function endRental(
         type: "HANDOFF",
         rentalItemId: next.id,
         fromRentalItemId: item.id,
-        fromAddress: item.rental.deliveryAddress,
-        toAddress: next.rental.deliveryAddress,
+        fromAddress: await customerAddress(tx, borrowerId),
+        toAddress: await customerAddress(tx, next.rental.borrowerId),
       });
       return { delivery, cancelled };
     }
@@ -147,8 +148,8 @@ export async function endRental(
     const delivery = await requestDelivery(tx, {
       type: "COLLECT",
       rentalItemId: item.id,
-      fromAddress: item.rental.deliveryAddress,
-      toAddress: item.shoe.pickupAddress,
+      fromAddress: await customerAddress(tx, borrowerId),
+      toAddress: await merchantAddress(tx, item.shoe.merchantId),
     });
     return { delivery, cancelled };
   });

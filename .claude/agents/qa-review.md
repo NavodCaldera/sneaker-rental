@@ -36,6 +36,7 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
    - [ ] A pair can be booked while `committedWear` < L, for any term; never once it reaches L. With `chargePastLife` on, wear past L is charged at P(L) per wear-day (no cap at L in `wearEnd` / `chainWear` / `runLedger`), and lifetime income above R goes to the platform.
    - [ ] The reference acceptance scenarios still run with `chargePastLife: false` and their expected values are unchanged.
    - [ ] No trip fee or booking fee moves through tokens, payments or payouts; `Delivery.paidBy` is the receiver (borrower for DELIVER/HANDOFF, merchant for COLLECT).
+   - [ ] Addresses: one per customer and merchant account, required at sign-up with the reason shown; no address input at checkout or per listing; every trip's addresses come from `customerAddress` / `merchantAddress` at the time it is booked.
    - [ ] No hard-coded settings values (0.10, 3 days, 4 pairs, 183 / 730 lifespan limits, 10 days' notice, 24-hour offers) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] The release discount comes from `releaseDiscount`, is fixed on the item at checkout, and never reaches the current holder.

@@ -16,7 +16,6 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
   await page.getByLabel("Model").fill("Endorphin Speed 4");
   await page.getByLabel("Size").fill("UK 11");
   await page.getByLabel("Category").selectOption("Running");
-  await page.getByLabel("Pickup address").fill("Colombo Kicks, 12 Galle Road, Colombo 03");
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
     await page.getByLabel(`${view} photo`, { exact: true }).setInputFiles({
       name: `${view}.png`,
@@ -32,6 +31,8 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
   await expect(page.getByText("LKR 8.68 / wear-day")).toBeVisible();
   await expect(page.getByText("LKR 6,600.00")).toBeVisible(); // merchant's lifetime share
 
+  // Picked up from the merchant's one address, set on their account.
+  await expect(page.getByText("Colombo Kicks, 12 Galle Road, Colombo 03")).toBeVisible();
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page).toHaveURL(/\/merchant\/shoes\/\w+/);
   await expect(page.getByText("Draft", { exact: true })).toBeVisible();
@@ -57,7 +58,6 @@ test("a merchant lists an upgraded second-hand pair; borrowers see its condition
   await page.getByLabel("Model").fill("Ultraboost Restored");
   await page.getByLabel("Size").fill("UK 8");
   await page.getByLabel("Category").selectOption("Running");
-  await page.getByLabel("Pickup address").fill("Colombo Kicks, 12 Galle Road, Colombo 03");
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
     await page.getByLabel(`${view} photo`, { exact: true }).setInputFiles({
       name: `${view}.png`,
@@ -94,6 +94,7 @@ test("an unverified merchant can't publish until an admin verifies them", async 
   await page.getByLabel("Full name").fill("New Shop Owner");
   await page.getByLabel("Business name").fill("Brand New Shop");
   await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Pickup and return address").fill("Brand New Shop, 3 Main Street, Galle");
   await page.getByLabel("Password", { exact: true }).fill("password123");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText(/awaiting verification/)).toBeVisible();

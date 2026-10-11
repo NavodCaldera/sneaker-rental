@@ -30,6 +30,7 @@ export default async function NewShoePage() {
         lifespanMax={limits.maxLifespanDays}
         monthsMin={daysToMonths(limits.minLifespanDays)}
         monthsMax={daysToMonths(limits.maxLifespanDays)}
+        pickupAddress={user.address}
       />
     </main>
   );

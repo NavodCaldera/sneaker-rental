@@ -32,12 +32,7 @@ describe("rent, return and close (§5.2–5.4)", () => {
     const { merchant, merchantId, borrower } = await setup();
     const shoe = await makeShoe(merchantId);
 
-    const rental = await checkout(
-      borrower.id,
-      [shoe.id],
-      { deliveryAddress: "1 Flower Rd, Colombo 07", plannedDays: 100 },
-      day(-1),
-    );
+    const rental = await checkout(borrower.id, [shoe.id], { plannedDays: 100 }, day(-1));
     // The pair's value (deposit) and the term's rent estimate are locked; nothing is charged.
     expect(rental.shoeValue.toString()).toBe("6000");
     expect(rental.estimatedRent.toFixed(2)).toBe("2866.11");
@@ -125,7 +120,7 @@ describe("rent, return and close (§5.2–5.4)", () => {
     const rental = await checkout(
       borrower.id,
       shoes.map((s) => s.id),
-      { deliveryAddress: "1 Flower Rd", plannedDays: 10 },
+      { plannedDays: 10 },
     );
     const items = await db.rentalItem.findMany({ where: { rentalId: rental.id } });
     expect((await rentalLocked(rental.id)).toFixed(2)).toBe(quote.required);
@@ -161,28 +156,18 @@ describe("direct handoff chain (§5.3)", () => {
     ]);
     const shoe = await makeShoe(merchantId);
 
-    const rentalA = await checkout(
-      a.id,
-      [shoe.id],
-      { deliveryAddress: "A street", plannedDays: 30 },
-      day(-1),
-    );
+    const rentalA = await checkout(a.id, [shoe.id], { plannedDays: 30 }, day(-1));
     const itemA = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rentalA.id } });
     await arrive(await deliveryFor(itemA.id, "DELIVER"), day(0));
 
     // B reserves the pair on A's day 2.
-    const rentalB = await checkout(
-      b.id,
-      [shoe.id],
-      { deliveryAddress: "B street", plannedDays: 20 },
-      day(2),
-    );
+    const rentalB = await checkout(b.id, [shoe.id], { plannedDays: 20 }, day(2));
     const itemB = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rentalB.id } });
     expect(itemB.status).toBe("WAITING_HANDOFF");
     expect(dateToDay(itemB.plannedFirstDay!)).toBe(colomboDay(day(32)));
-    await expect(
-      checkout(c.id, [shoe.id], { deliveryAddress: "C street", plannedDays: 5 }, day(3)),
-    ).rejects.toThrow(/reserved next/);
+    await expect(checkout(c.id, [shoe.id], { plannedDays: 5 }, day(3))).rejects.toThrow(
+      /reserved next/,
+    );
 
     // B's rent was priced from the wear A's term commits: 30.
     expect(itemB.plannedWearStart!.toString()).toBe("30");
@@ -190,8 +175,9 @@ describe("direct handoff chain (§5.3)", () => {
     const handoffAB = await deliveryFor(itemB.id, "HANDOFF");
     expect(handoffAB.paidBy).toBe("BORROWER"); // B, receiving it, pays the driver
     expect(handoffAB.fromRentalItemId).toBe(itemA.id);
-    expect(handoffAB.fromAddress).toBe("A street");
-    expect(handoffAB.toAddress).toBe("B street");
+    // From A's account address to B's.
+    expect(handoffAB.fromAddress).toBe(a.address);
+    expect(handoffAB.toAddress).toBe(b.address);
     await arrive(handoffAB, day(31)); // the handoff day is nobody's
     expect((await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).status).toBe(
       "WITH_BORROWER",
@@ -205,12 +191,7 @@ describe("direct handoff chain (§5.3)", () => {
     );
     expect(r1.closedItemIds).toEqual([itemA.id]);
 
-    const rentalC = await checkout(
-      c.id,
-      [shoe.id],
-      { deliveryAddress: "C street", plannedDays: 5 },
-      day(40),
-    );
+    const rentalC = await checkout(c.id, [shoe.id], { plannedDays: 5 }, day(40));
     const itemC = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rentalC.id } });
     // B's 20-day term is days 32–51; the handoff to C is on day 51, so C starts on day 52.
     await endRental(b.id, itemB.id, day(51));
@@ -243,27 +224,26 @@ describe("rules", () => {
     await checkout(
       borrower.id,
       shoes.slice(0, 3).map((s) => s.id),
-      { deliveryAddress: "Home 123", plannedDays: 7 },
+      { plannedDays: 7 },
     );
     await expect(
       checkout(
         borrower.id,
         shoes.slice(3).map((s) => s.id),
-        { deliveryAddress: "Home 123", plannedDays: 7 },
+        { plannedDays: 7 },
       ),
     ).rejects.toThrow(/up to 4 pairs/);
 
     const other = await makeUser("BORROWER");
-    await expect(
-      checkout(other.id, [shoes[0].id], { deliveryAddress: "Elsewhere", plannedDays: 7 }),
-    ).rejects.toThrow(BookingError);
+    await expect(checkout(other.id, [shoes[0].id], { plannedDays: 7 })).rejects.toThrow(
+      BookingError,
+    );
   });
 
   it("a damage flag opens a dispute on the closed item", async () => {
     const { merchant, merchantId, borrower } = await setup();
     const shoe = await makeShoe(merchantId);
     const rental = await checkout(borrower.id, [shoe.id], {
-      deliveryAddress: "Home 123",
       plannedDays: 7,
     });
     const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
@@ -284,21 +264,16 @@ describe("rules", () => {
     const { merchant, merchantId } = await setup();
     const [a, b] = await Promise.all([makeUser("BORROWER"), makeUser("BORROWER")]);
     const shoe = await makeShoe(merchantId, { lifespanDays: 60 });
-    const rentalA = await checkout(
-      a.id,
-      [shoe.id],
-      { deliveryAddress: "A street", plannedDays: 70 },
-      day(-1),
-    );
+    const rentalA = await checkout(a.id, [shoe.id], { plannedDays: 70 }, day(-1));
     const itemA = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rentalA.id } });
     await arrive(await deliveryFor(itemA.id, "DELIVER"), day(0));
     // A's term commits the whole life and 10 days past it, so nobody can reserve it next.
     expect(
       (await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).committedWear.toString(),
     ).toBe("70");
-    await expect(
-      checkout(b.id, [shoe.id], { deliveryAddress: "B street", plannedDays: 5 }, day(65)),
-    ).rejects.toThrow(/end of life/);
+    await expect(checkout(b.id, [shoe.id], { plannedDays: 5 }, day(65))).rejects.toThrow(
+      /end of life/,
+    );
 
     // The daily job ends the term on day 71 (the day after its last day) and books the driver.
     await runDailyRentals(day(71));
@@ -327,7 +302,6 @@ describe("rules", () => {
     const otherMerchant = await makeUser("MERCHANT");
     const shoe = await makeShoe(merchantId);
     const rental = await checkout(borrower.id, [shoe.id], {
-      deliveryAddress: "Home 123",
       plannedDays: 7,
     });
     const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
@@ -352,7 +326,6 @@ describe("rent calculation rules (pricing-spec.md)", () => {
     const { merchant, merchantId, borrower } = await setup();
     const [shoe, other] = await Promise.all([makeShoe(merchantId), makeShoe(merchantId)]);
     const rental = await checkout(borrower.id, [shoe.id], {
-      deliveryAddress: "Home 123",
       plannedDays: 1,
     });
     const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
@@ -368,7 +341,6 @@ describe("rent calculation rules (pricing-spec.md)", () => {
     // Wrong size, sent back the day it came: no wear, nothing charged.
     const before = (await walletBalance(borrower.id)).balance;
     const r2 = await checkout(borrower.id, [other.id], {
-      deliveryAddress: "Home 123",
       plannedDays: 30,
     });
     const item2 = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r2.id } });
@@ -389,20 +361,10 @@ describe("rent calculation rules (pricing-spec.md)", () => {
     const a = await makeShoe(merchantId);
     const b = await makeShoe(merchantId, { value: "8000", initialWear: "50" });
     // Worked example: A days 1–10, B days 6–10, one borrower.
-    const r1 = await checkout(
-      borrower.id,
-      [a.id],
-      { deliveryAddress: "Home 123", plannedDays: 10 },
-      day(-1),
-    );
+    const r1 = await checkout(borrower.id, [a.id], { plannedDays: 10 }, day(-1));
     const itemA = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r1.id } });
     await arrive(await deliveryFor(itemA.id, "DELIVER"), day(0));
-    const r2 = await checkout(
-      borrower.id,
-      [b.id],
-      { deliveryAddress: "Home 123", plannedDays: 5 },
-      day(4),
-    );
+    const r2 = await checkout(borrower.id, [b.id], { plannedDays: 5 }, day(4));
     const itemB = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r2.id } });
     // Planned from tomorrow (day 5): B overlaps A on days 5–9, so A's plan drops to 7.5.
     expect(
@@ -445,7 +407,7 @@ describe("rent calculation rules (pricing-spec.md)", () => {
   it("the estimate counts pairs already held: a second pair for 10 days gains 5 wear-days", async () => {
     const { merchantId, borrower } = await setup();
     const [held, next] = await Promise.all([makeShoe(merchantId), makeShoe(merchantId)]);
-    await checkout(borrower.id, [held.id], { deliveryAddress: "Home 123", plannedDays: 10 });
+    await checkout(borrower.id, [held.id], { plannedDays: 10 });
     const alone = await quoteBundle(null, [next.id], 5);
     const shared = await quoteBundle(borrower.id, [next.id], 10);
     // 5 days alone and 10 days shared with one other pair both add 5 wear-days.
@@ -457,12 +419,7 @@ describe("rent calculation rules (pricing-spec.md)", () => {
     const { merchantId, borrower } = await setup();
     const other = await makeUser("BORROWER");
     const shoe = await makeShoe(merchantId);
-    await checkout(
-      borrower.id,
-      [shoe.id],
-      { deliveryAddress: "Home 123", plannedDays: 90 },
-      day(-1),
-    );
+    await checkout(borrower.id, [shoe.id], { plannedDays: 90 }, day(-1));
     const booked = await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } });
     expect(booked.committedWear.toString()).toBe("90");
     const item = await db.rentalItem.findFirstOrThrow({ where: { shoeId: shoe.id } });
@@ -494,7 +451,6 @@ describe("merchant first and free waiting days", () => {
     const { merchant, merchantId, borrower } = await setup();
     const shoe = await makeShoe(merchantId);
     const rental = await checkout(borrower.id, [shoe.id], {
-      deliveryAddress: "Home 123",
       plannedDays: 10,
     });
     const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
@@ -516,12 +472,7 @@ describe("merchant first and free waiting days", () => {
       [50, 70],
     ]) {
       const b = await makeUser("BORROWER");
-      const rental = await checkout(
-        b.id,
-        [shoe.id],
-        { deliveryAddress: "Home 123", plannedDays: end - start },
-        day(start - 1),
-      );
+      const rental = await checkout(b.id, [shoe.id], { plannedDays: end - start }, day(start - 1));
       const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
       await arrive(await deliveryFor(item.id, "DELIVER"), day(start));
       await endRental(b.id, item.id, day(end));
@@ -558,12 +509,7 @@ describe("release discount for the next borrower (pricing-spec.md §8)", () => {
     const [a, b] = await Promise.all([makeUser("BORROWER"), makeUser("BORROWER")]);
     const shoe = await makeShoe(merchantId);
     // A books 90 days and gets the pair on day 0: days 1–90, release day 90.
-    const rentalA = await checkout(
-      a.id,
-      [shoe.id],
-      { deliveryAddress: "A street", plannedDays: 90 },
-      day(0),
-    );
+    const rentalA = await checkout(a.id, [shoe.id], { plannedDays: 90 }, day(0));
     const itemA = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rentalA.id } });
     expect(itemA.plannedDays).toBe(90);
     await arrive(await deliveryFor(itemA.id, "DELIVER"), day(0));
@@ -586,12 +532,7 @@ describe("release discount for the next borrower (pricing-spec.md §8)", () => {
     expect(await discountOn(200)).toBe("0.1"); // steady at the maximum
 
     // B reserves on day 85 (2.5% off) and keeps that rate for the whole rental.
-    const rentalB = await checkout(
-      b.id,
-      [shoe.id],
-      { deliveryAddress: "B street", plannedDays: 10 },
-      day(85),
-    );
+    const rentalB = await checkout(b.id, [shoe.id], { plannedDays: 10 }, day(85));
     const itemB = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rentalB.id } });
     expect(itemB.discount.toString()).toBe("0.025");
     expect(itemB.discountFunding).toBe("PLATFORM");
@@ -628,12 +569,7 @@ describe("release discount for the next borrower (pricing-spec.md §8)", () => {
   it("a pair returned early counts its release discount from the day it was ended; a new pair has none", async () => {
     const { merchant, merchantId, borrower } = await setup();
     const [shoe, fresh] = await Promise.all([makeShoe(merchantId), makeShoe(merchantId)]);
-    const rental = await checkout(
-      borrower.id,
-      [shoe.id],
-      { deliveryAddress: "Home 123", plannedDays: 30 },
-      day(0),
-    );
+    const rental = await checkout(borrower.id, [shoe.id], { plannedDays: 30 }, day(0));
     const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
     await arrive(await deliveryFor(item.id, "DELIVER"), day(0));
     // Notice on day 10 for a last day of 20 (of 30); the daily job ends it on day 21.

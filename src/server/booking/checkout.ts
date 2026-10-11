@@ -94,7 +94,7 @@ export async function quoteBundle(
     include: {
       settings: true,
       photos: { where: { kind: "FRONT" }, take: 1 },
-      merchant: { select: { verified: true } },
+      merchant: { select: { verified: true, user: { select: { address: true } } } },
       rentalItems: {
         where: { status: { in: ["WAITING_HANDOFF", "ACTIVE", "RETURNING"] } },
         select: {
@@ -204,7 +204,7 @@ type ShoeForLine = {
   status: string;
   committedWear: { toString(): string };
   lifespanDays: number;
-  merchant: { verified: boolean };
+  merchant: { verified: boolean; user: { address: string | null } };
   rentalItems: {
     status: RentalItemStatus;
     rental: { borrowerId: string };
@@ -213,7 +213,8 @@ type ShoeForLine = {
 };
 
 function lineProblem(shoe: ShoeForLine, borrowerId: string | null): string | undefined {
-  if (!shoe.merchant.verified) return "not available";
+  // A merchant without an address can't have the pair picked up.
+  if (!shoe.merchant.verified || !shoe.merchant.user.address) return "not available";
   if (atEndOfLife(shoe.committedWear.toString(), shoe.lifespanDays)) return "at end of life";
   if (shoe.status === "AVAILABLE") return undefined;
   if (shoe.status !== "WITH_BORROWER") return "no longer available";
@@ -229,7 +230,6 @@ function lineProblem(shoe: ShoeForLine, borrowerId: string | null): string | und
 }
 
 export const checkoutSchema = z.object({
-  deliveryAddress: z.string().trim().min(5, "Enter a delivery address").max(300),
   plannedDays: z.coerce.number().int().min(1).max(365),
 });
 
@@ -252,6 +252,11 @@ export async function checkout(
   const borrower = await db.user.findUniqueOrThrow({ where: { id: borrowerId } });
   if (borrower.role !== "BORROWER") throw new BookingError("Only borrowers can rent");
   if (borrower.locked) throw new BookingError("Your account is locked");
+  // Pairs are delivered to, and collected from, the account's one address.
+  const deliveryAddress = borrower.address;
+  if (!deliveryAddress) {
+    throw new BookingError("Add your delivery address in your account before booking");
+  }
 
   const settingsRow = await getActiveSettings(now);
   const quote = await quoteBundle(borrowerId, unique, input.plannedDays, settingsRow, now);
@@ -264,7 +269,6 @@ export async function checkout(
       data: {
         borrowerId,
         status: "ACTIVE",
-        deliveryAddress: input.deliveryAddress,
         estimatedRent: quote.estimate,
         shoeValue: quote.shoeValue,
       },
@@ -286,15 +290,18 @@ export async function checkout(
           data: { status: "RESERVED" },
         });
         if (count === 0) throw new BookingError(`${line.brand} ${line.model} was just taken`);
-        const shoe = await tx.shoe.findUniqueOrThrow({ where: { id: line.shoeId } });
+        const shoe = await tx.shoe.findUniqueOrThrow({
+          where: { id: line.shoeId },
+          include: { merchant: { include: { user: true } } },
+        });
         item = await tx.rentalItem.create({
           data: { rentalId: rental.id, shoeId: line.shoeId, status: "AWAITING_DELIVERY", ...terms },
         });
         await requestDelivery(tx, {
           type: "DELIVER",
           rentalItemId: item.id,
-          fromAddress: shoe.pickupAddress,
-          toAddress: input.deliveryAddress,
+          fromAddress: shoe.merchant.user.address!,
+          toAddress: deliveryAddress,
         });
       } else {
         const taken = await tx.rentalItem.count({

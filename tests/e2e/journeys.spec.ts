@@ -25,7 +25,8 @@ test("delivery → condition → return → close → restock, across all four r
   await page.goto("/browse?category=Skate");
   await page.getByRole("link", { name: new RegExp(shoe) }).click();
   await page.getByRole("button", { name: "Add to bundle" }).click();
-  await page.getByLabel("Delivery address").fill("9 Lake Drive, Colombo 08");
+  // Delivered to the account's one address; nothing to type.
+  await expect(page.getByText("17 Temple Road, Nugegoda")).toBeVisible();
   await page.getByRole("button", { name: "Check out" }).click();
   await expect(page.getByText("On its way")).toBeVisible();
   await signOut(page);

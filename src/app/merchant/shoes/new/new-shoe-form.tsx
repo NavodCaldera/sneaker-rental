@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { CurveChart } from "@/components/curve-chart";
 import { Alert, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
@@ -17,6 +18,7 @@ export function NewShoeForm({
   lifespanMax,
   monthsMin,
   monthsMax,
+  pickupAddress,
 }: {
   categories: string[];
   photoSlots: { kind: string; label: string }[];
@@ -24,6 +26,8 @@ export function NewShoeForm({
   lifespanMax: number;
   monthsMin: number;
   monthsMax: number;
+  /** The merchant's one address: every pair is picked up from and returned to it */
+  pickupAddress: string | null;
 }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(createShoeAction, {});
   const errors = state.fieldErrors ?? {};
@@ -62,10 +66,16 @@ export function NewShoeForm({
               <Textarea name="description" maxLength={1000} />
             </Field>
           </div>
-          <div className="sm:col-span-2">
-            <Field label="Pickup address" name="pickupAddress" error={errors.pickupAddress}>
-              <Input name="pickupAddress" required />
-            </Field>
+          <div className="text-sm sm:col-span-2">
+            <div className="font-medium">Picked up from and returned to</div>
+            {pickupAddress ? (
+              <p className="whitespace-pre-line text-subtle">{pickupAddress}</p>
+            ) : (
+              <Alert>Add your pickup address in your account before listing.</Alert>
+            )}
+            <Link href="/merchant/account" className="text-xs underline">
+              {pickupAddress ? "Change address" : "Add address"}
+            </Link>
           </div>
         </Card>
 

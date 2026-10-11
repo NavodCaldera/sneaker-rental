@@ -108,12 +108,13 @@ Every rental payment is split in a fixed ratio: with μm = μp = 0.10, the merch
 Four journeys carry the business; every step records who held the shoe and when, because wear-days are computed from those records.
 
 **5.1 Merchant lists a shoe**
-1. Signs up, verifies the business and adds a payout account.
-2. Adds a shoe: photos, value V, lifespan L, size, brand, model, pickup address, and its condition: brand new, or second-hand with or without upgrades. A second-hand pair also gives the wear-days it has been worn, and an upgraded one what was upgraded.
+1. Signs up with the business's one address (where drivers pick up and return its pairs; we say why we ask), verifies the business and adds a payout account.
+2. Adds a shoe: photos, value V, lifespan L, size, brand, model, and its condition: brand new, or second-hand with or without upgrades. A second-hand pair also gives the wear-days it has been worn, and an upgraded one what was upgraded.
 3. Sees the computed price curve before publishing: starting price, end price and lifetime income.
 4. Publishes. The shoe is Available, priced at P(w) for its current wear.
 
 **5.2 Borrower rents**
+0. Signs up as a customer with one address, where pairs are delivered and collected (we say why we ask). It can be changed later; there is no address to type at checkout.
 1. Browses by size, brand and style; each listing shows today's price per wear-day and the shoe's wear so far.
 2. Adds one to four pairs to a bundle and sees the daily cost of the whole bundle.
 3. Checks out: card pre-authorised for the estimate plus the deposit hold; a delivery is booked with a ride-hailing app.

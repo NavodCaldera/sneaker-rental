@@ -28,6 +28,10 @@ model User {
   name         String
   email        String   @unique
   phone        String?
+  /// The account's one address, entered at sign-up (customers and merchants; null for
+  /// admins). Customers: where pairs are delivered and collected. Merchants: where drivers
+  /// pick pairs up and bring them back. Trips copy it when they are booked.
+  address      String?
   passwordHash String
   verified     Boolean  @default(false)
   /// Locked after a lost shoe (§6)
@@ -114,7 +118,6 @@ model Shoe {
   size              String
   category          String
   description       String?
-  pickupAddress     String
   /// Declared value V (LKR)
   value             Decimal       @db.Decimal(14, 2)
   /// Expected lifespan L (wear-days)
@@ -245,16 +248,15 @@ enum RentalStatus {
 }
 
 model Rental {
-  id              String       @id @default(cuid())
-  borrowerId      String
-  status          RentalStatus @default(PENDING_PAYMENT)
-  deliveryAddress String
+  id            String       @id @default(cuid())
+  borrowerId    String
+  status        RentalStatus @default(PENDING_PAYMENT)
   /// Rent estimate for the booked terms, locked at booking (charged per item when it closes)
-  estimatedRent   Decimal      @db.Decimal(14, 2)
+  estimatedRent Decimal      @db.Decimal(14, 2)
   /// Merchant value of the pairs (Σ V), locked in tokens while they are out
-  shoeValue       Decimal      @db.Decimal(14, 2)
-  createdAt       DateTime     @default(now())
-  closedAt        DateTime?
+  shoeValue     Decimal      @db.Decimal(14, 2)
+  createdAt     DateTime     @default(now())
+  closedAt      DateTime?
 
   borrower      User          @relation(fields: [borrowerId], references: [id])
   items         RentalItem[]
