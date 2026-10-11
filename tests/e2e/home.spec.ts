@@ -26,3 +26,20 @@ test("home: style tabs, rows of pairs, and the search bar leads to Browse", asyn
   await expect(page).toHaveURL(/\/browse\?category=Running&size=&q=Pegasus/);
   await expect(page.getByRole("link", { name: /Nike Pegasus 41/ }).first()).toBeVisible();
 });
+
+test("day and night mode: the header switch flips the colours and is remembered", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ colorScheme: "light" });
+  const page = await context.newPage();
+  await page.goto("/");
+  const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(await background()).toBe("rgb(255, 255, 255)");
+  await page.getByRole("button", { name: "Switch to night mode" }).click();
+  expect(await background()).toBe("rgb(0, 0, 0)");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "Switch to day mode" }).click();
+  expect(await background()).toBe("rgb(255, 255, 255)");
+  await context.close();
+});

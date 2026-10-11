@@ -1,4 +1,7 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
+import { THEME_COOKIE, parseTheme } from "@/lib/theme";
+import { ThemeToggle } from "./theme-toggle";
 import { getCurrentUser } from "@/server/auth/session";
 import { signOutAction } from "@/server/auth/actions";
 import { unreadCount } from "@/server/notify";
@@ -32,6 +35,7 @@ const NAV: Record<Role, { href: string; label: string }[]> = {
 export async function SiteHeader() {
   const user = await getCurrentUser();
   const unread = user ? await unreadCount(user.id) : 0;
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-paper/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-4">
@@ -56,6 +60,7 @@ export async function SiteHeader() {
               ))}
             </nav>
             <div className="ml-auto flex items-center gap-3 text-sm">
+              <ThemeToggle initial={theme} />
               <Link
                 href="/notifications"
                 className="rounded-full px-3 py-1.5 font-medium hover:bg-muted"
@@ -72,6 +77,7 @@ export async function SiteHeader() {
           </>
         ) : (
           <div className="ml-auto flex items-center gap-1 text-sm">
+            <ThemeToggle initial={theme} />
             <Link href="/browse" className="rounded-full px-3 py-2 font-medium hover:bg-muted">
               Browse
             </Link>

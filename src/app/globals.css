@@ -3,37 +3,36 @@
 :root {
   /*
    * Brand palette (product owner, 2026-10-11): pure white, pure black and one blue, #35D6ED.
-   * Greys are black (or white, in dark mode) at low opacity, never a new colour. The blue is
-   * a fill (buttons, badges, highlights, the price chart) with black text on it: blue text on
+   * Greys are black (or white, at night) at low opacity, never a new colour. The blue is a
+   * fill (buttons, badges, highlights, the price chart) with black text on it: blue text on
    * white is too faint to read. Status colours map onto these three too.
+   *
+   * Day and night mode: each token is light-dark(day, night). The page follows the device
+   * setting until the visitor picks a mode with the header switch, which sets data-theme on
+   * <html> (and a cookie, so the server renders the right mode on the next visit).
    */
-  --paper: #ffffff;
-  --ink: #000000;
+  color-scheme: light dark;
+  --paper: light-dark(#ffffff, #000000);
+  --ink: light-dark(#000000, #ffffff);
   --accent: #35d6ed;
-  /* Text on a blue fill: black in both themes */
+  /* Text on a blue fill: black in both modes */
   --on-accent: #000000;
-  --muted: rgb(0 0 0 / 0.05);
-  --line: rgb(0 0 0 / 0.14);
-  --subtle: rgb(0 0 0 / 0.62);
-  --good: #000000;
-  --warn: #000000;
-  --danger: #000000;
-  --info: #000000;
+  --muted: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.08));
+  --line: light-dark(rgb(0 0 0 / 0.14), rgb(255 255 255 / 0.18));
+  --subtle: light-dark(rgb(0 0 0 / 0.62), rgb(255 255 255 / 0.65));
+  --good: var(--ink);
+  --warn: var(--ink);
+  --danger: var(--ink);
+  --info: var(--ink);
   --chart: #35d6ed;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #000000;
-    --ink: #ffffff;
-    --muted: rgb(255 255 255 / 0.08);
-    --line: rgb(255 255 255 / 0.18);
-    --subtle: rgb(255 255 255 / 0.65);
-    --good: #ffffff;
-    --warn: #ffffff;
-    --danger: #ffffff;
-    --info: #ffffff;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @theme inline {
