@@ -17,9 +17,9 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
 2. **Pricing acceptance table** (`docs/pricing-spec.md` §11): confirm every row, including the 90-day and 800-day scenarios, has a passing test in `src/lib/pricing/__tests__/acceptance.test.ts`. No `it.todo`, no skips, no loosened tolerances or changed expected values.
 3. **E2E journeys:**
    - 5.1 Merchant lists a shoe → curve preview shows 28.92 / 8.68 for the seeded 6,000 LKR / L = 365 shoe → publishes → Available.
-   - 5.2 Borrower builds a 4-pair bundle → sees bundle daily cost and 20,000 deposit → checks out (mock gateway) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
+   - 5.2 Borrower builds a 4-pair bundle → sees bundle daily cost and the tokens to lock → checks out (tokens locked) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
    - 5.3 Borrower ends one pair with a reservation pending → handoff trip → next borrower records condition.
-   - 5.4 Close → charge captured, deposit released → payout eligible after 3 days → included in the weekly batch. A dispute holds it.
+   - 5.4 Close → rent charged from tokens, the rest unlocked → payout eligible after 3 days → included in the weekly batch. A dispute holds it.
 4. **Review checklist** on the diff:
    - [ ] No price, charge, share or wear arithmetic outside `src/lib/pricing` / `src/lib/wear-ledger` (grep for `* K`, `Q(`, `/ n`, `.mul(`, `.times(` and similar in other dirs).
    - [ ] No JS `number`/`parseFloat`/`Float` for money or wear. Decimal everywhere.
@@ -31,6 +31,7 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
    - [ ] No hard-coded settings values (0.10, 5000, 3 days, 4 pairs, 183 / 730 lifespan limits) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] The release discount comes from `releaseDiscount`, is fixed on the item at checkout, and never reaches the current holder.
+   - [ ] Token ledger writes are idempotent and serialised per user; no money moves without a WalletEntry; balances are never computed with JS numbers.
    - [ ] MVP scope respected (§10). No unrequested Phase 2/3 features.
    - [ ] Agents stayed in their owned directories.
 

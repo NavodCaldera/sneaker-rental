@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
+import { rentalLocked } from "@/server/wallet";
 import { checkout } from "@/server/booking/checkout";
 import { endRental, recordCondition } from "@/server/booking/lifecycle";
 import { DisputeError, decideDispute, openDispute } from "@/server/disputes";
@@ -93,10 +94,11 @@ describe("weekly payouts (§4 rule 5)", () => {
       expect(item.merchantShare!.plus(item.platformShare!).toFixed(2)).toBe(
         item.charge!.toFixed(2),
       );
-      const capture = await db.payment.findUniqueOrThrow({
-        where: { idempotencyKey: `capture:${item.id}` },
+      const rent = await db.walletEntry.findUniqueOrThrow({
+        where: { idempotencyKey: `rent:${item.id}` },
       });
-      expect(capture.amount.toFixed(2)).toBe(item.charge!.toFixed(2));
+      expect(rent.kind).toBe("CHARGE");
+      expect(rent.amount.toFixed(2)).toBe(item.charge!.toFixed(2));
     }
   });
 
@@ -111,7 +113,7 @@ describe("weekly payouts (§4 rule 5)", () => {
 });
 
 describe("disputes (§6)", () => {
-  it("an upheld damage claim charges the deposit and adds it to the merchant's payout", async () => {
+  it("an upheld damage claim charges the borrower's tokens and adds it to the merchant's payout", async () => {
     const ctx = await merchantCtx();
     const admin = await makeUser("ADMIN");
     const { rental, item } = await closedRental(ctx, 10, 10, true);
@@ -122,11 +124,12 @@ describe("disputes (§6)", () => {
       amount: "1500",
       decision: "Torn sole in return photos",
     });
-    const payments = await db.payment.findMany({
-      where: { rentalId: rental.id, status: "SUCCEEDED" },
+    const damage = await db.walletEntry.findFirstOrThrow({
+      where: { rentalId: rental.id, kind: "CHARGE", note: "Damage" },
     });
-    expect(payments.find((p) => p.kind === "DEPOSIT_CAPTURE")?.amount.toFixed(2)).toBe("1500.00");
-    expect(payments.find((p) => p.kind === "DEPOSIT_RELEASE")?.amount.toFixed(2)).toBe("3500.00");
+    expect(damage.amount.toFixed(2)).toBe("1500.00");
+    // Decided: the pair's locked value is released and nothing stays locked.
+    expect((await rentalLocked(rental.id)).toFixed(2)).toBe("0.00");
 
     const { results } = await runPayoutBatch(day(20));
     expect(results[0].amount).toBe(item.merchantShare!.plus(1500).toFixed(2));
@@ -156,8 +159,8 @@ describe("disputes (§6)", () => {
       amount: "50",
       decision: "Courier delay",
     });
-    const refund = await db.payment.findFirstOrThrow({
-      where: { rentalId: rental.id, kind: "REFUND" },
+    const refund = await db.walletEntry.findFirstOrThrow({
+      where: { rentalId: rental.id, kind: "CREDIT" },
     });
     expect(refund.amount.toFixed(2)).toBe("50.00");
 

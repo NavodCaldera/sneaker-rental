@@ -13,6 +13,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 2. **Waiting for the driver is free.** A borrower's last day is the day they end the rental, not the day the pair reaches the next holder (§5).
 3. **Lifespan 6–24 months** (183–730 wear-days). An admin can grant a merchant a longer maximum on request (§1.1).
 4. **Release discount up to 10%** for the next borrower of a pair, shown from 10 days before the current holder's planned end (§8). The brief (§7) advised idle discounts of at most 5%; the product owner chose 10%.
+5. **Tokens instead of card holds and deposits** (§6). Borrowers keep a token balance (1 token = 1 LKR) bought through the gateway; booking locks the pairs' merchant value plus the rent estimate.
 
 ---
 
@@ -37,7 +38,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | `capitalRate` | r | 0.12 | Idle-cost test only |
 | `holdCost` (`holdCostPerDay`) | h | 0 | Idle-cost test only, LKR per idle day |
 
-**Settings snapshot.** Changing pricing settings affects **new listings only**. Each shoe stores the settings version it was listed under (`Shoe.settingsId`, set when created and refreshed when published), so a shoe's curve never changes under a running rental. Price a shoe with `shoeCurve(shoe)` (`src/server/catalogue/pricing.ts`), never with the active row. Operational settings (deposit, bundle size, dispute window, free-return window, delivery fee) come from the active version.
+**Settings snapshot.** Changing pricing settings affects **new listings only**. Each shoe stores the settings version it was listed under (`Shoe.settingsId`, set when created and refreshed when published), so a shoe's curve never changes under a running rental. Price a shoe with `shoeCurve(shoe)` (`src/server/catalogue/pricing.ts`), never with the active row. Operational settings (token cover, bundle size, dispute window, free-return window, delivery fee) come from the active version.
 
 ### 1.2 Per shoe (from the merchant)
 
@@ -152,11 +153,18 @@ A shoe is never held by two items on the same day. The item **closes** (wear, ch
 
 ---
 
-## 6. Booking: estimate and pre-authorisation
+## 6. Booking: estimate and tokens
 
 1. The borrower picks pairs and planned days. Reject more than `maxPairsPerBundle` held at once (counting pairs already held or awaiting delivery).
 2. The estimate runs the ledger on copies of the shoes (`estimate()`), from today through today + planned days − 1, with the pairs the borrower already holds counted as held throughout. It doesn't change shoe state. When the plan is kept, estimate = final charge.
-3. Pre-authorise **estimate + deposit** on the card.
+3. Lock **the pairs' merchant value + the estimate** from the borrower's tokens (`lockForRental`, in the booking transaction). Example: 2 pairs worth 12,000 with a 600 estimate need 12,600 tokens available. Short balance → no booking; the bundle page shows how much to top up.
+
+**Tokens** (`src/server/wallet`, append-only `WalletEntry` ledger, 1 token = 1 LKR):
+- Top up = a card sale through the gateway; withdraw = refunds of those sales, newest first, up to the available (unlocked) balance.
+- balance = top-ups + credits − charges − withdrawals; locked = locks − unlocks; available = balance − locked. The balance can go negative (a lost pair worth more than was locked): the borrower can't book again until it is cleared.
+- At each return, the pair's rent is charged from the rental's locked tokens and its merchant value is unlocked (kept locked while a dispute on it is open). When the rental closes, whatever is left is unlocked.
+- **Overrun check** (daily, `checkWalletCover`, `/api/cron/wallet`): a rental needs Σ value of pairs still out + rent so far + the next `topUpLeadDays` (3) days' rent locked. If short, more free tokens are locked automatically; if that isn't enough, the borrower is asked to top up within `topUpGraceDays` (3); after that the pairs are recalled (their rentals ended, so charging stops and a driver collects them).
+- OPEN DECISION (legal): holding customer money as a stored balance may need Central Bank of Sri Lanka approval; check before launch.
 4. Each item's discount is fixed at booking, and with catch-up on, φ is fixed at the start of the item from the shoe's state before that rental. Neither changes during the rental.
 
 ---
@@ -181,7 +189,7 @@ merchantOutstanding = max(0, merchantTarget − merchantCollected)
 
 The platform earns nothing on a shoe until its merchant has been paid in full; once the target is met, the platform gets everything. Over a full life of a new 6,000 LKR shoe the merchant still gets 6,600 and the platform 600 (the brief's 110 : 10 ratio holds for the lifetime, not per rental). If a shoe's lifetime rent falls short of the target (discounts without catch-up, early retirement), the merchant gets all of it and the platform nothing. `merchantCollected` is updated at close; helpers: `merchantOwed(shoe)`, `merchantFundedDiscounts(tx, shoeId)` in `src/server/catalogue/pricing.ts`.
 
-3. Capture the final total (not the estimate) from the pre-authorisation. Release the deposit when the condition check passes and no dispute is open.
+3. Charge the final total (not the estimate) from the rental's locked tokens and unlock the pair's value; keep it locked while a dispute is open.
 4. The merchant share is paid after the dispute window (3 days), in the weekly payout.
 
 **Rounding:** keep all wear and money unrounded. Round to 2 decimals, half away from zero, only for what is shown or charged. Charged amounts are stored as `Decimal(14, 2)`; unrounded values as `Decimal(28, 12)`.
@@ -224,13 +232,13 @@ For a 90-day plan (days 1–90): hidden from Browse until day 81, then 0.5% off 
 | Event | Calculation |
 |---|---|
 | Early return | `lastDay` = the day the borrower ends it. Charge only what the ledger accrued. |
-| Extension | Rentals are open-ended until the borrower ends them; the estimate covers the planned days. Topping up the pre-authorisation when the charge will exceed it depends on the gateway (OPEN DECISION) and isn't built yet. |
+| Extension | Rentals are open-ended until the borrower ends them. The daily overrun check asks for a top-up before the locked tokens run out and recalls the pairs if it doesn't come (§6). |
 | Direct handoff | The giver's last day is the day they ended the rental; the receiver starts on the delivery day (the next day if the giver ended that same day). Waiting days in between are free. |
 | Shoe reaches L | No more wear or charge; the item stays open until returned and still counts in n. |
-| Lost shoe | Charge `remainingValue(p, w, lifetimeCollected, settings)`: K × (A − IQ(w)), or R − lifetimeCollected with catch-up. Split merchant first (a new pair: 7,200 → merchant 6,600, platform 600); deposit first, then the card. |
+| Lost shoe | Charge `remainingValue(p, w, lifetimeCollected, settings)`: K × (A − IQ(w)), or R − lifetimeCollected with catch-up. Split merchant first (a new pair: 7,200 → merchant 6,600, platform 600); taken from the rental's locked tokens, then the free balance (which may go negative). |
 | Refund (upheld dispute) | Up to the item's charge. Up to that item's merchant share comes off the merchant's payout and `merchantCollected`, so later rentals pay the merchant back first; the rest is the platform's cost. |
 | Buy it now (Phase 2) | Price = `remainingValue`, same as a lost shoe. Close the item first, then sell. |
-| Damage | Assessed separately against the deposit through a dispute; not part of the rent. |
+| Damage | Assessed through a dispute; an upheld claim charges up to the pair's merchant value from the borrower's tokens. Not part of the rent. |
 | Wrong size within 24 h | Close the item at return; charge only the wear-days used. The return trip is on the platform. |
 
 ---

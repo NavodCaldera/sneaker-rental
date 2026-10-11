@@ -10,14 +10,14 @@ describe("payment gateway adapter", () => {
 
   it("mock replays results for a repeated idempotency key", async () => {
     const g = new MockGateway();
-    const a = await g.preAuthorise("100.00", "k1");
-    const b = await g.preAuthorise("100.00", "k1");
-    const c = await g.preAuthorise("100.00", "k2");
+    const a = await g.charge("100.00", "k1");
+    const b = await g.charge("100.00", "k1");
+    const c = await g.charge("100.00", "k2");
     expect(a).toEqual(b);
     expect(c).not.toEqual(a);
   });
 
   it("mock declines 13.13 LKR", async () => {
-    expect((await new MockGateway().capture("ref", "13.13", "k")).ok).toBe(false);
+    expect((await new MockGateway().charge("13.13", "k")).ok).toBe(false);
   });
 });

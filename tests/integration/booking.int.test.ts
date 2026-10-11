@@ -6,6 +6,7 @@ import { borrowerRentals } from "@/server/booking/queries";
 import { D } from "@/lib/decimal";
 import { DEFAULT_PRICING_SETTINGS, curveParams, incomeBetween } from "@/lib/pricing";
 import { browseShoes } from "@/server/catalogue";
+import { rentalLocked } from "@/server/wallet";
 import { colomboDay, dateToDay } from "@/lib/wear-ledger";
 import { arrive, day, deliveryFor, makeShoe, makeUser, photos, resetDb, setup } from "./helpers";
 
@@ -20,7 +21,9 @@ describe("rent, return and close (§5.2–5.4)", () => {
       deliveryAddress: "1 Flower Rd, Colombo 07",
       plannedDays: 100,
     });
-    expect(rental.depositAmount.toString()).toBe("5000");
+    // Tokens locked: the pair's merchant value plus the rent estimate.
+    expect(rental.shoeValue.toString()).toBe("6000");
+    expect((await rentalLocked(rental.id)).toFixed(2)).toBe("8866.11");
     expect(rental.estimate.toFixed(2)).toBe("2866.11"); // estimate = final when the plan is kept
     const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
     expect((await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).status).toBe("RESERVED");
@@ -65,7 +68,7 @@ describe("rent, return and close (§5.2–5.4)", () => {
     expect((await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).status).toBe("AVAILABLE");
   });
 
-  it("a 4-pair bundle held 10 days adds 2.5 wear-days to each pair, deposit 20,000", async () => {
+  it("a 4-pair bundle held 10 days adds 2.5 wear-days to each pair; locks 24,000 + rent", async () => {
     const { merchant, merchantId, borrower } = await setup();
     const shoes = await Promise.all([1, 2, 3, 4].map(() => makeShoe(merchantId)));
     const quote = await quoteBundle(
@@ -73,7 +76,8 @@ describe("rent, return and close (§5.2–5.4)", () => {
       shoes.map((s) => s.id),
       10,
     );
-    expect(quote.deposit).toBe("20000.00");
+    expect(quote.shoeValue).toBe("24000.00");
+    expect(quote.required).toBe(new D(quote.shoeValue).plus(quote.estimate).toFixed(2));
     // Four identical new pairs together cost one pair's daily price.
     expect(quote.dailyCost.slice(0, 7)).toBe("28.9247");
 

@@ -28,7 +28,8 @@ export default async function AdminSettings() {
     releaseDiscountStep: active.releaseDiscountStep.toString(),
     capitalRate: active.capitalRate.toString(),
     holdCost: active.holdCost.toFixed(2),
-    depositPerPair: active.depositPerPair.toFixed(2),
+    topUpLeadDays: String(active.topUpLeadDays),
+    topUpGraceDays: String(active.topUpGraceDays),
     maxPairsPerBundle: String(active.maxPairsPerBundle),
     disputeWindowDays: String(active.disputeWindowDays),
     freeReturnHours: String(active.freeReturnHours),
@@ -54,7 +55,7 @@ export default async function AdminSettings() {
             <li key={h.id} className="rounded-lg border border-line p-2">
               <div className="font-medium text-ink">{formatDateTime(h.effectiveFrom)}</div>
               μm {h.merchantMargin.toString()} · μp {h.platformMargin.toString()} · floor{" "}
-              {h.floor.toString()} · deposit {h.depositPerPair.toFixed(0)} · fee{" "}
+              {h.floor.toString()} · max discount {h.maxDiscount.toString()} · fee{" "}
               {h.deliveryBookingFee?.toFixed(2) ?? "TBD"} · catch-up{" "}
               {h.catchUpEnabled ? "on" : "off"}
             </li>

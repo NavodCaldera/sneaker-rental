@@ -1,162 +1,131 @@
 import "server-only";
-import type { PaymentKind } from "@/generated/prisma/client";
-import { D, roundMoney, toD } from "@/lib/decimal";
+import { D, toD } from "@/lib/decimal";
 import { chargedAmounts, remainingValue } from "@/lib/pricing";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { merchantFundedDiscounts, merchantOwed, shoeCurve } from "../catalogue/pricing";
-import { db } from "../db";
+import { type Tx, db } from "../db";
 import { getActiveSettings } from "../settings";
-import { type GatewayResult, gateway } from "./gateway";
+import { chargeRental, credit, unlockRental } from "../wallet";
 
 export class PaymentError extends Error {}
 
 /**
- * Runs one gateway call at most once per idempotency key and records it as a Payment row.
- * A repeated call with a key that already succeeded returns the stored row.
+ * Rental money in tokens (pricing-spec.md §6–7). Booking locks the pairs' merchant value
+ * plus the rent estimate; each charge here is taken from those locked tokens first. Card
+ * payments happen only when a borrower tops up or withdraws (src/server/wallet).
  */
-async function recordPayment(
-  input: {
-    kind: PaymentKind;
-    rentalId: string;
-    rentalItemId?: string;
-    amount: string;
-    key: string;
-    note?: string;
-  },
-  call: () => Promise<GatewayResult>,
-) {
-  const existing = await db.payment.findUnique({ where: { idempotencyKey: input.key } });
-  if (existing?.status === "SUCCEEDED") return existing;
-  const result = await call();
-  const data = {
-    kind: input.kind,
-    rentalId: input.rentalId,
-    rentalItemId: input.rentalItemId,
-    amount: input.amount,
-    gateway: gateway().name,
-    gatewayRef: result.ok ? result.ref : null,
-    status: result.ok ? ("SUCCEEDED" as const) : ("FAILED" as const),
-    note: result.ok ? input.note : result.error,
-  };
-  const row = existing
-    ? await db.payment.update({ where: { id: existing.id }, data })
-    : await db.payment.create({ data: { ...data, idempotencyKey: input.key } });
-  if (!result.ok) throw new PaymentError(result.error);
-  return row;
-}
 
-/** §4 rule 1–2: pre-authorise the estimate and hold the deposit, then activate the rental. */
-export async function authorizeRental(rentalId: string) {
-  const rental = await db.rental.findUniqueOrThrow({ where: { id: rentalId } });
-  const auth = await recordPayment(
-    { kind: "PREAUTH", rentalId, amount: rental.estimate.toFixed(2), key: `preauth:${rentalId}` },
-    () => gateway().preAuthorise(rental.estimate.toFixed(2), `preauth:${rentalId}`),
-  );
-  const hold = await recordPayment(
-    {
-      kind: "DEPOSIT_HOLD",
-      rentalId,
-      amount: rental.depositAmount.toFixed(2),
-      key: `deposit:${rentalId}`,
-    },
-    () => gateway().preAuthorise(rental.depositAmount.toFixed(2), `deposit:${rentalId}`),
-  );
-  return db.rental.update({
-    where: { id: rentalId },
-    data: { status: "ACTIVE", preAuthRef: auth.gatewayRef, depositHoldRef: hold.gatewayRef },
+/**
+ * After a pair is returned: unlock its merchant value, unless a dispute on it is open
+ * (the value stays locked to cover damage until an admin decides).
+ */
+async function releaseItem(tx: Tx, itemId: string) {
+  const item = await tx.rentalItem.findUniqueOrThrow({
+    where: { id: itemId },
+    include: { rental: true, shoe: true, disputes: { where: { status: "OPEN" } } },
+  });
+  if (item.status !== "CLOSED" || item.disputes.length > 0) return;
+  await unlockRental(tx, {
+    userId: item.rental.borrowerId,
+    rentalId: item.rentalId,
+    rentalItemId: item.id,
+    amount: toD(item.shoe.value),
+    key: `release:${item.id}`,
+    note: "Pair returned: value unlocked",
   });
 }
 
-/** §4 rule 1: charge each closed item at return, from the amount booking computed. */
+/** §4 rule 1: charge each closed item's rent at return, from the amount booking computed. */
 export async function settleItems(itemIds: string[]) {
   const rentalIds = new Set<string>();
   for (const itemId of itemIds) {
-    const item = await db.rentalItem.findUniqueOrThrow({
-      where: { id: itemId },
-      include: { rental: true },
+    await db.$transaction(async (tx) => {
+      const item = await tx.rentalItem.findUniqueOrThrow({
+        where: { id: itemId },
+        include: { rental: true },
+      });
+      if (item.status !== "CLOSED" || !item.charge) return;
+      await chargeRental(tx, {
+        userId: item.rental.borrowerId,
+        rentalId: item.rentalId,
+        rentalItemId: item.id,
+        amount: toD(item.charge),
+        key: `rent:${item.id}`,
+        note: "Rent",
+      });
+      await releaseItem(tx, item.id);
+      rentalIds.add(item.rentalId);
     });
-    if ((item.status !== "CLOSED" && item.status !== "LOST") || !item.charge) continue;
-    if (item.charge.gt(0)) {
-      const amount = item.charge.toFixed(2);
-      await recordPayment(
-        {
-          kind: "CAPTURE",
-          rentalId: item.rentalId,
-          rentalItemId: item.id,
-          amount,
-          key: `capture:${item.id}`,
-        },
-        () => gateway().capture(item.rental.preAuthRef ?? "", amount, `capture:${item.id}`),
-      );
-    }
-    rentalIds.add(item.rentalId);
   }
   for (const rentalId of rentalIds) await finishRentalIfDone(rentalId);
 }
 
 /**
- * When every item is closed and nothing is under dispute: release the deposit hold and
- * void what's left of the pre-authorisation (§4 rule 2).
+ * When every item is settled and nothing is under dispute: unlock what is left of the
+ * rental's tokens (the unused rent estimate) and clear any top-up request.
  */
 export async function finishRentalIfDone(rentalId: string) {
   const rental = await db.rental.findUniqueOrThrow({
     where: { id: rentalId },
-    include: { items: { include: { disputes: { where: { status: "OPEN" } } } }, payments: true },
+    include: { items: { include: { disputes: { where: { status: "OPEN" } } } } },
   });
   if (rental.status !== "CLOSED") return false;
   if (rental.items.some((i) => i.disputes.length > 0)) return false;
-  if (rental.payments.some((p) => p.kind === "DEPOSIT_RELEASE" && p.status === "SUCCEEDED"))
-    return true;
-
-  const captured = rental.payments
-    .filter((p) => p.kind === "DEPOSIT_CAPTURE" && p.status === "SUCCEEDED")
-    .reduce((sum, p) => sum.plus(toD(p.amount)), new D(0));
-  const released = toD(rental.depositAmount).minus(captured);
-  await recordPayment(
-    {
-      kind: "DEPOSIT_RELEASE",
+  await db.$transaction(async (tx) => {
+    for (const item of rental.items) await releaseItem(tx, item.id);
+    await unlockRental(tx, {
+      userId: rental.borrowerId,
       rentalId,
-      amount: roundMoney(released).toFixed(2),
-      key: `deposit-release:${rentalId}`,
-    },
-    () => gateway().void(rental.depositHoldRef ?? "", `deposit-release:${rentalId}`),
-  );
-  await recordPayment(
-    { kind: "PREAUTH_VOID", rentalId, amount: "0.00", key: `preauth-void:${rentalId}` },
-    () => gateway().void(rental.preAuthRef ?? "", `preauth-void:${rentalId}`),
-  );
+      amount: "all",
+      key: `finish:${rentalId}`,
+      note: "Rental closed: tokens unlocked",
+    });
+    await tx.rental.update({
+      where: { id: rentalId },
+      data: { topUpDueAt: null, topUpAmount: null },
+    });
+  });
   return true;
 }
 
-/** Capture up to `amount` from a rental's deposit hold (damage or loss). */
-export async function captureFromDeposit(
-  rentalId: string,
-  rentalItemId: string,
-  amount: string,
-  reason: string,
-) {
-  const rental = await db.rental.findUniqueOrThrow({
-    where: { id: rentalId },
-    include: { payments: true },
+/**
+ * An upheld damage claim: charge up to the pair's merchant value from the borrower's
+ * locked tokens (then the free balance). Returns the amount charged.
+ */
+export async function chargeDamage(itemId: string, amount: string, reason: string) {
+  return db.$transaction(async (tx) => {
+    const item = await tx.rentalItem.findUniqueOrThrow({
+      where: { id: itemId },
+      include: { rental: true, shoe: true },
+    });
+    const take = D.min(new D(amount), toD(item.shoe.value));
+    if (take.lte(0)) return new D(0);
+    await chargeRental(tx, {
+      userId: item.rental.borrowerId,
+      rentalId: item.rentalId,
+      rentalItemId: item.id,
+      amount: take,
+      key: `damage:${item.id}:${reason}`,
+      note: "Damage",
+    });
+    return take;
   });
-  const already = rental.payments
-    .filter((p) => p.kind === "DEPOSIT_CAPTURE" && p.status === "SUCCEEDED")
-    .reduce((sum, p) => sum.plus(toD(p.amount)), new D(0));
-  const available = toD(rental.depositAmount).minus(already);
-  const take = D.min(new D(amount), available);
-  if (take.lte(0)) return null;
-  const key = `deposit-capture:${rentalItemId}:${reason}`;
-  return recordPayment(
-    { kind: "DEPOSIT_CAPTURE", rentalId, rentalItemId, amount: take.toFixed(2), key, note: reason },
-    () => gateway().capture(rental.depositHoldRef ?? "", take.toFixed(2), key),
-  );
+}
+
+/** After a dispute is decided: unlock the pair's value and close out the rental if done. */
+export async function releaseAfterDispute(itemId: string) {
+  const item = await db.$transaction(async (tx) => {
+    await releaseItem(tx, itemId);
+    return tx.rentalItem.findUniqueOrThrow({ where: { id: itemId } });
+  });
+  await finishRentalIfDone(item.rentalId);
 }
 
 /**
  * §4 rule 3 / §6: a lost or unreturned pair. The borrower pays what the shoe had left to
- * earn (K · (A − IQ(w)), or R − collected with catch-up), split merchant first; the deposit
- * is captured first and the card is charged the rest. The merchant is made whole, the shoe
- * is retired and the account locked.
+ * earn (K · (A − IQ(w)), or R − collected with catch-up), split merchant first, charged
+ * from the rental's locked tokens and then the free balance (which may go negative). The
+ * merchant is made whole, the shoe is retired and the account locked.
  */
 export async function markLost(itemId: string, now = new Date()) {
   const settingsRow = await getActiveSettings(now);
@@ -225,44 +194,23 @@ export async function markLost(itemId: string, now = new Date()) {
         data: { status: "CLOSED", closedAt: now },
       });
     }
-    return { ...item, charge, pairs: item.rental.items.length };
+    await chargeRental(tx, {
+      userId: item.rental.borrowerId,
+      rentalId: item.rentalId,
+      rentalItemId: item.id,
+      amount: charge,
+      key: `lost:${item.id}`,
+      note: "Lost pair: remaining value",
+    });
+    return item;
   });
-
-  // Deposit first: this pair's share of the deposit, then the card for the rest.
-  const rental = await db.rental.findUniqueOrThrow({ where: { id: item.rentalId } });
-  const depositShare = toD(rental.depositAmount).div(item.pairs);
-  const fromDeposit = await captureFromDeposit(
-    item.rentalId,
-    item.id,
-    D.min(depositShare, item.charge).toFixed(2),
-    "lost",
-  );
-  const rest = item.charge.minus(fromDeposit ? toD(fromDeposit.amount) : 0);
-  if (rest.gt(0)) {
-    await recordPayment(
-      {
-        kind: "CAPTURE",
-        rentalId: item.rentalId,
-        rentalItemId: item.id,
-        amount: rest.toFixed(2),
-        key: `capture:${item.id}`,
-        note: "Lost pair: remaining value after deposit",
-      },
-      () => gateway().capture(rental.preAuthRef ?? "", rest.toFixed(2), `capture:${item.id}`),
-    );
-  }
   await finishRentalIfDone(item.rentalId);
   return db.rentalItem.findUniqueOrThrow({ where: { id: itemId } });
 }
 
-/** Payment rows for a rental, oldest first, for receipts. */
-export async function rentalPayments(rentalId: string) {
-  return db.payment.findMany({ where: { rentalId }, orderBy: { createdAt: "asc" } });
-}
-
 /**
  * §4 rule 6: the trip fee passes through to the ride-hailing app and we keep the booking
- * fee. Charged to the borrower's rental when the trip is delivered, if the borrower pays.
+ * fee. Charged in tokens to the borrower's rental when the trip is delivered, if they pay.
  */
 export async function chargeDeliveryFee(deliveryId: string) {
   const delivery = await db.delivery.findUniqueOrThrow({
@@ -273,37 +221,39 @@ export async function chargeDeliveryFee(deliveryId: string) {
   const total = toD(delivery.quote ?? 0).plus(toD(delivery.bookingFee ?? 0));
   if (total.lte(0)) return null;
   const rental = delivery.rentalItem.rental;
-  const key = `delivery:${delivery.id}`;
-  return recordPayment(
-    {
-      kind: "CAPTURE",
+  await db.$transaction((tx) =>
+    chargeRental(tx, {
+      userId: rental.borrowerId,
       rentalId: rental.id,
       rentalItemId: delivery.rentalItemId,
-      amount: total.toFixed(2),
-      key,
+      amount: total,
+      key: `delivery:${delivery.id}`,
       note: `Delivery fee (${delivery.type.toLowerCase()})`,
-    },
-    () => gateway().capture(rental.preAuthRef ?? "", total.toFixed(2), key),
+    }),
   );
+  return total;
 }
 
-/** Refund part of an item's charge to the borrower (an upheld overcharge dispute). */
+/** Give back part of an item's charge as tokens (an upheld overcharge dispute). */
 export async function refundItem(itemId: string, amount: string, reason: string) {
-  const capture = await db.payment.findUnique({ where: { idempotencyKey: `capture:${itemId}` } });
-  if (!capture || capture.status !== "SUCCEEDED")
+  const item = await db.rentalItem.findUniqueOrThrow({
+    where: { id: itemId },
+    include: { rental: true },
+  });
+  if (!item.charge || item.charge.lte(0)) {
     throw new PaymentError("Nothing was charged for this pair");
-  const take = D.min(new D(amount), toD(capture.amount));
+  }
+  const take = D.min(new D(amount), toD(item.charge));
   if (take.lte(0)) return null;
-  const key = `refund:${itemId}:${reason}`;
-  return recordPayment(
-    {
-      kind: "REFUND",
-      rentalId: capture.rentalId,
-      rentalItemId: itemId,
-      amount: take.toFixed(2),
-      key,
-      note: reason,
-    },
-    () => gateway().refund(capture.gatewayRef ?? "", take.toFixed(2), key),
+  await db.$transaction((tx) =>
+    credit(tx, {
+      userId: item.rental.borrowerId,
+      rentalId: item.rentalId,
+      rentalItemId: item.id,
+      amount: take,
+      key: `refund:${item.id}:${reason}`,
+      note: "Refund of rent",
+    }),
   );
+  return take;
 }

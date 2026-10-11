@@ -58,8 +58,8 @@ describe("manual provider: quote → book → courier pickup → drop-off", () =
       "WITH_BORROWER",
     );
 
-    const fee = await db.payment.findFirstOrThrow({
-      where: { rentalId: rental.id, kind: "CAPTURE" },
+    const fee = await db.walletEntry.findFirstOrThrow({
+      where: { rentalId: rental.id, kind: "CHARGE" },
     });
     expect(fee.amount.toFixed(2)).toBe("450.00");
     expect(fee.note).toMatch(/Delivery fee/);

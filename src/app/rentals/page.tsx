@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { RentalItemStatus } from "@/generated/prisma/client";
 import { PhotoImg } from "@/components/shoe-bits";
 import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
-import { formatDate, formatLKR, formatWear } from "@/lib/format";
+import { formatDate, formatLKR, formatTokens, formatWear } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { borrowerRentals } from "@/server/booking/queries";
 import { endRentalAction } from "./actions";
@@ -22,13 +22,6 @@ const ITEM_STATUS: Record<
   CANCELLED: { label: "Cancelled", tone: "neutral" },
   LOST: { label: "Lost", tone: "bad" },
 };
-
-const DEPOSIT_LABEL = {
-  held: "held",
-  released: "released",
-  captured: "partly captured",
-  none: "not taken",
-} as const;
 
 export default async function RentalsPage({ searchParams }: PageProps<"/rentals">) {
   const user = await requireUser("BORROWER");
@@ -59,13 +52,33 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <h2 className="font-medium">Booked {formatDate(rental.createdAt)}</h2>
                 <span className="flex flex-wrap items-center gap-2 text-subtle">
-                  Deposit {formatLKR(rental.depositAmount.toString())}
-                  <Badge tone={rental.depositStatus === "captured" ? "warn" : "neutral"}>
-                    {DEPOSIT_LABEL[rental.depositStatus]}
-                  </Badge>
-                  · estimate {formatLKR(rental.estimate.toString())}
+                  {formatTokens(rental.locked)} locked · estimate{" "}
+                  {formatLKR(rental.estimate.toString())}
                 </span>
               </div>
+              {rental.topUpDueAt && rental.topUpAmount && !rental.recalledAt && (
+                <div className="mb-2">
+                  <Alert>
+                    Your locked tokens no longer cover this rental. Top up{" "}
+                    <strong>{formatTokens(rental.topUpAmount.toString())}</strong> by{" "}
+                    {formatDate(rental.topUpDueAt)} or the pairs will be collected.{" "}
+                    <Link
+                      href={`/wallet?amount=${rental.topUpAmount.toFixed(2)}&next=/rentals`}
+                      className="underline"
+                    >
+                      Top up now
+                    </Link>
+                  </Alert>
+                </div>
+              )}
+              {rental.recalledAt && (
+                <div className="mb-2">
+                  <Alert>
+                    These pairs were recalled on {formatDate(rental.recalledAt)} because the top-up
+                    didn&apos;t arrive in time. A driver will collect them.
+                  </Alert>
+                </div>
+              )}
               <ul className="flex flex-col gap-3">
                 {rental.items.map((item) => {
                   const status = ITEM_STATUS[item.status];

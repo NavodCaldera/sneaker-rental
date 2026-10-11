@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { toD } from "./decimal";
-import { formatDate, formatDateTime, formatLKR, formatPercent, formatWear } from "./format";
+import {
+  formatDate,
+  formatDateTime,
+  formatLKR,
+  formatPercent,
+  formatTokens,
+  formatWear,
+} from "./format";
 
 const NBSP = " ";
 
@@ -16,6 +23,8 @@ describe("format", () => {
     expect(formatWear("2.5")).toBe("2.5");
     expect(formatPercent("0.005")).toBe("0.5%");
     expect(formatPercent("0.1")).toBe("10%");
+    expect(formatTokens("12600")).toBe("12,600.00 tokens");
+    expect(formatTokens("-332.4")).toBe("-332.40 tokens");
     expect(formatWear("12.3456")).toBe("12.35");
     expect(formatWear("365")).toBe("365");
   });

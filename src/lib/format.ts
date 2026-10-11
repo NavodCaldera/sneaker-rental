@@ -14,6 +14,16 @@ export function formatLKR(value: Decimal.Value): string {
   return lkr.format(roundMoney(value).toFixed(2) as unknown as number);
 }
 
+const tokens = new Intl.NumberFormat("en-LK", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** Display a token amount (1 token = 1 LKR), rounded to 2 dp, e.g. "12,600.00 tokens". */
+export function formatTokens(value: Decimal.Value): string {
+  return `${tokens.format(roundMoney(value).toFixed(2) as unknown as number)} tokens`;
+}
+
 /** Display a ratio as a percentage to at most 2 dp, e.g. 0.005 → "0.5%". */
 export function formatPercent(ratio: Decimal.Value): string {
   return `${new D(ratio).times(100).toDecimalPlaces(2).toString()}%`;
