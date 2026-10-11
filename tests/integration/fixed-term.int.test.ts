@@ -18,6 +18,7 @@ import {
   scheduleEarlyReturn,
 } from "@/server/booking/lifecycle";
 import { acceptOffer, rejectOffer } from "@/server/booking/reservations";
+import { fullAddress } from "@/lib/address";
 import { db } from "@/server/db";
 import { MockMailer, setMailerForTests } from "@/server/notify/mailer";
 import { runPayoutBatch } from "@/server/payouts";
@@ -317,8 +318,8 @@ describe("reserve from day 1; the holder returns early (pricing-spec.md §6a)", 
     const handoff = await deliveryFor(item3.id, "HANDOFF");
     expect([handoff.fromRentalItemId, handoff.fromAddress, handoff.toAddress]).toEqual([
       item1.id,
-      u1.address,
-      u3.address,
+      fullAddress(u1),
+      fullAddress(u3),
     ]);
     await arrive(handoff, day(41));
     await recordCondition(u3.id, { itemId: item3.id, grade: "A", photos: photos() }, day(41));

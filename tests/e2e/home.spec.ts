@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("home page loads", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Sneaker Rental/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Shoe Rental/);
 });
 
 test("home: style tabs, rows of pairs, and the search bar leads to Browse", async ({ page }) => {
@@ -20,7 +20,7 @@ test("home: style tabs, rows of pairs, and the search bar leads to Browse", asyn
   await expect(page.getByRole("region", { name: "Just listed in Running" })).toBeVisible();
 
   // Searching opens Browse with the filters.
-  const search = page.getByRole("search", { name: "Find sneakers" });
+  const search = page.getByRole("search", { name: "Find shoes" });
   await search.getByLabel("Brand or model").fill("Pegasus");
   await search.getByRole("button", { name: "Search" }).click();
   await expect(page).toHaveURL(/\/browse\?category=Running&size=&q=Pegasus/);

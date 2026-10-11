@@ -8,7 +8,7 @@ export default function NotFound() {
         This page doesn&apos;t exist, or the pair is no longer listed.
       </p>
       <LinkButton href="/browse" className="self-center">
-        Browse sneakers
+        Browse shoes
       </LinkButton>
     </main>
   );

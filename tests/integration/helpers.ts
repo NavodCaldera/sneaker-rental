@@ -50,7 +50,13 @@ let cachedHash: string | undefined;
  */
 export async function makeUser(
   role: Role,
-  overrides: { email?: string; name?: string; tokens?: string; address?: string | null } = {},
+  overrides: {
+    email?: string;
+    name?: string;
+    tokens?: string;
+    address?: string | null;
+    city?: string | null;
+  } = {},
 ) {
   cachedHash ??= await hashPassword("password123");
   counter += 1;
@@ -65,10 +71,18 @@ export async function makeUser(
         overrides.address !== undefined
           ? overrides.address
           : role === "MERCHANT"
-            ? `Shop ${counter}, 12 Galle Road, Colombo 03`
+            ? `Shop ${counter}, 12 Galle Road`
             : role === "BORROWER"
-              ? `${counter} Flower Road, Colombo 07`
+              ? `${counter} Flower Road`
               : null,
+      city:
+        overrides.city !== undefined
+          ? overrides.city
+          : overrides.address === null || role === "ADMIN"
+            ? null
+            : role === "MERCHANT"
+              ? "Colombo 03"
+              : "Colombo 07",
       verified: true,
       merchant:
         role === "MERCHANT"

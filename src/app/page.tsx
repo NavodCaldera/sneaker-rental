@@ -86,7 +86,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   return (
     <main className="flex flex-col gap-10">
-      <h1 className="sr-only">Sneaker Rental: rent sneakers by the wear</h1>
+      <h1 className="sr-only">Shoe Rental: rent shoes by the wear</h1>
 
       <div className="flex flex-col items-center gap-6">
         <nav aria-label="Styles" className="w-full overflow-x-auto [scrollbar-width:none]">
@@ -118,7 +118,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <form
           action="/browse"
           role="search"
-          aria-label="Find sneakers"
+          aria-label="Find shoes"
           className="flex w-full max-w-3xl items-center rounded-full border border-line bg-paper py-2 pl-2 pr-2 shadow-md"
         >
           {category && <input type="hidden" name="category" value={category} />}
@@ -147,7 +147,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           <button
             type="submit"
             aria-label="Search"
-            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-white transition hover:brightness-95"
+            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent transition hover:brightness-95"
           >
             <svg
               viewBox="0 0 24 24"

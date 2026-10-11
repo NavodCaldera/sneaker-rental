@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { fullAddress } from "@/lib/address";
 import { db } from "@/server/db";
 import { BookingError, checkout, quoteBundle } from "@/server/booking/checkout";
 import { runDailyRentals } from "@/server/booking/daily";
@@ -176,8 +177,8 @@ describe("direct handoff chain (§5.3)", () => {
     expect(handoffAB.paidBy).toBe("BORROWER"); // B, receiving it, pays the driver
     expect(handoffAB.fromRentalItemId).toBe(itemA.id);
     // From A's account address to B's.
-    expect(handoffAB.fromAddress).toBe(a.address);
-    expect(handoffAB.toAddress).toBe(b.address);
+    expect(handoffAB.fromAddress).toBe(fullAddress(a));
+    expect(handoffAB.toAddress).toBe(fullAddress(b));
     await arrive(handoffAB, day(31)); // the handoff day is nobody's
     expect((await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).status).toBe(
       "WITH_BORROWER",

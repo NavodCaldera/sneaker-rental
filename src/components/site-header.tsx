@@ -37,9 +37,10 @@ export async function SiteHeader() {
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-4">
         <Link
           href="/"
-          className="flex items-center gap-1.5 text-xl font-bold tracking-tight text-accent"
+          className="flex items-center gap-2 text-xl font-bold tracking-tight text-ink"
         >
-          <span aria-hidden="true">👟</span> Sneaker Rental
+          <span aria-hidden="true" className="inline-block size-6 rounded-lg bg-accent" /> Shoe
+          Rental
         </Link>
         {user ? (
           <>
@@ -82,7 +83,7 @@ export async function SiteHeader() {
             </Link>
             <Link
               href="/sign-up"
-              className="rounded-full bg-ink px-4 py-2 font-medium text-paper hover:opacity-90"
+              className="rounded-full bg-accent px-4 py-2 font-medium text-on-accent hover:opacity-90"
             >
               Sign up
             </Link>

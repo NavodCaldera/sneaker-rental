@@ -94,7 +94,8 @@ test("an unverified merchant can't publish until an admin verifies them", async 
   await page.getByLabel("Full name").fill("New Shop Owner");
   await page.getByLabel("Business name").fill("Brand New Shop");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Pickup and return address").fill("Brand New Shop, 3 Main Street, Galle");
+  await page.getByLabel("Pickup and return address").fill("Brand New Shop, 3 Main Street");
+  await page.getByLabel("City").fill("Galle");
   await page.getByLabel("Password", { exact: true }).fill("password123");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText(/awaiting verification/)).toBeVisible();

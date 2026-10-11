@@ -22,41 +22,61 @@ describe("sign-up and sign-in", () => {
       email: "  Kasun@Shop.LK ",
       password: "longenough",
       businessName: "Colombo Kicks",
-      address: "Colombo Kicks, 12 Galle Road, Colombo 03",
+      address: "Colombo Kicks, 12 Galle Road",
+      city: "Colombo 03",
     });
     const user = await registerUser(input);
     expect(user.email).toBe("kasun@shop.lk");
     expect(user.passwordHash).not.toContain("longenough");
     expect(await db.merchant.count({ where: { userId: user.id } })).toBe(1);
-    expect(user.address).toBe("Colombo Kicks, 12 Galle Road, Colombo 03");
+    expect([user.address, user.city]).toEqual(["Colombo Kicks, 12 Galle Road", "Colombo 03"]);
 
     const signedIn = await authenticate("KASUN@shop.lk", "longenough");
     expect(signedIn.id).toBe(user.id);
   });
 
-  it("asks customers and merchants for one address, and lets them change it", async () => {
+  it("asks customers and merchants for one address and its city, and lets them change them", async () => {
     const base = { name: "A B", email: "a@b.lk", password: "12345678" };
-    const error = (data: object) =>
-      signUpSchema.safeParse(data).error?.flatten().fieldErrors.address;
-    expect(error({ ...base, role: "BORROWER" })).toBeDefined();
-    expect(error({ ...base, role: "BORROWER", address: "Colombo" })).toEqual([
-      "Enter your full address: street and town",
+    const errors = (data: object) => signUpSchema.safeParse(data).error?.flatten().fieldErrors;
+    expect(errors({ ...base, role: "BORROWER" })).toMatchObject({
+      address: expect.any(Array),
+      city: expect.any(Array),
+    });
+    expect(errors({ ...base, role: "BORROWER", address: "No 1", city: "Kandy" })?.address).toEqual([
+      "Enter your house number and street",
     ]);
+    expect(errors({ ...base, role: "BORROWER", address: "12 Galle Road", city: "" })?.city).toEqual(
+      ["Enter your city"],
+    );
     expect(
-      error({ ...base, role: "MERCHANT", businessName: "Shop", address: "12 Galle Road, Colombo" }),
+      errors({
+        ...base,
+        role: "MERCHANT",
+        businessName: "Shop",
+        address: "12 Galle Road",
+        city: "Colombo 03",
+      }),
     ).toBeUndefined();
 
     const user = await registerUser(
-      signUpSchema.parse({ ...base, role: "BORROWER", address: "  21/3 Hill Street, Dehiwala " }),
+      signUpSchema.parse({
+        ...base,
+        role: "BORROWER",
+        address: "  21/3 Hill Street ",
+        city: " Dehiwala ",
+      }),
     );
-    expect(user.address).toBe("21/3 Hill Street, Dehiwala");
-    await updateAddress(user.id, "17 Temple Road, Nugegoda");
-    expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).address).toBe(
-      "17 Temple Road, Nugegoda",
-    );
-    await expect(updateAddress(user.id, "short")).rejects.toThrow(/full address/);
+    expect([user.address, user.city]).toEqual(["21/3 Hill Street", "Dehiwala"]);
+    await updateAddress(user.id, "17 Temple Road", "Nugegoda");
+    const moved = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect([moved.address, moved.city]).toEqual(["17 Temple Road", "Nugegoda"]);
+    await expect(updateAddress(user.id, "No 1", "Nugegoda")).rejects.toThrow(/house number/);
+    await expect(updateAddress(user.id, "17 Temple Road", "")).rejects.toThrow(/city/);
     const token = (await startSession(user.id)).token;
-    expect((await userForToken(token))?.address).toBe("17 Temple Road, Nugegoda");
+    expect(await userForToken(token)).toMatchObject({
+      address: "17 Temple Road",
+      city: "Nugegoda",
+    });
   });
 
   it("requires a business name for merchants and rejects public admin sign-up", () => {
@@ -80,7 +100,8 @@ describe("sign-up and sign-in", () => {
       name: "Amaya",
       email: "amaya@test.lk",
       password: "password123",
-      address: "No. 8, Flower Road, Colombo 07",
+      address: "No. 8, Flower Road",
+      city: "Colombo 07",
     });
     const user = await registerUser(input);
     await expect(registerUser(input)).rejects.toThrow(AuthError);

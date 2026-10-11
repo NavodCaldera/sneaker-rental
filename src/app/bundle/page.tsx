@@ -14,6 +14,7 @@ import {
 } from "@/components/ui";
 import { formatDate, formatLKR, formatPercent, formatTokens, formatWear } from "@/lib/format";
 import { removeFromBundleAction } from "@/app/rentals/actions";
+import { fullAddress } from "@/lib/address";
 import { requireUser } from "@/server/auth/session";
 import { getBundle } from "@/server/booking/bundle";
 import { DEFAULT_PLANNED_DAYS, quoteBundle } from "@/server/booking/checkout";
@@ -34,7 +35,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
         <PageHeader title="Your bundle" />
         <EmptyState title="Your bundle is empty">
           <Link href="/browse" className="underline">
-            Browse sneakers
+            Browse shoes
           </Link>{" "}
           and add up to {quote.maxPairs} pairs.
         </EmptyState>
@@ -148,7 +149,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
           <Alert>{quote.problems[0]}</Alert>
         ) : (
           <Card>
-            <CheckoutForm plannedDays={plannedDays} address={user.address} />
+            <CheckoutForm plannedDays={plannedDays} address={fullAddress(user)} />
           </Card>
         )}
       </aside>

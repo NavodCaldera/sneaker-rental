@@ -15,9 +15,9 @@ export function Button({
     <button
       className={cx(
         "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
-        variant === "primary" && "bg-ink text-paper hover:opacity-90",
+        variant === "primary" && "bg-accent text-on-accent hover:opacity-90",
         variant === "secondary" && "border border-line bg-paper hover:bg-muted",
-        variant === "danger" && "bg-danger text-white hover:opacity-90",
+        variant === "danger" && "bg-ink text-paper hover:opacity-90",
         variant === "ghost" && "hover:bg-muted",
         className,
       )}
@@ -35,7 +35,7 @@ export function LinkButton({
     <a
       className={cx(
         "inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-sm font-medium transition",
-        variant === "primary" && "bg-ink text-paper hover:opacity-90",
+        variant === "primary" && "bg-accent text-on-accent hover:opacity-90",
         variant === "secondary" && "border border-line bg-paper hover:bg-muted",
         className,
       )}
@@ -66,7 +66,7 @@ export function Field({
       {children}
       {hint && !message && <p className="text-xs text-subtle">{hint}</p>}
       {message && (
-        <p className="text-xs text-danger" role="alert">
+        <p className="text-xs font-medium text-ink" role="alert">
           {message}
         </p>
       )}
@@ -149,10 +149,11 @@ export function Badge({
       className={cx(
         "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
         tone === "neutral" && "bg-muted text-ink",
-        tone === "good" && "bg-good/15 text-good",
-        tone === "warn" && "bg-warn/15 text-warn",
-        tone === "bad" && "bg-danger/15 text-danger",
-        tone === "info" && "bg-info/15 text-info",
+        // Three colours only: blue for good news, black for problems, outlines for warnings.
+        tone === "good" && "bg-accent text-on-accent",
+        tone === "info" && "bg-accent/35 text-ink",
+        tone === "warn" && "border border-ink text-ink",
+        tone === "bad" && "bg-ink text-paper",
       )}
     >
       {children}
@@ -172,9 +173,9 @@ export function Alert({
       role="alert"
       className={cx(
         "rounded-lg px-3 py-2 text-sm",
-        tone === "bad" && "bg-danger/10 text-danger",
-        tone === "good" && "bg-good/10 text-good",
-        tone === "info" && "bg-info/10 text-info",
+        tone === "bad" && "border border-ink font-medium text-ink",
+        tone === "good" && "border border-accent bg-accent/20 text-ink",
+        tone === "info" && "border border-line bg-muted text-ink",
       )}
     >
       {children}

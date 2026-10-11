@@ -73,8 +73,9 @@ const users: {
   name: string;
   role: Role;
   businessName?: string;
-  /** The account's one address (customers and merchants) */
+  /** The account's one address and its city (customers and merchants) */
   address?: string;
+  city?: string;
 }[] = [
   { email: "admin@sneakers.test", name: "Admin", role: "ADMIN" },
   {
@@ -82,32 +83,37 @@ const users: {
     name: "Kasun Perera",
     role: "MERCHANT",
     businessName: "Colombo Kicks",
-    address: "Colombo Kicks, 12 Galle Road, Colombo 03",
+    address: "Colombo Kicks, 12 Galle Road",
+    city: "Colombo 03",
   },
   {
     email: "sole@sneakers.test",
     name: "Dilani Fernando",
     role: "MERCHANT",
     businessName: "Sole Republic",
-    address: "Sole Republic, 45 Duplication Road, Colombo 04",
+    address: "Sole Republic, 45 Duplication Road",
+    city: "Colombo 04",
   },
   {
     email: "amaya@sneakers.test",
     name: "Amaya Silva",
     role: "BORROWER",
-    address: "No. 8, Flower Road, Colombo 07",
+    address: "No. 8, Flower Road",
+    city: "Colombo 07",
   },
   {
     email: "ravi@sneakers.test",
     name: "Ravi Jayasuriya",
     role: "BORROWER",
-    address: "21/3 Hill Street, Dehiwala",
+    address: "21/3 Hill Street",
+    city: "Dehiwala",
   },
   {
     email: "nimal@sneakers.test",
     name: "Nimal Wickrama",
     role: "BORROWER",
-    address: "17 Temple Road, Nugegoda",
+    address: "17 Temple Road",
+    city: "Nugegoda",
   },
 ];
 
@@ -235,6 +241,7 @@ async function main() {
         passwordHash,
         phone: "+94 77 000 0000",
         address: u.address ?? null,
+        city: u.city ?? null,
         merchant: u.businessName
           ? {
               create: {
@@ -248,9 +255,13 @@ async function main() {
       include: { merchant: true },
     });
 
-    // Accounts seeded before addresses existed get theirs (never overwrites one set since).
-    if (u.address && !user.address) {
-      await db.user.update({ where: { id: user.id }, data: { address: u.address } });
+    // Sample accounts seeded before addresses (or cities) existed get theirs; an account
+    // that already has a city is left alone.
+    if (u.address && u.city && !user.city) {
+      await db.user.update({
+        where: { id: user.id },
+        data: { address: u.address, city: u.city },
+      });
     }
 
     // Borrowers start with tokens so they can book (1 token = 1 LKR).

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { RentalItemStatus } from "@/generated/prisma/client";
 import { D, toD } from "@/lib/decimal";
 import { bundleDailyCost, catchUpPhi, shownPrice } from "@/lib/pricing";
+import { fullAddress } from "@/lib/address";
 import { atEndOfLife, dayToDate } from "@/lib/wear-ledger";
 import { releaseInfo, shoeCurve } from "../catalogue/pricing";
 import { db } from "../db";
@@ -10,6 +11,7 @@ import { requestDelivery } from "../logistics/requests";
 import { flushEmails } from "../notify";
 import { type SettingsRow, getActiveSettings } from "../settings";
 import { WalletError, lockDeposit, walletBalance } from "../wallet";
+import { merchantAddress } from "./addresses";
 import { BookingError } from "./errors";
 import { asOfToday } from "./holdings";
 import { type PlanItem, loadPlanItems, planItems, replan, toPlanItem } from "./plan";
@@ -253,7 +255,7 @@ export async function checkout(
   if (borrower.role !== "BORROWER") throw new BookingError("Only borrowers can rent");
   if (borrower.locked) throw new BookingError("Your account is locked");
   // Pairs are delivered to, and collected from, the account's one address.
-  const deliveryAddress = borrower.address;
+  const deliveryAddress = fullAddress(borrower);
   if (!deliveryAddress) {
     throw new BookingError("Add your delivery address in your account before booking");
   }
@@ -290,17 +292,14 @@ export async function checkout(
           data: { status: "RESERVED" },
         });
         if (count === 0) throw new BookingError(`${line.brand} ${line.model} was just taken`);
-        const shoe = await tx.shoe.findUniqueOrThrow({
-          where: { id: line.shoeId },
-          include: { merchant: { include: { user: true } } },
-        });
+        const shoe = await tx.shoe.findUniqueOrThrow({ where: { id: line.shoeId } });
         item = await tx.rentalItem.create({
           data: { rentalId: rental.id, shoeId: line.shoeId, status: "AWAITING_DELIVERY", ...terms },
         });
         await requestDelivery(tx, {
           type: "DELIVER",
           rentalItemId: item.id,
-          fromAddress: shoe.merchant.user.address!,
+          fromAddress: await merchantAddress(tx, shoe.merchantId),
           toAddress: deliveryAddress,
         });
       } else {

@@ -13,7 +13,11 @@ export async function updateAddressAction(
 ): Promise<AddressState> {
   const user = await requireUser("BORROWER", "MERCHANT");
   try {
-    await updateAddress(user.id, String(formData.get("address") ?? ""));
+    await updateAddress(
+      user.id,
+      String(formData.get("address") ?? ""),
+      String(formData.get("city") ?? ""),
+    );
   } catch (e) {
     if (e instanceof AuthError) return { error: e.message };
     throw e;

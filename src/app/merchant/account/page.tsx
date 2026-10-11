@@ -22,7 +22,7 @@ export default async function MerchantAccount() {
         )}
       </Card>
       <Card className="mb-4">
-        <AddressForm role="MERCHANT" current={user.address} />
+        <AddressForm role="MERCHANT" current={user.address} currentCity={user.city} />
       </Card>
       <Card>
         <PayoutForm current={merchant.payoutAccount ?? ""} />

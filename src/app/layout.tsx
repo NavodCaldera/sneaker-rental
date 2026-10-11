@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Sneaker Rental", template: "%s · Sneaker Rental" },
-  description: "Rent sneakers by the wear you actually use.",
+  title: { default: "Shoe Rental", template: "%s · Shoe Rental" },
+  description: "Rent shoes by the wear you actually use.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

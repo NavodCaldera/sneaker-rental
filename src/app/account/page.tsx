@@ -12,7 +12,7 @@ export default async function CustomerAccount() {
     <main className="max-w-xl">
       <PageHeader title="Account" description={`${user.name} · ${user.email}`} />
       <Card>
-        <AddressForm role="BORROWER" current={user.address} />
+        <AddressForm role="BORROWER" current={user.address} currentCity={user.city} />
       </Card>
     </main>
   );

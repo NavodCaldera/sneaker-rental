@@ -33,7 +33,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
   return (
     <main>
       <PageHeader
-        title="Browse sneakers"
+        title="Browse shoes"
         description="Prices are per wear-day and fall as a pair ages. Hold up to four pairs and the wear is split between them."
       />
       <form className="mb-6 flex flex-wrap items-end gap-2" role="search">

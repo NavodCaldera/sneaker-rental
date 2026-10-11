@@ -32,6 +32,8 @@ model User {
   /// admins). Customers: where pairs are delivered and collected. Merchants: where drivers
   /// pick pairs up and bring them back. Trips copy it when they are booked.
   address      String?
+  /// The town or city of that address, asked for separately at sign-up (both roles)
+  city         String?
   passwordHash String
   verified     Boolean  @default(false)
   /// Locked after a lost shoe (§6)

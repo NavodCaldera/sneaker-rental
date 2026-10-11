@@ -50,12 +50,14 @@ test("a new merchant can sign up", async ({ page }) => {
   await page.getByLabel("Email").fill(`merchant-${Date.now()}@test.local`);
   // The address field and its reason follow the account type.
   await expect(page.getByText(/Drivers pick up your shoes from this address/)).toBeVisible();
-  await page.getByLabel("Pickup and return address").fill("Test Shoes, 5 Station Road, Colombo 06");
+  await page.getByLabel("Pickup and return address").fill("Test Shoes, 5 Station Road");
+  await page.getByLabel("City").fill("Colombo 06");
   await page.getByLabel("Password", { exact: true }).fill("password123");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL("/merchant");
   await page.goto("/merchant/account");
   await expect(page.getByLabel("Pickup and return address")).toHaveValue(
-    "Test Shoes, 5 Station Road, Colombo 06",
+    "Test Shoes, 5 Station Road",
   );
+  await expect(page.getByLabel("City")).toHaveValue("Colombo 06");
 });

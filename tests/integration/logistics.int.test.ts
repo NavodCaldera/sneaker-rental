@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { fullAddress } from "@/lib/address";
 import { db } from "@/server/db";
 import { updateAddress } from "@/server/auth/service";
 import { checkout } from "@/server/booking/checkout";
@@ -43,14 +44,14 @@ describe("addresses: one per account", () => {
     const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
     await arrive(await deliveryFor(item.id, "DELIVER"), day(0));
     // The customer moves mid-rental: the collection comes from the new address.
-    await updateAddress(borrower.id, "99 New Lane, Kandy");
+    await updateAddress(borrower.id, "99 New Lane", "Kandy");
     await endRental(borrower.id, item.id, day(5));
     const collect = await deliveryFor(item.id, "COLLECT");
     expect([collect.fromAddress, collect.toAddress]).toEqual([
       "99 New Lane, Kandy",
-      merchant.address,
+      fullAddress(merchant),
     ]);
-    expect((await deliveryFor(item.id, "DELIVER")).toAddress).toBe(borrower.address);
+    expect((await deliveryFor(item.id, "DELIVER")).toAddress).toBe(fullAddress(borrower));
   });
 });
 
@@ -59,8 +60,8 @@ describe("manual provider: quote → book → courier pickup → drop-off", () =
     const { merchant, borrower, shoe, rental, item, delivery } = await bookedRental();
     expect(delivery.status).toBe("REQUESTED");
     // From the merchant's account address to the customer's.
-    expect(delivery.fromAddress).toBe(merchant.address);
-    expect(delivery.toAddress).toBe(borrower.address);
+    expect(delivery.fromAddress).toBe(fullAddress(merchant));
+    expect(delivery.toAddress).toBe(fullAddress(borrower));
 
     await setQuote(delivery.id, "450");
     const token = await bookDelivery(delivery.id, "admin", day(0));

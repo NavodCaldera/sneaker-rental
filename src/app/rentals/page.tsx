@@ -42,7 +42,7 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
       {rentals.length === 0 ? (
         <EmptyState title="No rentals yet">
           <Link href="/browse" className="underline">
-            Browse sneakers
+            Browse shoes
           </Link>
         </EmptyState>
       ) : (

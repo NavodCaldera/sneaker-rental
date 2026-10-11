@@ -66,9 +66,19 @@ export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWE
           autoComplete="street-address"
           rows={2}
           required
-          minLength={10}
+          minLength={5}
           maxLength={300}
-          placeholder="No. 12, Flower Road, Colombo 07"
+          placeholder="No. 12, Flower Road"
+        />
+      </Field>
+      <Field label="City" name="city" error={errors.city}>
+        <Input
+          name="city"
+          autoComplete="address-level2"
+          required
+          minLength={2}
+          maxLength={60}
+          placeholder="Colombo 07"
         />
       </Field>
       <Field label="Password" name="password" error={errors.password} hint="At least 8 characters">
