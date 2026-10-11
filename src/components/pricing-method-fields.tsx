@@ -40,16 +40,20 @@ export function PricingMethodFields({
           >
             ?
           </button>
+          {/* The gap above the box is padding, not margin, so the pointer can move from the
+              "?" onto the box without it closing. */}
           <span
             id={tipId}
             role="tooltip"
-            className="invisible absolute top-full left-0 z-30 mt-2 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-1.5 rounded-lg border border-line bg-paper p-3 text-xs font-normal text-ink opacity-0 shadow-lg transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
+            className="invisible absolute top-full left-0 z-30 w-80 max-w-[calc(100vw-2rem)] pt-2 text-xs font-normal text-ink opacity-0 transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
           >
-            <span className="font-medium">{PRICING_METHOD_HELP.title}</span>
-            <span>{PRICING_METHOD_HELP.intro}</span>
-            {PRICING_METHOD_OPTIONS.map((m) => (
-              <span key={m.value}>{PRICING_METHOD_HELP.reasons[m.value]}</span>
-            ))}
+            <span className="flex flex-col gap-1.5 rounded-lg border border-line bg-paper p-3 shadow-lg">
+              <span className="font-medium">{PRICING_METHOD_HELP.title}</span>
+              <span>{PRICING_METHOD_HELP.intro}</span>
+              {PRICING_METHOD_OPTIONS.map((m) => (
+                <span key={m.value}>{PRICING_METHOD_HELP.reasons[m.value]}</span>
+              ))}
+            </span>
           </span>
         </span>
       </legend>

@@ -87,6 +87,13 @@ test("a merchant picks exponential decay, can switch it as a draft, and it's fix
   await expect(help).toBeVisible();
   await expect(help).toContainText("Its price should fall the way its quality does.");
   await expect(help).toContainText("Choose exponential decay if the pair loses its fresh look");
+  // It stays open while the pointer moves from the "?" onto it.
+  const q = (await page
+    .getByRole("button", { name: "How to choose a pricing method" })
+    .boundingBox())!;
+  const box = (await help.boundingBox())!;
+  await page.mouse.move(q.x + q.width / 2, box.y + box.height / 2, { steps: 10 });
+  await expect(help).toBeVisible();
   await page.mouse.move(0, 0);
   await expect(help).toBeHidden();
   await page.getByRole("button", { name: "How to choose a pricing method" }).focus();
