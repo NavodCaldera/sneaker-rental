@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { PasswordInput } from "@/components/password-input";
 import { Alert, Button, Field, Input } from "@/components/ui";
 import { signInAction, type FormState } from "@/server/auth/actions";
 
@@ -13,7 +14,7 @@ export function SignInForm() {
         <Input name="email" type="email" autoComplete="email" required />
       </Field>
       <Field label="Password" name="password">
-        <Input name="password" type="password" autoComplete="current-password" required />
+        <PasswordInput name="password" autoComplete="current-password" required />
       </Field>
       <Button type="submit" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}

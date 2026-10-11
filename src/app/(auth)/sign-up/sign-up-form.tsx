@@ -1,5 +1,6 @@
 "use client";
 
+import { PasswordInput } from "@/components/password-input";
 import { useActionState, useState } from "react";
 import { Alert, Button, Field, Input, cx } from "@/components/ui";
 import { signUpAction, type FormState } from "@/server/auth/actions";
@@ -54,7 +55,7 @@ export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWE
         <Input name="phone" type="tel" autoComplete="tel" placeholder="+94 77 123 4567" />
       </Field>
       <Field label="Password" name="password" error={errors.password} hint="At least 8 characters">
-        <Input name="password" type="password" autoComplete="new-password" required minLength={8} />
+        <PasswordInput name="password" autoComplete="new-password" required minLength={8} />
       </Field>
       <Button type="submit" disabled={pending}>
         {pending ? "Creating account…" : "Create account"}

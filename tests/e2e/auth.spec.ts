@@ -26,9 +26,21 @@ test("signed-out visitors are sent to sign in", async ({ page }) => {
 test("wrong password shows an error", async ({ page }) => {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(ACCOUNTS.borrower);
-  await page.getByLabel("Password").fill("nope-nope");
+  await page.getByLabel("Password", { exact: true }).fill("nope-nope");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText("Email or password is incorrect")).toBeVisible();
+});
+
+test("the eye button shows and hides the password", async ({ page }) => {
+  await page.goto("/sign-in");
+  const password = page.getByLabel("Password", { exact: true });
+  await password.fill("secret-123");
+  await expect(password).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(password).toHaveAttribute("type", "text");
+  await expect(password).toHaveValue("secret-123");
+  await page.getByRole("button", { name: "Hide password" }).click();
+  await expect(password).toHaveAttribute("type", "password");
 });
 
 test("a new merchant can sign up", async ({ page }) => {
@@ -36,7 +48,7 @@ test("a new merchant can sign up", async ({ page }) => {
   await page.getByLabel("Full name").fill("Test Merchant");
   await page.getByLabel("Business name").fill("Test Shoes");
   await page.getByLabel("Email").fill(`merchant-${Date.now()}@test.local`);
-  await page.getByLabel("Password").fill("password123");
+  await page.getByLabel("Password", { exact: true }).fill("password123");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL("/merchant");
 });

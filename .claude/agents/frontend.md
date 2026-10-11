@@ -13,6 +13,7 @@ You build the user interface. Read `CLAUDE.md` and `docs/business-model.md` §1,
 
 ## Must deliver
 
+0. **Password fields** (sign-in, sign-up, and any later one) use `PasswordInput` (`src/components/password-input.tsx`): an eye button at the right of the field shows or hides what was typed ("Show password" / "Hide password", `aria-pressed`). Never a bare `type="password"` input. (Product owner, 2026-10-11.)
 1. **Merchant**
    - Sign-up, business verification and payout account.
    - Add shoe: 5 required photos (front, side, sole, inside, box), V, L (6–24 months, or the merchant's admin-granted maximum; say how to ask for longer), a **Condition** select (Brand new / Second-hand, no upgrades / Second-hand, upgraded; labels from `src/lib/shoe-condition.ts`), the wear already used shown and required only for second-hand pairs, and "What was upgraded" shown and required only for upgraded pairs, size, brand, model, category, pickup address. The pair's page shows "Condition when listed" (with the upgrades).
