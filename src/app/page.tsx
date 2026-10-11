@@ -2,9 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { type ShoeCardData, ShoeCard } from "@/components/shoe-card";
 import { ShoeRow, ShoeRowItem } from "@/components/shoe-row";
+import { SizeOptions } from "@/components/size-bits";
 import { D } from "@/lib/decimal";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
 import { conditionShort } from "@/lib/shoe-condition";
+import { sizeSummary } from "@/lib/shoe-size";
 import { EXPERIENCES, SHOP_AUDIENCES, parseShopAudience, styleLabel } from "@/lib/shoe-style";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { getCurrentUser } from "@/server/auth/session";
@@ -53,7 +55,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       id: shoe.id,
       brand: shoe.brand,
       model: shoe.model,
-      size: shoe.size,
+      size: sizeSummary(shoe),
       style: styleLabel(shoe),
       photoId: shoe.photos[0]?.id,
       badge: discounted
@@ -163,9 +165,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               className="-ml-1 bg-transparent text-sm text-subtle outline-none"
             >
               <option value="">Any size</option>
-              {facets.sizes.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
+              <SizeOptions sizes={facets.sizes} />
             </select>
           </label>
           <span aria-hidden="true" className="h-8 w-px bg-line" />
@@ -197,6 +197,12 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             </svg>
           </button>
         </form>
+        <p className="-mt-2 text-xs text-subtle">
+          UK, EU, US or cm: search in the size you know.{" "}
+          <Link href="/size-guide" className="underline">
+            Size guide
+          </Link>
+        </p>
       </div>
 
       {rows.length === 0 ? (

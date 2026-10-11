@@ -1,4 +1,5 @@
 import { db } from "@/server/db";
+import { shoeSizeFields } from "@/lib/shoe-size";
 import { hashPassword } from "@/server/auth/password";
 import type { Delivery, Role } from "@/generated/prisma/client";
 import { onDeliveryDelivered, onDeliveryPickedUp } from "@/server/booking/lifecycle";
@@ -130,7 +131,7 @@ export async function makeShoe(
       merchantId,
       brand: "Nike",
       model: "Pegasus 41",
-      size: "UK 9",
+      ...shoeSizeFields("MEN", "UK", "9"),
       audience: "MEN",
       experience: "Morning Run",
       value: overrides.value ?? "6000",

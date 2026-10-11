@@ -78,3 +78,28 @@ test("a new customer signs up with their age; merchants aren't asked", async ({ 
   await page.goto("/account");
   await expect(page.getByText("Age 26")).toBeVisible();
 });
+
+test("a customer who forgot their password resets it from the emailed link", async ({ page }) => {
+  await page.goto("/sign-in");
+  await page.getByRole("link", { name: "Forgot password?" }).click();
+  await expect(page).toHaveURL("/forgot-password");
+  await page.getByLabel("Email").fill(ACCOUNTS.borrower3);
+  await page.getByRole("button", { name: "Send reset link" }).click();
+  await expect(page.getByText(/has an account, we've emailed it a link/)).toBeVisible();
+
+  // Emails aren't really sent in development: the page shows the link instead.
+  await page.getByRole("link", { name: "Reset your password" }).click();
+  await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
+  const resetUrl = page.url();
+  // Set it back to the seed password so other tests can still sign in.
+  await page.getByLabel("New password").fill("password123");
+  await page.getByRole("button", { name: "Save new password" }).click();
+  await expect(page).toHaveURL("/sign-in?reset=done");
+  await expect(page.getByText("Your password has been changed")).toBeVisible();
+  await signIn(page, ACCOUNTS.borrower3);
+  await expect(page).toHaveURL("/browse");
+
+  // The link works once.
+  await page.goto(resetUrl);
+  await expect(page.getByText("This link has expired or was already used.")).toBeVisible();
+});

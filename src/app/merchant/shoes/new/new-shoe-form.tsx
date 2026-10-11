@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { CurveChart } from "@/components/curve-chart";
+import { SizeFields } from "@/components/size-fields";
 import { StyleFields } from "@/components/style-fields";
 import { Alert, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
+import type { Audience } from "@/generated/prisma/enums";
 import { formatLKR } from "@/lib/format";
 import { SHOE_CONDITIONS } from "@/lib/shoe-condition";
 import type { CurvePreview } from "@/server/catalogue/pricing";
@@ -33,6 +35,7 @@ export function NewShoeForm({
   const [value, setValue] = useState("");
   const [lifespan, setLifespan] = useState("365");
   const [condition, setCondition] = useState("NEW");
+  const [audience, setAudience] = useState<Audience | "">("");
   const preview = useCurvePreview(value, lifespan);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
@@ -47,11 +50,8 @@ export function NewShoeForm({
           <Field label="Model" name="model" error={errors.model}>
             <Input name="model" required />
           </Field>
-          <Field label="Size" name="size" error={errors.size}>
-            <Input name="size" placeholder="UK 9" required />
-          </Field>
-          <div aria-hidden="true" className="hidden sm:block" />
-          <StyleFields errors={errors} />
+          <StyleFields errors={errors} onAudienceChange={setAudience} />
+          <SizeFields audience={audience} errors={errors} />
           <div className="sm:col-span-2">
             <Field label="Description (optional)" name="description" error={errors.description}>
               <Textarea name="description" maxLength={1000} />

@@ -3,6 +3,15 @@ import { z } from "zod";
 import { D } from "@/lib/decimal";
 import type { Audience, PhotoKind, Prisma } from "@/generated/prisma/client";
 import { validateListing } from "@/lib/pricing";
+import {
+  SIZE_COLUMN,
+  SIZE_KEY,
+  type SearchSystem,
+  formatSize,
+  parseSize,
+  shoeSizeFields,
+  sortSizes,
+} from "@/lib/shoe-size";
 import { EXPERIENCES, LISTING_AUDIENCES, audiencesFor } from "@/lib/shoe-style";
 import { db } from "../db";
 import { type SettingsRow, getActiveSettings } from "../settings";
@@ -20,6 +29,8 @@ export const LISTING_PHOTOS: { kind: PhotoKind; label: string }[] = [
 
 const MONEY_FORMAT = /^\d+(\.\d{1,2})?$/;
 const WEAR_FORMAT = /^\d+(\.\d{1,2})?$/;
+/** A label size: whole or half sizes */
+const SIZE_FORMAT = /^\d{1,2}(\.[05])?$/;
 
 const AUDIENCE_VALUES = LISTING_AUDIENCES.map((a) => a.value) as [Audience, ...Audience[]];
 
@@ -45,7 +56,15 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
     .object({
       brand: z.string().trim().min(1, "Enter the brand").max(60),
       model: z.string().trim().min(1, "Enter the model").max(80),
-      size: z.string().trim().min(1, "Enter the size").max(20),
+      /** The size on the pair's label: its system and number */
+      sizeSystem: z.enum(["UK", "EU", "US"], { error: "Choose UK, EU or US" }),
+      size: z
+        .string()
+        .trim()
+        .regex(SIZE_FORMAT, "Enter the number on the label, e.g. 9 or 9.5")
+        .refine((v) => !SIZE_FORMAT.test(v) || (Number(v) >= 1 && Number(v) <= 60), {
+          message: "Enter a size from 1 to 60",
+        }),
       audience: z.enum(AUDIENCE_VALUES, { error: "Choose who it's for" }),
       experience: z.string({ error: "Choose the experience" }).trim(),
       description: z.string().trim().max(1000).optional().or(z.literal("")),
@@ -173,9 +192,12 @@ export async function createShoe(
   for (const { kind } of LISTING_PHOTOS) {
     saved.push({ kind, ...(await savePhoto(photos[kind]!, `shoes/${merchantId}`)) });
   }
+  const { size, sizeSystem, ...rest } = input;
   return db.shoe.create({
     data: {
-      ...input,
+      ...rest,
+      // The label size, and the same size in every system from the chart (src/lib/shoe-size.ts)
+      ...shoeSizeFields(input.audience, sizeSystem, size),
       description: input.description || null,
       upgradeNotes: input.condition === "SECOND_HAND_UPGRADED" ? input.upgradeNotes || null : null,
       wear: input.initialWear,
@@ -196,12 +218,20 @@ async function ownShoe(merchantId: string, shoeId: string) {
   return shoe;
 }
 
-/** Who a pair is for and its experience: the merchant can change these at any time. */
+/**
+ * Who a pair is for and its experience: the merchant can change these at any time. The label
+ * size stays; its other systems are read again from the new audience's chart.
+ */
 export async function updateShoeStyle(merchantId: string, shoeId: string, input: StyleInput) {
-  await ownShoe(merchantId, shoeId);
+  const shoe = await ownShoe(merchantId, shoeId);
+  const listed = shoe[SIZE_COLUMN[shoe.sizeSystem]]!.toString();
   return db.shoe.update({
     where: { id: shoeId },
-    data: { audience: input.audience, experience: input.experience },
+    data: {
+      audience: input.audience,
+      experience: input.experience,
+      ...shoeSizeFields(input.audience, shoe.sizeSystem, listed),
+    },
   });
 }
 
@@ -291,6 +321,7 @@ function browsableWhere(): Prisma.ShoeWhereInput {
 }
 
 export type BrowseFilters = {
+  /** A size in any system, e.g. "UK 6", "EU 39", "24.5 cm": matches pairs listed in any system */
   size?: string;
   brand?: string;
   /** A shopping tab: Men and Women include Unisex pairs */
@@ -302,7 +333,7 @@ export type BrowseFilters = {
 export async function browseShoes(filters: BrowseFilters) {
   const where: Prisma.ShoeWhereInput = {
     AND: [browsableWhere()],
-    ...(filters.size && { size: filters.size }),
+    ...sizeWhere(filters.size),
     ...(filters.brand && { brand: filters.brand }),
     ...(filters.audience && { audience: { in: audiencesFor(filters.audience) } }),
     ...(filters.experience && { experience: filters.experience }),
@@ -324,16 +355,33 @@ export async function browseShoes(filters: BrowseFilters) {
   });
 }
 
+/** A pair matches a size when it is that size in that system, however it was listed. */
+function sizeWhere(text: string | undefined): Prisma.ShoeWhereInput {
+  if (!text) return {};
+  const size = parseSize(text);
+  // An unreadable size matches nothing rather than everything.
+  if (!size) return { id: { in: [] } };
+  return { [SIZE_COLUMN[size.system]]: size.value };
+}
+
 export async function browseFacets() {
   const shoes = await db.shoe.findMany({
     where: browsableWhere(),
-    select: { size: true, brand: true },
+    select: { brand: true, sizeUk: true, sizeEu: true, sizeUs: true, sizeCm: true },
   });
-  const uniq = (xs: string[]) =>
-    [...new Set(xs)].sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+  const sizesIn = (system: SearchSystem) =>
+    sortSizes(
+      shoes.flatMap((s) => {
+        const v = s[SIZE_COLUMN[system]];
+        return v === null ? [] : [v.toString()];
+      }),
+    ).map((v) => formatSize(system, v));
   return {
-    sizes: uniq(shoes.map((s) => s.size)),
-    brands: uniq(shoes.map((s) => s.brand)),
+    /** The sizes on offer in each system, smallest first ("UK 6", …, "24.5 cm") */
+    sizes: Object.fromEntries(
+      (Object.keys(SIZE_KEY) as SearchSystem[]).map((sys) => [sys, sizesIn(sys)]),
+    ) as Record<SearchSystem, string[]>,
+    brands: [...new Set(shoes.map((s) => s.brand))].sort((a, b) => a.localeCompare(b)),
   };
 }
 

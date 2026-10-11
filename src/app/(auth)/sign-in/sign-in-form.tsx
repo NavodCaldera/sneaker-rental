@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { PasswordInput } from "@/components/password-input";
 import { Alert, Button, Field, Input } from "@/components/ui";
@@ -16,6 +17,9 @@ export function SignInForm() {
       <Field label="Password" name="password">
         <PasswordInput name="password" autoComplete="current-password" required />
       </Field>
+      <Link href="/forgot-password" className="-mt-2 self-end text-sm underline">
+        Forgot password?
+      </Link>
       <Button type="submit" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>

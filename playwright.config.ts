@@ -38,6 +38,11 @@ export default defineConfig({
     // Never reuse: an existing server on this port could point at the dev database.
     reuseExistingServer: false,
     timeout: 180_000,
-    env: { DATABASE_URL: TEST_DATABASE_URL, STORAGE_DIR: ".data/test-uploads" },
+    // Links in emails (password reset) point at this server.
+    env: {
+      DATABASE_URL: TEST_DATABASE_URL,
+      STORAGE_DIR: ".data/test-uploads",
+      APP_URL: `http://localhost:${PORT}`,
+    },
   },
 });

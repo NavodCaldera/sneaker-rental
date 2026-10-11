@@ -13,10 +13,13 @@ export function StyleFields({
   errors = {},
   defaultAudience,
   defaultExperience,
+  onAudienceChange,
 }: {
   errors?: Record<string, string[] | undefined>;
   defaultAudience?: Audience;
   defaultExperience?: string;
+  /** Tells the form who it's for (the size fields use that audience's chart) */
+  onAudienceChange?: (audience: Audience) => void;
 }) {
   const [audience, setAudience] = useState<Audience | "">(defaultAudience ?? "");
   const [experience, setExperience] = useState(defaultExperience ?? "");
@@ -31,6 +34,7 @@ export function StyleFields({
           onChange={(e) => {
             const next = e.target.value as Audience;
             setAudience(next);
+            onAudienceChange?.(next);
             if (!EXPERIENCES[next].includes(experience)) setExperience("");
           }}
         >
