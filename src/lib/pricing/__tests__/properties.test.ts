@@ -78,10 +78,27 @@ describe("charges", () => {
     expect(targetIncome(6000, S).eq(7200)).toBe(true);
   });
 
-  it("clamps wear at L and stops earning past it", () => {
-    expect(incomeBetween(p, 300, 500).income.eq(incomeBetween(p, 300, 365).income)).toBe(true);
-    expect(priceAt(p, 366).eq(0)).toBe(true);
-    expect(incomeBetween(p, 365, 400).income.eq(0)).toBe(true);
+  it("reference engine (chargePastLife off): clamps wear at L and stops earning past it", () => {
+    const ref = curveParams(6000, 365, { ...S, chargePastLife: false });
+    expect(incomeBetween(ref, 300, 500).income.eq(incomeBetween(ref, 300, 365).income)).toBe(true);
+    expect(priceAt(ref, 366).eq(0)).toBe(true);
+    expect(incomeBetween(ref, 365, 400).income.eq(0)).toBe(true);
+  });
+
+  it("past L every wear-day costs the end-of-life price P(L) = K · q, without limit", () => {
+    expect(p.pastLife).toBe(true);
+    const endPrice = priceAt(p, 365);
+    expect(endPrice.eq(p.K.times(p.q))).toBe(true);
+    expect(priceAt(p, 400).eq(endPrice)).toBe(true);
+    expect(incomeBetween(p, 365, 385).income.eq(endPrice.times(20))).toBe(true);
+    // Straddling L: the curve up to L, then P(L) a day; R is exceeded.
+    const straddle = incomeBetween(p, 364, 384).income;
+    expect(straddle.eq(incomeBetween(p, 364, 365).income.plus(endPrice.times(19)))).toBe(true);
+    expect(incomeBetween(p, 0, 400).income.gt(p.R)).toBe(true);
+    // Discounts and φ apply as before.
+    expect(incomeBetween(p, 365, 375, "0.10").income.eq(endPrice.times(10).times("0.9"))).toBe(
+      true,
+    );
   });
 
   it("discounts never stack: the next item starts from the undiscounted curve", () => {

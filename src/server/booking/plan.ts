@@ -134,7 +134,7 @@ export function planItems(items: PlanItem[], shoes: Map<string, PlanShoe>, today
     if (!shoe) throw new Error(`Shoe ${shoeId} missing from the plan`);
     const { params, settings, collected } = shoeCurve(shoe);
     const added = list.map((i) => wearAdded(holdings.get(i.borrowerId)!, i.id));
-    const chain = chainWear(toD(shoe.wear), added, shoe.lifespanDays);
+    const chain = chainWear(toD(shoe.wear), added, shoe.lifespanDays, !params.pastLife);
     list.forEach((i, k) => {
       const { start, end } = chain[k];
       const phi = settings.catchUp ? catchUpPhi(params, collected, start) : i.phi;

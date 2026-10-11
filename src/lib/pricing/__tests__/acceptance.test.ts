@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type Decimal from "decimal.js";
 import { D } from "../../decimal";
 import {
-  DEFAULT_PRICING_SETTINGS as S,
+  DEFAULT_PRICING_SETTINGS,
   IQ,
   type PricingSettings,
   breakEvenIdleDays,
@@ -39,6 +39,16 @@ function near(actual: Decimal, expected: Decimal.Value, tol: Decimal.Value = "1e
   const diff = actual.minus(expected).abs();
   expect(diff.lte(tol), `${msg} ${actual.toFixed(8)} ≠ ${expected} (±${tol})`).toBe(true);
 }
+
+/**
+ * The reference engine: wear and rent stop at L. Its expected values are the contract, so
+ * these scenarios pin `chargePastLife` off. The product charges wear past L at P(L)
+ * (pricing-spec.md product decision 8); that is tested separately below, as a difference
+ * from these same scenarios.
+ */
+const S: PricingSettings = { ...DEFAULT_PRICING_SETTINGS, chargePastLife: false };
+/** Launch settings: wear past L charged at the end-of-life price. */
+const PAST_LIFE: PricingSettings = DEFAULT_PRICING_SETTINGS;
 
 const MAX = { maxPairs: 4 };
 /** Merchant targets of the shoes made in each test, for the merchant-first split. */
@@ -223,6 +233,40 @@ describe("ledger scenarios", () => {
     expect(results.get("d")!.wearEnd.eq(365)).toBe(true);
     expect(results.get("d")!.uncharged.eq("2.5")).toBe(true);
     near(results.get("a")!.wearAdded, "19.1667", "1e-4", "A wear");
+  });
+
+  it("past the lifespan (decision 8): the same problem charges D's 2.5 extra wear-days at P(L)", () => {
+    const shoes = shoesMap([
+      newShoe("A", 6000, 365, 0, PAST_LIFE),
+      newShoe("B", 7500, 365, 40, PAST_LIFE),
+      newShoe("C", 9000, 365, "120.5", PAST_LIFE),
+      newShoe("D", 5000, 365, 360, PAST_LIFE),
+      newShoe("E", 8000, 365, 0, PAST_LIFE),
+    ]);
+    const items = [
+      item("a", "cust", "A", 1, 60),
+      item("b", "cust", "B", 1, 35),
+      item("c", "cust", "C", 11, 75),
+      item("d", "cust", "D", 21, 50),
+      item("e", "cust", "E", 36, 90),
+    ];
+    const { results } = runLedger(items, shoes, 1, 90, MAX);
+    const endPriceD = priceAt(curveParams(5000, 365, PAST_LIFE), 365);
+    const extra = endPriceD.times("2.5");
+    // Pairs that never reach L are unchanged; D keeps gaining wear and pays P(L) for it.
+    for (const [id, v] of Object.entries({
+      a: "554.0527",
+      b: "434.6162",
+      c: "865.6896",
+      e: "1139.7117",
+    }))
+      near(results.get(id)!.amount, v, "1e-4", id);
+    near(results.get("d")!.amount, extra.plus("36.2029").toString(), "1e-4", "d");
+    expect(results.get("d")!.wearEnd.eq("367.5")).toBe(true);
+    expect(results.get("d")!.uncharged.eq(0)).toBe(true);
+    expect(endPriceD.eq(curveParams(5000, 365, PAST_LIFE).K.times("0.30"))).toBe(true);
+    const inv = buildInvoice(results.values(), owedFor);
+    near(inv.totalUnrounded, extra.plus("3030.2730").toString(), "1e-4", "total");
   });
 
   it("hard test problem: 10 borrowers, 4 shoes, 800 days; every shoe collects exactly R", () => {

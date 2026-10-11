@@ -12,7 +12,7 @@ import { D } from "../decimal";
 import {
   type CurveParams,
   type DiscountFunding,
-  IQ,
+  rentIntegral,
   assertDiscount,
   catchUpPhi,
   chargedAmounts,
@@ -144,10 +144,12 @@ export function runLedger(
         }
         const share = new D(1).div(n);
         const before = shoe.wear;
-        const dw = D.min(share, c.L.minus(before));
+        // Past L, wear keeps counting (and is charged at P(L)) only if the shoe's settings
+        // say so; otherwise the pair gains nothing and the share is reported as uncharged.
+        const dw = c.pastLife ? share : D.min(share, D.max(0, c.L.minus(before)));
         const after = before.plus(dw);
-        const iqBefore = iqNow.get(shoe.id) ?? IQ(c, before);
-        const iqAfter = IQ(c, after);
+        const iqBefore = iqNow.get(shoe.id) ?? rentIntegral(c, before);
+        const iqAfter = rentIntegral(c, after);
         iqNow.set(shoe.id, iqAfter);
         const gross = r.phi.times(c.K).times(iqAfter.minus(iqBefore));
         const amount = new D(1).minus(r.discount).times(gross);

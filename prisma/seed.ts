@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS = {
   disputeWindowDays: 3,
   freeReturnHours: 24,
   catchUpEnabled: false, // OPEN DECISION
+  chargePastLife: true, // wear past L charged at the end-of-life price
 };
 
 const PASSWORD = "password123";

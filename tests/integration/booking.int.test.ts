@@ -9,7 +9,7 @@ import {
   scheduleEarlyReturn,
 } from "@/server/booking/lifecycle";
 import { D } from "@/lib/decimal";
-import { DEFAULT_PRICING_SETTINGS, curveParams, incomeBetween } from "@/lib/pricing";
+import { DEFAULT_PRICING_SETTINGS, curveParams, incomeBetween, priceAt } from "@/lib/pricing";
 import { browseShoes } from "@/server/catalogue";
 import { rentalLocked, walletBalance } from "@/server/wallet";
 import { colomboDay, dateToDay } from "@/lib/wear-ledger";
@@ -273,10 +273,10 @@ describe("rules", () => {
     );
     const itemA = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rentalA.id } });
     await arrive(await deliveryFor(itemA.id, "DELIVER"), day(0));
-    // A's term commits the whole life (capped at L), so nobody can reserve it next.
+    // A's term commits the whole life and 10 days past it, so nobody can reserve it next.
     expect(
       (await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).committedWear.toString(),
-    ).toBe("60");
+    ).toBe("70");
     await expect(
       checkout(b.id, [shoe.id], { deliveryAddress: "B street", plannedDays: 5 }, day(65)),
     ).rejects.toThrow(/end of life/);
@@ -290,8 +290,14 @@ describe("rules", () => {
     await recordCondition(merchant.id, { itemId: itemA.id, grade: "C", photos: photos() }, day(71));
 
     const closed = await db.rentalItem.findUniqueOrThrow({ where: { id: itemA.id } });
-    expect(closed.wearEnd!.toString()).toBe("60"); // capped at L
-    expect(closed.charge!.toFixed(2)).toBe("7200.00"); // the whole of R
+    expect(closed.wearEnd!.toString()).toBe("70"); // 10 wear-days past L
+    // The whole of R, plus 10 days at the end-of-life price P(L).
+    const p60 = curveParams(6000, 60, DEFAULT_PRICING_SETTINGS);
+    expect(closed.charge!.toFixed(2)).toBe(
+      priceAt(p60, 60).times(10).plus(7200).toDecimalPlaces(2).toFixed(2),
+    );
+    // Merchant first: the merchant gets their 6,600; everything past it is the platform's.
+    expect(closed.merchantShare!.toFixed(2)).toBe("6600.00");
     await markCleaned(merchantId, shoe.id);
     expect((await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).status).toBe("RETIRED");
   });
@@ -486,7 +492,7 @@ describe("merchant first and free waiting days", () => {
     const shares: string[][] = [];
     for (const [start, end] of [
       [0, 40],
-      [50, 71],
+      [50, 70],
     ]) {
       const b = await makeUser("BORROWER");
       const rental = await checkout(

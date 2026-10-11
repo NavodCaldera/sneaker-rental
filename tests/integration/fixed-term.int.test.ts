@@ -4,6 +4,7 @@ import {
   chargedAmounts,
   curveParams,
   incomeBetween,
+  priceAt,
 } from "@/lib/pricing";
 import { colomboDay, dateToDay } from "@/lib/wear-ledger";
 import { checkout } from "@/server/booking/checkout";
@@ -329,7 +330,7 @@ describe("extension", () => {
 });
 
 describe("lifespan (pricing-spec.md §6)", () => {
-  it("a pair with any life left can be booked for any term; once it reaches L nobody can book it", async () => {
+  it("a pair with any life left can be booked for any term; days past L cost P(L); then nobody can book it", async () => {
     const { merchantId, borrower } = await setup();
     const next = await makeUser("BORROWER");
     // 364 of 365 wear-days used.
@@ -341,14 +342,13 @@ describe("lifespan (pricing-spec.md §6)", () => {
       day(-1),
     );
     const it1 = await item(rental.id);
-    // Wear and rent stop at L: 1 wear-day charged, the other 19 days are free.
-    expect(it1.plannedWearEnd!.toString()).toBe("365");
+    // 1 wear-day on the curve, then 19 days at the end-of-life price P(L), past R.
+    expect(it1.plannedWearEnd!.toString()).toBe("384");
+    const expected = incomeBetween(p, 364, 365).income.plus(priceAt(p, 365).times(19));
     expect(it1.rentPaid.toFixed(2)).toBe(
-      chargedAmounts(incomeBetween(p, 364, 365).income, { merchantOutstanding: 0 }).charge.toFixed(
-        2,
-      ),
+      chargedAmounts(expected, { merchantOutstanding: 0 }).charge.toFixed(2),
     );
-    expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("365");
+    expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("384");
     await arrive(await deliveryFor(it1.id, "DELIVER"), day(0));
     await expect(
       checkout(next.id, [shoe.id], { deliveryAddress: "Next", plannedDays: 5 }, day(15)),

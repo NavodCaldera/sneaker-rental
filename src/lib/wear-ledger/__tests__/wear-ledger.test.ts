@@ -136,7 +136,7 @@ describe("planned days", () => {
     expect(plannedLastDay(5, 1)).toBe(5);
   });
 
-  it("chains a pair's open items: each starts where the last one's plan ends, capped at L", () => {
+  it("chains a pair's open items: each starts where the last one's plan ends, capped at L unless wear past L is charged", () => {
     const chain = chainWear("0", ["90", "45"], 365);
     expect(chain.map((c) => [c.start.toString(), c.end.toString()])).toEqual([
       ["0", "90"],
@@ -145,6 +145,10 @@ describe("planned days", () => {
     const capped = chainWear("300", ["50", "30"], 365);
     expect(capped.map((c) => c.end.toString())).toEqual(["350", "365"]);
     expect(chainWear("10", [], 365)).toEqual([]);
+    // Wear past L charged (chargePastLife): no cap, so the chain keeps counting.
+    const uncapped = chainWear("300", ["50", "30"], 365, false);
+    expect(uncapped.map((c) => c.end.toString())).toEqual(["350", "380"]);
+    expect(wearEnd("360", "10", 365, false).eq(370)).toBe(true);
   });
 });
 

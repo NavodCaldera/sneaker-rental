@@ -104,6 +104,7 @@ describe("pricing settings", () => {
         disputeWindowDays: 3,
         freeReturnHours: 24,
         catchUpEnabled: false,
+        chargePastLife: true,
       },
       admin.id,
     );

@@ -16,7 +16,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 5. **Tokens instead of card holds** (§6). Borrowers keep a token balance (1 token = 1 LKR) bought through the gateway. Each pair's merchant value is locked as its own deposit, at full value, for as long as the pair is out; only tokens above the deposits can be withdrawn as money.
 6. **Fixed-term, prepaid rentals** (§6, §6a). The borrower books a term (e.g. 90 days) and pays its rent from their tokens at booking. The pair's wear is committed at once: a new pair booked for 90 days shows 90/365 used, and is free again after the term. Day 1 is the day after delivery (the delivery day is free). Extending is paid upfront; on the day after the term ends a driver collects the pair, and waiting for the driver is free.
 7. **Early return needs 10 days' notice** (§6a). The borrower picks a new last day at least `earlyReturnNoticeDays` (10) ahead; the term is shortened to it and the unused days are refunded at once. Only a wrong-size return within `freeReturnHours` of delivery can end at once. A borrower who reserved the pair next and whose price goes up as a result is told in the app and by email, and has `offerResponseHours` (24) to accept (§6a).
-8. **Lifespan cap at booking** (§6). A pair with any life left (`committedWear` < L) can be booked for any term; wear and rent stop at L, so days past L are free. Once a pair's committed wear reaches L nobody can book it.
+8. **Booking up to the lifespan, charging past it** (§3, §6). A pair with any life left (`committedWear` < L) can be booked for any term. Past L, wear keeps counting and every further wear-day is charged at the end-of-life price P(L) = K · q until the pair is returned, even if the pair then collects more than its target R (`chargePastLife`, on). Once a pair's committed wear reaches L nobody can book it. The reference engine stopped wear and rent at L; its acceptance scenarios still run with `chargePastLife` off.
 9. **Trips are not handled by us.** Whoever receives the pair pays the driver directly in the ride-hailing app: the borrower for deliveries, the next borrower for handoffs, the merchant for returns. No trip fee or booking fee ever goes through tokens.
 
 ---
@@ -41,6 +41,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | `offerResponseHours` | | 24 | Time a reserved-next borrower has to accept a higher price after an early return, before the reservation is cancelled (OPEN DECISION) |
 | `earlyReturnNoticeDays` | | 10 | An early return is asked for at least this many days before the new last day |
 | `catchUpEnabled` (`catchUp`) | | false | Option B: spread past discounts over the remaining life (OPEN DECISION) |
+| `chargePastLife` | | true | Past L, keep counting wear and charge P(L) per wear-day until the pair is returned, even past R. Off = the reference engine (wear and rent stop at L). Part of each shoe's settings snapshot |
 | `capitalRate` | r | 0.12 | Idle-cost test only |
 | `holdCost` (`holdCostPerDay`) | h | 0 | Idle-cost test only, LKR per idle day |
 
@@ -120,6 +121,14 @@ Charge w0 → w1      (1 − d) × φ × K × [IQ(w1) − IQ(w0)]
 
 - The listing page shows `P_shown` at the shoe's current wear (φ from the shoe's settings), plus wear used and % of life left.
 - **The next renter always starts from the curve price `P(w_end)`**, never from the previous renter's discounted price. Discounts never stack.
+- **Past the lifespan** (`chargePastLife`): P(w) = P(L) = K · q for every w > L, so rent is charged on `rentIntegral(w) = IQ(w) + q · max(0, w − L)`:
+
+```
+Charge w0 → w1   (1 − d) × φ × K × [rentIntegral(w1) − rentIntegral(w0)]
+                 = the curve up to L, plus (1 − d) × φ × P(L) per wear-day past L
+```
+
+  A 6,000 LKR / 365-day pair costs 8.68 LKR per wear-day past L. Its lifetime income then exceeds R; merchant first (§7) means the merchant still gets exactly their target and everything above it goes to the platform. Lost-pair and buy-out values (`remainingValue`) stay 0 past L.
 
 ---
 
@@ -135,7 +144,7 @@ n(t)   = number of pairs that borrower holds on day t        (1 to maxPairs)
 charge = (1 − d) × φ × K × [IQ(w + δ) − IQ(w)]               for that pair, that day
 ```
 
-- A pair at end of life (wear = L) gains nothing and is charged nothing, but **still counts in n** while held. The unused share is reported as `uncharged`.
+- A pair past its lifespan (wear ≥ L) keeps gaining its 1/n share each day and is charged P(L) per wear-day (`chargePastLife`). It **counts in n** like any held pair. In the reference engine (`chargePastLife` off) it gains nothing and is charged nothing, still counts in n, and the unused share is reported as `uncharged`. `wearEnd` and `chainWear` cap at L only when `chargePastLife` is off.
 - Holding a pair without wearing it still adds wear-days. That is by design (§6).
 - Different borrowers never affect each other: n is per borrower, across all their rentals.
 - A shoe is in only one item on any day (no overlapping items for the same shoe).
@@ -147,7 +156,7 @@ Accruing day by day gives exactly the same total as one formula per item, becaus
 - `runLedger(items, shoes, fromDay, toDay, { maxPairs })` (`src/lib/wear-ledger/accrual.ts`) is the reference daily accrual. It runs booking estimates and the acceptance scenarios.
 - The app closes an item with the phase-based `wearAdded(holdings, itemId)`, which sums 1/n over the borrower's phases (maximal day ranges with a constant set of held items). Then `w_end = min(w_start + wearAdded, L)` and the pricing engine charges `w_start → w_end`. A unit test checks `wearAdded` against `runLedger` day for day.
 - The reference also recommends a nightly accrual job writing one `wear_ledger` row per held item per day. It is not needed: rent is paid for the whole term at booking and wear is committed upfront (§6a), so nothing accrues day by day. The daily job only ends terms and expires price offers (§6a).
-- `chainWear(settledWear, added[], L)` chains the open items on one pair: each starts at the previous one's planned end, capped at L.
+- `chainWear(settledWear, added[], L)` chains the open items on one pair: each starts at the previous one's planned end (capped at L only when `chargePastLife` is off).
 
 ---
 
@@ -172,7 +181,7 @@ A shoe is never held by two items on the same day. The item **closes** (wear, ch
 ## 6. Booking: prepaid term, deposits and tokens
 
 1. The borrower picks pairs and a term (`plannedDays`, 1–365). Reject more than `maxPairsPerBundle` held at once (counting pairs already held, awaiting delivery or reserved next).
-2. **Lifespan:** a pair can be booked while its `committedWear` < L, for any term. Wear and rent stop at L: a 365-day pair with 364 wear-days used can be booked for 20 days, pays for 1 wear-day, and the other 19 days are free. Its committed wear is then L, so nobody can book or reserve it again; it is retired when it comes back (§9).
+2. **Lifespan:** a pair can be booked while its `committedWear` < L, for any term. A 365-day pair with 364 wear-days used can be booked for 20 days: it pays 1 wear-day on the curve and 19 wear-days at P(L) (8.68 LKR for a 6,000 LKR pair), and its committed wear becomes 384. Nobody can book or reserve it again; it is retired when it comes back (§9).
 3. The quote plans the term (§6a) on copies of the pairs: each new pair from its expected first day for `plannedDays`, counting the borrower's other bookings over their own planned terms. A free pair's expected first day is tomorrow (delivered today at the earliest); a held pair's is the day after the current holder's term ends, plus a day for the handoff. Each pair starts from its `committedWear`.
 4. In the booking transaction: lock **each pair's merchant value** as its own deposit (`lockDeposit`, one `LOCK` per item) and charge **the planned rent** for the term (`rentPaid`). Plan again, so the borrower's other bookings are settled to the new overlap (§6a). If the borrower's available tokens would go below zero, nothing is booked and the bundle page shows how much to top up. Example: 2 pairs worth 6,000 each with 600 rent need 12,600 tokens available; 12,000 stays locked (6,000 per pair) and 600 is spent.
 5. Each item's discount is fixed at booking, and with catch-up on, φ is fixed at the start of the item from the shoe's state before that rental. Neither changes during the rental.
@@ -289,7 +298,7 @@ For a 90-day term (days 1–90): hidden from Browse until day 81, then 0.5% off 
 | Extension | Before the term ends, if nobody has reserved the pair next: add days, replan, charge the extra rent upfront (§6a). |
 | Term ends | On `termEndDay + 1` the daily job ends the holding with `lastDay = termEndDay`; a driver collects the pair or hands it to the next borrower. Waiting for the driver is free. |
 | Direct handoff | The giver's last day is the day they ended the rental (or their term's last day); the receiver's day 1 is the day after delivery (or after the giver's last day, if later). Waiting days in between are free. |
-| Shoe reaches L | No more wear or charge; the item stays open until returned and still counts in n. A pair whose committed wear has reached L can't be booked or reserved (§6); it is retired when the merchant marks it cleaned. |
+| Shoe reaches L | Wear keeps counting and each further wear-day is charged P(L) until the pair is returned, even past R (`chargePastLife`; the reference engine stopped at L). A pair whose committed wear has reached L can't be booked or reserved (§6); it is retired when the merchant marks it cleaned. |
 | Lost shoe | Charge `remainingValue(p, w, lifetimeCollected, settings)`: K × (A − IQ(w)), or R − lifetimeCollected with catch-up. Split merchant first (a new pair: 7,200 → merchant 6,600, platform 600); taken from that pair's deposit, then the free balance (which may go negative), never from another pair's deposit. The prepaid rent for the term is refunded and any reservation of the pair cancelled. |
 | Refund (upheld dispute) | Up to the item's charge. Up to that item's merchant share comes off the merchant's payout and `merchantCollected`, so later rentals pay the merchant back first; the rest is the platform's cost. |
 | Buy it now (Phase 2) | Price = `remainingValue`, same as a lost shoe. Close the item first, then sell. |
@@ -329,6 +338,7 @@ All in `src/lib/pricing/__tests__/acceptance.test.ts`. Tolerance 1e-4 on 4-dp va
 | Merchant-funded 5% idle discount | Same charge as a promotion; lowers the merchant's lifetime total by its cost (a promotion lowers the platform's) |
 | Release discount, 90-day term | Day 80: 0; day 81: 0.5%; day 82: 1%; day 90: 5%; day 91: 5.5%; day 100: 10%; later: 10%; never rented: 0; the whole next rental at the booked rate |
 | Worked example (section 12) | A 216.89, B 95.81, total 312.70; all to the merchants (neither target reached) |
+| Past the lifespan (`chargePastLife` on) | P(w > L) = P(L) = K · q; 365 → 385 costs 20 × P(L); the 90-day problem's D pays 36.2029 + 2.5 × P(L) and ends at wear 367.5, A–C and E unchanged; the reference scenarios above run with it off |
 | Estimate vs final | Equal when the plan is kept; estimate leaves shoe state unchanged. Integration tests (`tests/integration/fixed-term.int.test.ts`) cover committed wear, early-return notice and refunds, bundle settling, offers (24 h), extension, term end and the lifespan cap; `payments.int.test.ts` covers per-pair deposits. |
 | Remaining value at wear 100 / idle cost | 7,200 − 2,866.1143; 1.9726 a day; 5% on 30 days ≈ 22 idle days |
 | Guards | Double booking, more than 4 pairs, lifespan outside 183–730 at listing (unless extended), value ≤ 0, discount outside [0, 1) all throw |
@@ -382,7 +392,7 @@ A = K_A × [IQ(7.5) − IQ(0)] and B = K_B × [IQ(52.5) − IQ(50)]. Application
 
 ## 13. Where it lives
 
-- `src/lib/pricing/`: `curveParams`, `validateListing`, `Q`, `IQ`, `priceAt`, `shownPrice`, `curveIncome`, `curvePoints`, `targetIncome`, `incomeBetween`, `catchUpPhi`, `lifetimeCollected`, `remainingValue`, `splitCharge` (proportional, for previews), `releaseWindowStart`, `releaseDiscount`, `merchantTarget`, `merchantOutstanding`, `chargedAmounts` (merchant first), `bundleDailyCost`, `idleCostPerDay`, `breakEvenIdleDays`.
+- `src/lib/pricing/`: `curveParams`, `validateListing`, `Q`, `IQ`, `priceAt`, `shownPrice`, `curveIncome`, `curvePoints`, `targetIncome`, `rentIntegral` (IQ plus P(L) past L), `incomeBetween`, `catchUpPhi`, `lifetimeCollected`, `remainingValue`, `splitCharge` (proportional, for previews), `releaseWindowStart`, `releaseDiscount`, `merchantTarget`, `merchantOutstanding`, `chargedAmounts` (merchant first), `bundleDailyCost`, `idleCostPerDay`, `breakEvenIdleDays`.
 - `src/lib/wear-ledger/`: `wearAdded`, `wearEnd`, `colomboDay`, `dayToDate` / `dateToDay` / `dayNumber`, `firstDayAfterDelivery`, `receiverFirstDay`, `plannedLastDay`, `chainWear`, `lifeLeft`; `runLedger`, `estimate`, `buildInvoice` (accrual.ts; carries each shoe's merchant balance across its items).
 - `src/server/catalogue/pricing.ts`: `shoeCurve`, `nextPhi`, `shoePricing`, `releaseInfo`, `merchantOwed`, `merchantFundedDiscounts` (a shoe priced with its own settings snapshot). `src/server/catalogue/index.ts`: `listingLimits`, `setLifespanExtension`, `monthsToDays` / `daysToMonths`.
 - End of a holding: `endRental`, `scheduleEarlyReturn`, `extendRental`; offers: `acceptOffer` / `rejectOffer`; close-out: `closeItem`, all in `src/server/booking/lifecycle.ts`. Planning: `replan` in `src/server/booking/plan.ts`. Daily job: `runDailyRentals` in `src/server/booking/daily.ts`. Quote: `quoteBundle` in `src/server/booking/checkout.ts`. Lost pair: `markLost` in `src/server/payments/index.ts`.

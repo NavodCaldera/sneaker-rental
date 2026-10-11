@@ -110,6 +110,19 @@ export function SettingsForm({ values }: { values: Values }) {
           reaches R. Off at launch: discounts come out of the margin. (OPEN DECISION)
         </span>
       </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="chargePastLife"
+          defaultChecked={values.chargePastLife === true}
+          className="mt-0.5"
+        />
+        <span>
+          <strong>Charge past the lifespan.</strong> Once a pair has used its lifespan, each further
+          wear-day is charged at the end-of-life price until it is returned, even if that takes it
+          past R. Off: wear and rent stop at the lifespan. Applies to new listings.
+        </span>
+      </label>
       <Button type="submit" disabled={pending} className="self-start">
         Save new version
       </Button>

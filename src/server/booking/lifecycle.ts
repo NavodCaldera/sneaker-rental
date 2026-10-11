@@ -506,10 +506,9 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
   const holdings = await loadHoldings(tx, item.rental.borrowerId);
   const added = wearAdded(holdings, item.id, dateToDay(item.lastDay));
   const wStart = toD(item.shoe.wear);
-  const wEnd = wearEnd(wStart, added, item.shoe.lifespanDays);
-
   // φ is fixed at the start of the item, from the shoe's state before this rental.
   const { params, settings, collected } = shoeCurve(item.shoe);
+  const wEnd = wearEnd(wStart, added, item.shoe.lifespanDays, !params.pastLife);
   const phi = settings.catchUp ? catchUpPhi(params, collected, wStart) : toD(item.phi);
   const { income, undiscounted, discountCost } = incomeBetween(
     params,

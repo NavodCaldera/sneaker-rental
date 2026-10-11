@@ -34,6 +34,7 @@ export default async function AdminSettings() {
     disputeWindowDays: String(active.disputeWindowDays),
     freeReturnHours: String(active.freeReturnHours),
     catchUpEnabled: active.catchUpEnabled,
+    chargePastLife: active.chargePastLife,
   };
 
   return (
@@ -55,7 +56,8 @@ export default async function AdminSettings() {
               <div className="font-medium text-ink">{formatDateTime(h.effectiveFrom)}</div>
               μm {h.merchantMargin.toString()} · μp {h.platformMargin.toString()} · floor{" "}
               {h.floor.toString()} · max discount {h.maxDiscount.toString()} · catch-up{" "}
-              {h.catchUpEnabled ? "on" : "off"}
+              {h.catchUpEnabled ? "on" : "off"} · past lifespan{" "}
+              {h.chargePastLife ? "charged" : "free"}
             </li>
           ))}
         </ul>

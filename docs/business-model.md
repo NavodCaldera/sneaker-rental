@@ -204,7 +204,7 @@ Build one web app with four role views (merchant, borrower, admin, and a courier
 
 **Shoe status values:** Draft, Available, Reserved, Out for delivery, With borrower, In handoff, Cleaning, Retired, Sold.
 
-**Wear at close.** A rental item's wear depends on the other pairs its borrower held on the same days. When an item closes, the wear ledger rebuilds that borrower's phases over the item's dates (other open items count as held), adds 1 ÷ n per day capped at L, and passes w_start and w_end to the pricing engine.
+**Wear at close.** A rental item's wear depends on the other pairs its borrower held on the same days. When an item closes, the wear ledger rebuilds that borrower's phases over the item's dates (other open items count as held), adds 1 ÷ n per day (past L each wear-day is charged at the end-of-life price, pricing-spec.md §3), and passes w_start and w_end to the pricing engine.
 
 ## 9. Agent plan for Claude Code
 

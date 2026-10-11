@@ -17,7 +17,9 @@ You build and maintain the pricing engine for the Sneaker Rental Marketplace. Re
 - `src/lib/pricing/**` (source and `__tests__/`)
 - Sections 2, 3, 7, 8, 10 and 11 of `docs/pricing-spec.md`
 - The daily accrual ledger (`src/lib/wear-ledger/accrual.ts`) and the planner (`src/server/booking/plan.ts`) are owned by `booking-wear`, but they price only through this engine's functions (`incomeBetween`, `chargedAmounts`, `shownPrice`, `catchUpPhi`).
-- Prepaid terms don't change the maths: a term's rent is `incomeBetween(w_start, w_end)` over its planned wear, and wear and charge stop at L, so a term that runs past the end of life pays only up to L (days past L are free). Don't add charging beyond L without a spec change: the acceptance tests require every shoe to collect exactly R.
+- Prepaid terms don't change the maths: a term's rent is `incomeBetween(w_start, w_end)` over its planned wear.
+- **Past the lifespan (product decision 8, 2026-10-11):** with `settings.chargePastLife` (on at launch, carried on `CurveParams.pastLife`), wear keeps counting past L and every wear-day past L costs the end-of-life price P(L) = K · q until the pair is returned, with discount and φ applied as usual. A pair's lifetime income may then exceed R; that is intended. `Q(w > L) = q`, `rentIntegral(w) = IQ(w) + q · max(0, w − L)`, and `incomeBetween` charges on `rentIntegral`. `IQ`, `A`, `curveIncome`, `remainingValue` and `catchUpPhi` stay clamped at L (a lost pair past L costs 0 more). With it off the engine is the reference engine: wear and rent stop at L, `Q(w > L) = 0`.
+- The reference acceptance scenarios pin `chargePastLife: false`; the past-life behaviour has its own tests (a difference from the same scenarios). Never "fix" a reference number by turning it on.
 
 ## Must deliver
 
@@ -27,7 +29,8 @@ Pure functions, decimal.js only (`D` from `src/lib/decimal.ts`, precision 40), n
 - `targetIncome(V, settings)` → R; `curveParams(V, L, settings)` → `{ V, L, R, m, beta, q, A, K }`
 - `Q(p, w)`, `IQ(p, w)` (closed form, stable softplus, w clamped to [0, L])
 - `priceAt(p, w)` → P(w) = K·Q(w); `shownPrice(p, w, d, φ)` → (1 − d)·φ·P(w); `curveIncome(p, w)` → F(w); `curvePoints(p, n)`
-- `incomeBetween(p, wStart, wEnd, d = 0, φ = 1)` → `{ income, undiscounted, discountCost }`
+- `rentIntegral(p, w)` → IQ(w), plus q·(w − L) past L when `p.pastLife`
+- `incomeBetween(p, wStart, wEnd, d = 0, φ = 1)` → `{ income, undiscounted, discountCost }`, on `rentIntegral` (P(L) per wear-day past L when `pastLife`)
 - `lifetimeCollected(p, w₀, collectedOnPlatform)` → F(w₀) + collected
 - `catchUpPhi(p, lifetimeCollected, w)` → (R − collected) / (K·[A − IQ(w)]), never below 0, 1 when nothing is left
 - `remainingValue(p, w, lifetimeCollected, settings)` → K·(A − IQ(w)), or R − collected with catch-up
@@ -38,7 +41,7 @@ Pure functions, decimal.js only (`D` from `src/lib/decimal.ts`, precision 40), n
 - `bundleDailyCost(prices[])`, `idleCostPerDay(V, settings)`, `breakEvenIdleDays(p, w0, w1, d, settings)`, `assertDiscount(d)`
 - `roundMoney(x)` → 2 dp, half away from zero, used **only** at display/charge boundaries
 
-`PricingSettings` is passed in as a plain object (merchantMargin, platformMargin, floor, midpointRatio, baseSteepness, refLife, minLife, maxLife, maxDiscount, releaseLeadDays, releaseDiscountStep, catchUp, capitalRate, holdCostPerDay). The engine never reads config itself. Callers price a listed shoe with that shoe's own settings snapshot.
+`PricingSettings` is passed in as a plain object (merchantMargin, platformMargin, floor, midpointRatio, baseSteepness, refLife, minLife, maxLife, maxDiscount, releaseLeadDays, releaseDiscountStep, catchUp, chargePastLife, capitalRate, holdCostPerDay). The engine never reads config itself. Callers price a listed shoe with that shoe's own settings snapshot.
 
 ## Must not
 
@@ -50,5 +53,5 @@ Pure functions, decimal.js only (`D` from `src/lib/decimal.ts`, precision 40), n
 ## Done when
 
 - Every row of the acceptance table in `docs/pricing-spec.md` §11 passes in `acceptance.test.ts`, including both scenarios (90-day A–E = 3,030.2730; hard test = 33,600.00 with every shoe collecting R). No `it.todo` or skipped tests.
-- Property tests pass: Q(0) = 1, Q(L) = q, Q non-increasing, IQ(L) = A, incomes over consecutive ranges add up to R, charged shares add up to the charge to the cent.
+- Property tests pass: Q(0) = 1, Q(L) = q, Q non-increasing, IQ(L) = A, incomes over consecutive ranges add up to R, charged shares add up to the charge to the cent; with `chargePastLife` on, P(w > L) = P(L), 365 → 385 costs 20 × P(L) and lifetime income exceeds R; with it off, nothing is earned past L.
 - `npx vitest run src/lib/pricing` is green, with 100% branch coverage on the module.

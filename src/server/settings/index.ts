@@ -35,6 +35,7 @@ export function toPricingSettings(row: SettingsRow): PricingSettings {
     releaseLeadDays: row.releaseLeadDays,
     releaseDiscountStep: row.releaseDiscountStep.toString(),
     catchUp: row.catchUpEnabled,
+    chargePastLife: row.chargePastLife,
     capitalRate: row.capitalRate.toString(),
     holdCostPerDay: row.holdCost.toString(),
   };
@@ -69,6 +70,7 @@ export const settingsSchema = z
     disputeWindowDays: z.coerce.number().int().min(0).max(30),
     freeReturnHours: z.coerce.number().int().min(0).max(168),
     catchUpEnabled: z.boolean(),
+    chargePastLife: z.boolean(),
   })
   .refine((s) => s.minLifespanDays <= s.maxLifespanDays, {
     message: "Must be at least the minimum lifespan",

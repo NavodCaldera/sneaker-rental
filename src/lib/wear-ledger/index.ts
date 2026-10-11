@@ -118,13 +118,18 @@ export function wearAdded(holdings: Holding[], itemId: string, through?: Day): D
   return wear;
 }
 
-/** Wear at the end of a holding: w_start + added, capped at the lifespan L. */
+/**
+ * Wear at the end of a holding: w_start + added, capped at the lifespan L unless wear past
+ * L is charged (`capAtLife = false`, the shoe's `chargePastLife` setting).
+ */
 export function wearEnd(
   wearStart: Decimal.Value,
   added: Decimal.Value,
   lifespan: Decimal.Value,
+  capAtLife = true,
 ): D {
-  return D.min(new D(wearStart).plus(added), lifespan);
+  const end = new D(wearStart).plus(added);
+  return capAtLife ? D.min(end, lifespan) : end;
 }
 
 /** Wear actually added once the cap at L is applied: wearEnd − wStart. */
@@ -132,13 +137,15 @@ export function cappedWearAdded(
   wearStart: Decimal.Value,
   added: Decimal.Value,
   lifespan: Decimal.Value,
+  capAtLife = true,
 ): D {
-  return wearEnd(wearStart, added, lifespan).minus(wearStart);
+  return wearEnd(wearStart, added, lifespan, capAtLife).minus(wearStart);
 }
 
 /**
  * Chain the open items on one pair (pricing-spec.md §6a): the first starts at the pair's
- * settled wear, each later one at the previous one's planned end, each capped at L. `added`
+ * settled wear, each later one at the previous one's planned end, each capped at L unless
+ * wear past L is charged (`capAtLife = false`). `added`
  * is each item's planned wear in order (from `wearAdded`). The last end is the pair's
  * committed wear.
  */
@@ -146,11 +153,12 @@ export function chainWear(
   settledWear: Decimal.Value,
   added: Decimal.Value[],
   lifespan: Decimal.Value,
+  capAtLife = true,
 ): { start: D; end: D }[] {
   let wear = new D(settledWear);
   return added.map((a) => {
     const start = wear;
-    wear = wearEnd(start, a, lifespan);
+    wear = wearEnd(start, a, lifespan, capAtLife);
     return { start, end: wear };
   });
 }

@@ -209,6 +209,9 @@ model PricingSettings {
   freeReturnHours       Int
   /// Catch-up pricing (OPEN DECISION; off at launch)
   catchUpEnabled        Boolean  @default(false)
+  /// After a pair reaches its lifespan L, keep counting wear and charge the end-of-life price
+  /// P(L) per wear-day until it is returned, even past the target R (off = reference engine)
+  chargePastLife        Boolean  @default(true)
   createdById           String?
   createdAt             DateTime @default(now())
 

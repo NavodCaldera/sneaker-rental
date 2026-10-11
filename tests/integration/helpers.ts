@@ -24,6 +24,7 @@ export const TEST_SETTINGS = {
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
   freeReturnHours: 24,
+  chargePastLife: true,
 };
 
 /** Empty every table and restore default settings. */
