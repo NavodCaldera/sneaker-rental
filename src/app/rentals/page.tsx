@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { RentalItemStatus } from "@/generated/prisma/client";
 import { PhotoImg } from "@/components/shoe-bits";
-import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
-import { formatDate, formatLKR, formatTokens, formatWear } from "@/lib/format";
+import { Alert, Badge, Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
+import { formatDate, formatDateTime, formatLKR, formatTokens, formatWear } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { borrowerRentals } from "@/server/booking/queries";
-import { endRentalAction } from "./actions";
+import { EarlyReturnForm, EndRentalForm, ExtendForm, OfferButtons } from "./item-forms";
 
 export const metadata: Metadata = { title: "My rentals" };
 
@@ -42,7 +42,7 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
       {rentals.length === 0 ? (
         <EmptyState title="No rentals yet">
           <Link href="/browse" className="underline">
-            Browse sneakers
+            Browse shoes
           </Link>
         </EmptyState>
       ) : (
@@ -52,33 +52,10 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <h2 className="font-medium">Booked {formatDate(rental.createdAt)}</h2>
                 <span className="flex flex-wrap items-center gap-2 text-subtle">
-                  {formatTokens(rental.locked)} locked · estimate{" "}
-                  {formatLKR(rental.estimate.toString())}
+                  rent estimate {formatLKR(rental.estimatedRent.toString())} ·{" "}
+                  {formatTokens(rental.locked)} locked (deposit and rent estimate)
                 </span>
               </div>
-              {rental.topUpDueAt && rental.topUpAmount && !rental.recalledAt && (
-                <div className="mb-2">
-                  <Alert>
-                    Your locked tokens no longer cover this rental. Top up{" "}
-                    <strong>{formatTokens(rental.topUpAmount.toString())}</strong> by{" "}
-                    {formatDate(rental.topUpDueAt)} or the pairs will be collected.{" "}
-                    <Link
-                      href={`/wallet?amount=${rental.topUpAmount.toFixed(2)}&next=/rentals`}
-                      className="underline"
-                    >
-                      Top up now
-                    </Link>
-                  </Alert>
-                </div>
-              )}
-              {rental.recalledAt && (
-                <div className="mb-2">
-                  <Alert>
-                    These pairs were recalled on {formatDate(rental.recalledAt)} because the top-up
-                    didn&apos;t arrive in time. A driver will collect them.
-                  </Alert>
-                </div>
-              )}
               <ul className="flex flex-col gap-3">
                 {rental.items.map((item) => {
                   const status = ITEM_STATUS[item.status];
@@ -101,12 +78,29 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                             )}
                           </div>
                           <div className="mt-1 text-sm text-subtle">
-                            {item.startDate && <>Since {formatDate(item.startDate)}</>}
-                            {item.live && (
+                            {item.firstDay ? (
+                              <>
+                                Days {formatDate(item.firstDay)} –{" "}
+                                {formatDate(item.lastDay ?? item.termEndDay)}
+                              </>
+                            ) : item.expected ? (
+                              <>
+                                Expected days {formatDate(item.expected.first)} –{" "}
+                                {formatDate(item.expected.last)}
+                              </>
+                            ) : (
+                              item.plannedDays && (
+                                <>{item.plannedDays}-day term from the day after delivery</>
+                              )
+                            )}
+                            {item.plannedWearEnd && item.status !== "CLOSED" && (
                               <>
                                 {" "}
-                                · {formatWear(item.live.wearSoFar)} wear-days so far ·{" "}
-                                {formatLKR(item.live.chargeSoFar)} so far
+                                · wear {formatWear(item.plannedWearStart!.toString())} →{" "}
+                                {formatWear(item.plannedWearEnd.toString())} of{" "}
+                                {item.shoe.lifespanDays} · rent estimate{" "}
+                                {formatLKR(item.plannedCharge?.toString() ?? "0")}, locked until
+                                it&apos;s back
                               </>
                             )}
                             {item.status === "CLOSED" && item.charge && (
@@ -118,6 +112,59 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                               </>
                             )}
                           </div>
+                          {item.offerCharge && (
+                            <div className="mt-2 flex flex-col gap-2">
+                              <Alert tone="info">
+                                The borrower before you is returning this pair early
+                                {item.offerFirstDay && item.plannedFirstDay && (
+                                  <>
+                                    , so it can come to you with day 1 on{" "}
+                                    <strong>{formatDate(item.offerFirstDay)}</strong> instead of{" "}
+                                    {formatDate(item.plannedFirstDay)}
+                                  </>
+                                )}
+                                . It will have {formatWear(item.offerWearStart!.toString())}{" "}
+                                wear-days used, not {formatWear(item.plannedWearStart!.toString())},
+                                and a pair with less wear costs more per day: your{" "}
+                                {item.plannedDays}-day rent estimate is now{" "}
+                                <strong>{formatTokens(item.offerCharge.toString())}</strong> instead
+                                of {formatTokens(item.plannedCharge!.toString())}. Accept by{" "}
+                                {formatDateTime(item.offerDueAt)} to take it on these terms. If
+                                you&apos;d rather keep your original dates, say no or don&apos;t
+                                answer: we cancel your reservation and unlock all its tokens.
+                              </Alert>
+                              <OfferButtons itemId={item.id} />
+                            </div>
+                          )}
+                          {item.keepingForNext && (
+                            <p className="mt-2 text-sm text-subtle">
+                              {item.holdForNext
+                                ? "Please keep the pair safe for now: as soon as the next borrower books it, a driver takes it straight to them. You aren't charged for these days."
+                                : "Please keep the pair safe for now: the next borrower is deciding whether to take it early, and we'll book the driver as soon as they answer. You aren't charged for these days."}
+                            </p>
+                          )}
+                          {item.earlyReturnAt && item.status === "ACTIVE" && (
+                            <p className="mt-2 text-sm text-subtle">
+                              Early return booked: your last day is {formatDate(item.termEndDay)}. A
+                              driver collects the pair the day after.
+                            </p>
+                          )}
+                          {item.canExtend && (
+                            <div className="mt-2">
+                              <ExtendForm itemId={item.id} name={name} />
+                            </div>
+                          )}
+                          {item.earlyReturn && (
+                            <div className="mt-2">
+                              <EarlyReturnForm
+                                itemId={item.id}
+                                name={name}
+                                min={item.earlyReturn.min}
+                                max={item.earlyReturn.max}
+                                noticeDays={item.noticeDays}
+                              />
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {item.needsReceipt && (
@@ -136,17 +183,7 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                                 Report a problem
                               </LinkButton>
                             )}
-                          {item.status === "ACTIVE" && (
-                            <form action={endRentalAction.bind(null, item.id)}>
-                              <Button
-                                type="submit"
-                                variant="secondary"
-                                aria-label={`End rental of ${name}`}
-                              >
-                                End rental
-                              </Button>
-                            </form>
-                          )}
+                          {item.canEndNow && <EndRentalForm itemId={item.id} name={name} />}
                         </div>
                       </Card>
                     </li>

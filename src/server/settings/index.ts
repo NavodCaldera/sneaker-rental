@@ -35,6 +35,7 @@ export function toPricingSettings(row: SettingsRow): PricingSettings {
     releaseLeadDays: row.releaseLeadDays,
     releaseDiscountStep: row.releaseDiscountStep.toString(),
     catchUp: row.catchUpEnabled,
+    chargePastLife: row.chargePastLife,
     capitalRate: row.capitalRate.toString(),
     holdCostPerDay: row.holdCost.toString(),
   };
@@ -63,13 +64,13 @@ export const settingsSchema = z
     releaseDiscountStep: ratio,
     capitalRate: ratio,
     holdCost: money,
-    topUpLeadDays: z.coerce.number().int().min(0).max(30),
-    topUpGraceDays: z.coerce.number().int().min(0).max(30),
+    offerResponseHours: z.coerce.number().int().min(1).max(720),
+    earlyReturnNoticeDays: z.coerce.number().int().min(0).max(90),
     maxPairsPerBundle: z.coerce.number().int().min(1).max(10),
     disputeWindowDays: z.coerce.number().int().min(0).max(30),
     freeReturnHours: z.coerce.number().int().min(0).max(168),
-    deliveryBookingFee: money.optional().or(z.literal("")),
     catchUpEnabled: z.boolean(),
+    chargePastLife: z.boolean(),
   })
   .refine((s) => s.minLifespanDays <= s.maxLifespanDays, {
     message: "Must be at least the minimum lifespan",
@@ -81,6 +82,6 @@ export type SettingsInput = z.infer<typeof settingsSchema>;
 /** Settings are append-only: each change is a new row, so past rentals keep their history. */
 export async function updateSettings(input: SettingsInput, adminId: string) {
   return db.pricingSettings.create({
-    data: { ...input, deliveryBookingFee: input.deliveryBookingFee || null, createdById: adminId },
+    data: { ...input, createdById: adminId },
   });
 }

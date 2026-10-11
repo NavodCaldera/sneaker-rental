@@ -4,9 +4,11 @@ import { DEFAULT_PRICING_SETTINGS as S, curveParams } from "../../pricing";
 import {
   type Holding,
   type LedgerItem,
+  chainWear,
   colomboDay,
   dateToDay,
   dayToDate,
+  firstDayAfterDelivery,
   plannedLastDay,
   receiverFirstDay,
   runLedger,
@@ -114,12 +116,17 @@ describe("days", () => {
     expect(dateToDay(dayToDate(day))).toBe(day);
   });
 
-  it("a handoff receiver starts on the delivery day, or the day after the giver's last day", () => {
+  it("day 1 is the day after delivery; the delivery day is free", () => {
+    const at = new Date("2026-10-11T23:30:00+05:30");
+    expect(firstDayAfterDelivery(at)).toBe(colomboDay(at) + 1);
+  });
+
+  it("a handoff receiver starts the day after delivery, or after the giver's last day", () => {
     const at = new Date("2026-10-11T15:00:00+05:30");
     const day = colomboDay(at);
-    expect(receiverFirstDay(at, day - 3)).toBe(day); // giver ended 3 days ago: waiting was free
-    expect(receiverFirstDay(at, day)).toBe(day + 1); // giver ended today: never both
-    expect(receiverFirstDay(at, null)).toBe(day);
+    expect(receiverFirstDay(at, day - 3)).toBe(day + 1); // giver ended 3 days ago: waiting was free
+    expect(receiverFirstDay(at, day + 2)).toBe(day + 3); // giver's term runs past delivery
+    expect(receiverFirstDay(at, null)).toBe(day + 1);
   });
 });
 
@@ -127,6 +134,21 @@ describe("planned days", () => {
   it("a 90-day plan starting on day 1 ends on day 90", () => {
     expect(plannedLastDay(1, 90)).toBe(90);
     expect(plannedLastDay(5, 1)).toBe(5);
+  });
+
+  it("chains a pair's open items: each starts where the last one's plan ends, capped at L unless wear past L is charged", () => {
+    const chain = chainWear("0", ["90", "45"], 365);
+    expect(chain.map((c) => [c.start.toString(), c.end.toString()])).toEqual([
+      ["0", "90"],
+      ["90", "135"],
+    ]);
+    const capped = chainWear("300", ["50", "30"], 365);
+    expect(capped.map((c) => c.end.toString())).toEqual(["350", "365"]);
+    expect(chainWear("10", [], 365)).toEqual([]);
+    // Wear past L charged (chargePastLife): no cap, so the chain keeps counting.
+    const uncapped = chainWear("300", ["50", "30"], 365, false);
+    expect(uncapped.map((c) => c.end.toString())).toEqual(["350", "380"]);
+    expect(wearEnd("360", "10", 365, false).eq(370)).toBe(true);
   });
 });
 

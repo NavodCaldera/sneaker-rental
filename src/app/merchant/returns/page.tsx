@@ -84,11 +84,18 @@ export default async function MerchantReturns() {
 
       {inTransit.length > 0 && (
         <section>
-          <h2 className="mb-3 font-medium">On the way back</h2>
+          <h2 className="mb-3 font-medium">Ended, not back yet</h2>
           <ul className="flex flex-col gap-2 text-sm">
             {inTransit.map((item) => (
               <li key={item.id} className="flex items-center gap-2">
-                {item.shoe.brand} {item.shoe.model} <Badge tone="info">Collection requested</Badge>
+                {item.shoe.brand} {item.shoe.model}{" "}
+                <Badge tone="info">
+                  {item.deliveries.some((d) => d.type === "COLLECT")
+                    ? "Collection requested"
+                    : item.outgoing.length > 0
+                      ? "Going to the next borrower"
+                      : "Waiting with the borrower for the next booking"}
+                </Badge>
               </li>
             ))}
           </ul>

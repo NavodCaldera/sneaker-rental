@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { fullAddress } from "@/lib/address";
 import { db } from "@/server/db";
+import { updateAddress } from "@/server/auth/service";
 import { checkout } from "@/server/booking/checkout";
 import { endRental, recordCondition } from "@/server/booking/lifecycle";
 import {
@@ -22,7 +24,6 @@ async function bookedRental() {
   const ctx = await setup();
   const shoe = await makeShoe(ctx.merchantId);
   const rental = await checkout(ctx.borrower.id, [shoe.id], {
-    deliveryAddress: "22 Flower Rd",
     plannedDays: 14,
   });
   const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
@@ -30,12 +31,37 @@ async function bookedRental() {
   return { ...ctx, shoe, rental, item, delivery };
 }
 
+describe("addresses: one per account", () => {
+  it("trips use the account's address when they are booked; a customer without one can't book", async () => {
+    const { merchant, merchantId, borrower } = await setup();
+    const shoe = await makeShoe(merchantId);
+    const nowhere = await makeUser("BORROWER", { address: null });
+    await expect(checkout(nowhere.id, [shoe.id], { plannedDays: 5 }, day(-1))).rejects.toThrow(
+      /Add your delivery address/,
+    );
+
+    const rental = await checkout(borrower.id, [shoe.id], { plannedDays: 5 }, day(-1));
+    const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
+    await arrive(await deliveryFor(item.id, "DELIVER"), day(0));
+    // The customer moves mid-rental: the collection comes from the new address.
+    await updateAddress(borrower.id, "99 New Lane", "Kandy");
+    await endRental(borrower.id, item.id, day(5));
+    const collect = await deliveryFor(item.id, "COLLECT");
+    expect([collect.fromAddress, collect.toAddress]).toEqual([
+      "99 New Lane, Kandy",
+      fullAddress(merchant),
+    ]);
+    expect((await deliveryFor(item.id, "DELIVER")).toAddress).toBe(fullAddress(borrower));
+  });
+});
+
 describe("manual provider: quote → book → courier pickup → drop-off", () => {
-  it("moves the shoe, starts the clock and charges the delivery fee", async () => {
-    const { shoe, rental, item, delivery } = await bookedRental();
+  it("moves the shoe and starts the clock; the trip fee is the receiver's to pay the driver", async () => {
+    const { merchant, borrower, shoe, rental, item, delivery } = await bookedRental();
     expect(delivery.status).toBe("REQUESTED");
-    expect(delivery.fromAddress).toMatch(/Galle Road/);
-    expect(delivery.toAddress).toBe("22 Flower Rd");
+    // From the merchant's account address to the customer's.
+    expect(delivery.fromAddress).toBe(fullAddress(merchant));
+    expect(delivery.toAddress).toBe(fullAddress(borrower));
 
     await setQuote(delivery.id, "450");
     const token = await bookDelivery(delivery.id, "admin", day(0));
@@ -58,11 +84,10 @@ describe("manual provider: quote → book → courier pickup → drop-off", () =
       "WITH_BORROWER",
     );
 
-    const fee = await db.walletEntry.findFirstOrThrow({
-      where: { rentalId: rental.id, kind: "CHARGE" },
-    });
-    expect(fee.amount.toFixed(2)).toBe("450.00");
-    expect(fee.note).toMatch(/Delivery fee/);
+    // Not handled by us: no tokens move for the trip, the borrower pays the driver (and the
+    // rent is only charged when the pair is back).
+    expect(delivery.paidBy).toBe("BORROWER");
+    expect(await db.walletEntry.count({ where: { rentalId: rental.id, kind: "CHARGE" } })).toBe(0);
 
     const done = await db.delivery.findUniqueOrThrow({
       where: { id: delivery.id },
@@ -119,32 +144,26 @@ describe("handoff trips", () => {
     const { borrower, merchantId } = await setup();
     const next = await makeUser("BORROWER");
     const shoe = await makeShoe(merchantId);
-    const r1 = await checkout(borrower.id, [shoe.id], {
-      deliveryAddress: "First home",
-      plannedDays: 10,
-    });
+    const r1 = await checkout(borrower.id, [shoe.id], { plannedDays: 10 }, day(-1));
     const item1 = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r1.id } });
     await arrive(await deliveryFor(item1.id, "DELIVER"), day(0));
-    const r2 = await checkout(next.id, [shoe.id], {
-      deliveryAddress: "Second home",
-      plannedDays: 10,
-    });
+    const r2 = await checkout(next.id, [shoe.id], { plannedDays: 10 }, day(1));
     const item2 = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r2.id } });
 
-    await endRental(borrower.id, item1.id, day(9));
+    await endRental(borrower.id, item1.id, day(10));
     const handoff = await deliveryFor(item2.id, "HANDOFF");
-    const token = await bookDelivery(handoff.id, "admin", day(9));
+    const token = await bookDelivery(handoff.id, "admin", day(10));
     await expect(
-      courierPickup(token, { photo: photo(), sealedBag: true, cleaningKit: false }, day(10)),
+      courierPickup(token, { photo: photo(), sealedBag: true, cleaningKit: false }, day(11)),
     ).rejects.toThrow(/cleaning kit/);
-    await courierPickup(token, { photo: photo(), sealedBag: true, cleaningKit: true }, day(10));
+    await courierPickup(token, { photo: photo(), sealedBag: true, cleaningKit: true }, day(11));
     expect((await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).status).toBe("IN_HANDOFF");
-    await courierDropoff(token, { photo: photo() }, day(10));
+    await courierDropoff(token, { photo: photo() }, day(11));
 
-    await recordCondition(next.id, { itemId: item2.id, grade: "A", photos: photos() }, day(10));
+    await recordCondition(next.id, { itemId: item2.id, grade: "A", photos: photos() }, day(11));
     const closed = await db.rentalItem.findUniqueOrThrow({ where: { id: item1.id } });
     expect(closed.status).toBe("CLOSED");
-    // Days 0–9: ended on day 9; the handoff trip on day 10 is free.
+    // Days 1–10: the term's last day was day 10; the handoff trip on day 11 is free.
     expect(closed.wearEnd!.toString()).toBe("10");
   });
 });

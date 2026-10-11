@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AddressForm } from "@/components/address-form";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/server/auth/session";
 import { getMerchantForUser } from "@/server/catalogue";
@@ -19,6 +20,9 @@ export default async function MerchantAccount() {
         ) : (
           <Badge tone="warn">Pending</Badge>
         )}
+      </Card>
+      <Card className="mb-4">
+        <AddressForm role="MERCHANT" current={user.address} currentCity={user.city} />
       </Card>
       <Card>
         <PayoutForm current={merchant.payoutAccount ?? ""} />

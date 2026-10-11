@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { conditionLabel } from "@/lib/shoe-condition";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
@@ -40,7 +41,7 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <Card>
           <h2 className="mb-3 font-medium">Price curve</h2>
-          <CurveChart points={preview.points} currentWear={shoe.wear.toString()} />
+          <CurveChart points={preview.points} currentWear={shoe.committedWear.toString()} />
         </Card>
         <Card className="flex flex-col gap-4 text-sm">
           <Stat label="Price today" value={`${formatLKR(pricing.priceToday)} / wear-day`} />
@@ -50,9 +51,10 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
           />
           <div>
             <div className="mb-1 text-subtle">Wear</div>
-            <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />
+            <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
             <div className="mt-1">
-              {formatWear(shoe.wear.toString())} of {shoe.lifespanDays} wear-days
+              {formatWear(shoe.committedWear.toString())} of {shoe.lifespanDays} wear-days used,
+              counting current bookings
               {shoe.initialWear.gt(0) && (
                 <span className="text-subtle">
                   {" "}
@@ -61,6 +63,14 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
               )}
             </div>
           </div>
+          <Stat
+            label="Condition when listed"
+            value={
+              shoe.upgradeNotes
+                ? `${conditionLabel(shoe.condition)}: ${shoe.upgradeNotes}`
+                : conditionLabel(shoe.condition)
+            }
+          />
           <Stat label="Declared value" value={formatLKR(shoe.value.toString())} />
           <Stat label="Lifetime income target (R)" value={formatLKR(pricing.lifetimeIncome)} />
           <Stat label="You earn over its life" value={formatLKR(pricing.merchantTarget)} />

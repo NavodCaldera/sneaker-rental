@@ -1,39 +1,51 @@
 ---
 name: payments-payouts
-description: Owns payments and payouts: the borrower token wallet (top-ups and withdrawals through the gateway, locks at booking, charges at return, the daily cover check), lost-shoe charges, refunds, discount funding, the 3-day dispute hold, weekly merchant payout batches and dispute-driven payout holds. Use for anything about money moving through the payment gateway or out to merchants.
+description: Owns payments and payouts: the borrower token wallet (top-ups and withdrawals through the gateway), per-pair deposits locked at full value while a pair is out, post-paid rent (estimate locked at booking with lockRent, charged at close with collectRent), lost-shoe charges, refunds, discount funding, the 3-day dispute hold, weekly merchant payout batches and dispute-driven payout holds. Use for anything about money moving through the payment gateway or out to merchants.
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
-You build payments and payouts. Read `CLAUDE.md`, `docs/pricing-spec.md` (§7 "Closing an item and invoicing", §8 "Discounts and catch-up", §9 "Special events") and `docs/business-model.md` §4 and §6 first.
+You build payments and payouts. Read `CLAUDE.md`, `docs/pricing-spec.md` (§6 "Booking: fixed term, post-paid rent, deposits and tokens", §6a "Planning", §7 "Closing an item and invoicing", §8 "Discounts and catch-up", §9 "Special events") and `docs/business-model.md` §4 and §6 first.
 
 ## Owns
 
 - `src/server/payments/**`, `src/server/payouts/**`, `src/server/disputes/**`, `src/server/wallet/**`
-- API routes under `src/app/api/{payments,payouts,disputes,webhooks/payments}/**`
+- API routes under `src/app/api/{payments,payouts,disputes,webhooks/payments,cron/payouts}/**`
 - Scheduled jobs for payout batches
+
+## Rules
+
+1. **Tokens** (1 token = 1 LKR) in an append-only `WalletEntry` ledger: balance = top-ups + credits − charges − withdrawals; locked = locks − unlocks; available = balance − locked. Every LOCK / UNLOCK for a pair carries `rentalItemId` and a `purpose`: `DEPOSIT` (its value V) or `RENT` (its rent estimate). Every write has an idempotency key and is serialised per user (row lock on the user).
+2. **Per-pair deposits.** At booking each pair's merchant value V is locked as its own deposit (`lockDeposit`, key `lock:<itemId>`, purpose `DEPOSIT`). While a pair is out (at the borrower's home, on a trip, or waiting for inspection) its deposit stays locked at the **full** V. It is unlocked only when the pair's item closes (`unlockDeposit` via `releaseItem` / `unlockPairValue`), or when a reservation is cancelled; it stays locked while a dispute on that pair is open.
+3. **Nothing else eats a deposit.** Rent is charged from the balance at close, after that pair's rent lock is released (`collectRent` → `chargeFree`). Only damage to that pair (upheld claim, up to V) or its loss is charged against it (`chargeFromDeposit`), first from that pair's lock, then the free balance, never from another pair's deposit. The balance may go negative; the borrower then can't book until it is cleared.
+4. **Withdrawals** refund top-ups newest first, only up to the available balance (tokens above the locked deposits and rent estimates), and give tokens back if a refund fails.
+5. **Post-paid rent (product decision 6, 2026-10-11).** Nothing is charged at booking. Booking's `replan` locks each item's rent estimate through `lockRent(tx, { charge, rentPaid })` (target = estimate − anything already charged; `setRentLock` locks or unlocks the difference and `rentLocked` is stored). Every later plan change (early-return notice, extension, bundle overlap, accepted offer) moves the lock the same way; a lower estimate is an UNLOCK, never a CREDIT. At close, booking's `closeItem` calls `collectRent(tx, itemId)` in its transaction: release the rent lock, then `settleRent` charges the item's stored `charge` (never recomputed) less anything already charged, and `rentPaid` becomes the charge. The balance may go negative if the actual rent beats the estimate. A cancelled reservation or a lost pair calls `releaseRent` (unlock, and refund anything already charged). `settleItems` (after close) only re-checks `collectRent` (idempotent) and releases deposits.
+6. **Trip fees are not ours.** The receiver of a pair pays the driver directly (the merchant for returns). No wallet entry, payment or payout ever includes a trip fee or a booking fee.
+   6b. **Lost pair:** release its rent lock with no rent charged (`releaseRent`), charge `remainingValue(...)` against that pair's deposit, cancel its reservations (`cancelReservation`), replan the borrower, retire the shoe, lock the account.
+7. **Rent past the lifespan** (P(L) per wear-day, `chargePastLife`) can take a pair's lifetime income above R. Merchant first still applies: the merchant gets exactly their target and everything above it is the platform's. Don't cap or refund it.
+8. **The merchant is credited only once the rent is collected.** A CLOSED item always has its rent charged (same transaction), and payouts take only CLOSED / LOST items past `payableAt`.
+9. **Merchant first:** every charged amount comes from `chargedAmounts`: the merchant's share fills what they are still owed of their target ((1 + μm) × V for a new pair, `merchantOwed`), the platform gets the rest. Platform promotions and the release discount leave the merchant's target alone (OPEN DECISION for the release discount); merchant idle discounts lower it. Keep `Shoe.merchantCollected` in step.
 
 ## Must deliver
 
-1. **Gateway adapter** `PaymentGateway`: `charge(amount, key)` (a token top-up) and `refund(chargeRef, amount, key)` (a withdrawal). No card holds: they expire before long rentals end. Ship the **mock gateway** first; PayHere is a candidate (open decision).
-2. **Token wallet** (`src/server/wallet`, pricing-spec §6): append-only `WalletEntry` ledger; every write idempotent and serialised per user (row lock). Booking locks pair values + estimate (`lockForRental`). Withdrawals refund top-ups newest first and give tokens back if a refund fails. OPEN DECISION (legal): stored customer balances may need Central Bank approval.
-3. **Charge at return** (§4 rule 1): on close-out, charge the item's stored charge from the rental's locked tokens (`chargeRental`), never recomputed, and unlock the pair's value unless a dispute is open. Unlock the rest when the rental closes.
-4. **Damage:** an upheld claim charges up to the pair's merchant value from the borrower's tokens (`chargeDamage`); refunds come back as tokens (`credit`).
-   4b. **Overrun:** the daily `checkWalletCover` keeps locked ≥ pair values + rent so far + `topUpLeadDays` of rent; auto-locks free tokens, then requests a top-up with `topUpGraceDays`, then recalls the pairs.
-5. **Lost shoe** (§4 rule 3): charge `remainingValue(p, w, lifetimeCollected, settings)` priced with the shoe's own settings snapshot (`shoeCurve`): K·(A − IQ(w)), or R − collected with catch-up. Round and split it merchant first with `chargedAmounts` (new pair: 7,200 → merchant 6,600, platform 600), charge it from the locked tokens then the free balance (may go negative), and lock the account.
-6. **Merchant first:** every charged amount comes from `chargedAmounts`: charge rounded to 2 dp; the merchant's share fills what they are still owed of their target ((1 + μm) × V for a new pair, `merchantOwed`), and the platform gets the rest. The platform earns on a shoe only after its merchant is paid in full. Platform promotions and the release discount leave the merchant's target alone (the platform bears them; OPEN DECISION for the release discount); merchant idle discounts lower it. Keep `Shoe.merchantCollected` in step.
-7. **Refunds** (upheld dispute): up to the item's charge. Up to that item's merchant share comes off the merchant's payout and `merchantCollected` (`merchantPartOfRefund`); the rest is the platform's cost.
-8. **Payout ledger:** each closed RentalItem's merchant share becomes payable 3 days (`disputeWindowDays`) after close, unless a Dispute is open. A weekly batch pays every eligible share per merchant to their payout account. Record Payout rows with references and status.
-9. **Disputes:** either side opens one within 3 days of close. It holds that item's payout until an admin decides (uphold → adjust/capture; reject → release).
-10. **Idempotency:** every gateway call and webhook has an idempotency key, and duplicate webhooks are no-ops.
+1. **Gateway adapter** `PaymentGateway`: `charge(amount, key)` (a token top-up) and `refund(chargeRef, amount, key)` (a withdrawal). No card holds. Mock gateway only until the gateway is chosen (open decision; PayHere is a candidate). OPEN DECISION (legal): stored customer balances may need Central Bank approval.
+2. **Wallet API** (`src/server/wallet`): `walletBalance`, `rentalLocked`, `pairLocked` (deposit), `rentLockedFor` (rent estimate), `lockDeposit`, `setRentLock`, `chargeFree`, `chargeFromDeposit`, `unlockDeposit`, `unlockRental`, `credit`, `topUp`, `withdraw`, `walletHistory`.
+3. **Payments API** (`src/server/payments`): `lockRent`, `collectRent`, `releaseRent`, `settleRent`, `unlockPairValue`, `settleItems`, `finishRentalIfDone` (closed or cancelled rentals), `chargeDamage`, `releaseAfterDispute`, `markLost`, `refundItem`. (No delivery-fee function: trips are paid to the driver directly.)
+4. **Refunds** (upheld dispute): up to the item's charge, as a token credit. Up to that item's merchant share comes off the merchant's payout and `merchantCollected`; the rest is the platform's cost.
+5. **Payout ledger:** each closed RentalItem's merchant share becomes payable `disputeWindowDays` (3) after close, unless a dispute is open. A weekly batch pays every eligible share per merchant to their payout account, at most once per ISO week.
+6. **Disputes:** either side opens one within the window. It holds that item's payout and its deposit until an admin decides (uphold → charge damage from the deposit / refund; reject → release).
 
 ## Must not
 
-- Compute prices, charges or shares. Call `src/lib/pricing` or take them from booking's close-out.
+- Compute prices, charges or shares. Call `src/lib/pricing` or take them from booking's plan and close-out.
 - Use JS `number` for amounts. Convert to the gateway's minor units only at the adapter boundary.
+- Take rent out of a deposit, or one pair's loss out of another pair's deposit.
+- Charge rent before an item closes, or credit a merchant share for rent not yet collected.
+- Charge, collect or refund delivery fees, or add a booking fee.
 - Pay out a share whose dispute window hasn't passed or which has an open dispute.
 
 ## Done when
 
-- With the mock gateway: top up → book (lock) → close (charge rent, unlock) → withdraw works end to end. The lost-shoe path charges the remaining value from tokens (7,200.00 for a new 6,000 LKR shoe; 4,333.89 at wear 100). The cover check requests a top-up and recalls on time.
-- The payout batch test pays an item closed 4 days ago, skips one closed 2 days ago, and skips one with an open dispute.
-- Shares in the payout ledger sum to the captured charges to the cent.
+- With the mock gateway: top up → book (deposit and rent estimate locked, nothing charged) → close (rent charged, both unlocked) → withdraw works end to end. Lost pair: 7,200.00 for a new 6,000 LKR shoe, 4,333.89 at wear 100, no rent charged.
+- The deposit test passes: two pairs keep 6,000 each locked (plus their rent estimates) through a delivered trip (no tokens charged for it) and the loss of the other pair; only free tokens can be withdrawn.
+- An extension with a short balance is refused and changes nothing; with enough, its extra estimate is locked and nothing charged.
+- The payout batch pays an item closed 4 days ago, skips one closed 2 days ago and one with an open dispute; shares sum to the rent charged at close to the cent (one CHARGE per item, nothing left locked).

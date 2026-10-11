@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PhotoImg, WearBar } from "@/components/shoe-bits";
 import { Badge, Button, EmptyState, Input, PageHeader, Select } from "@/components/ui";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { conditionShort } from "@/lib/shoe-condition";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
@@ -32,7 +33,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
   return (
     <main>
       <PageHeader
-        title="Browse sneakers"
+        title="Browse shoes"
         description="Prices are per wear-day and fall as a pair ages. Hold up to four pairs and the wear is split between them."
       />
       <form className="mb-6 flex flex-wrap items-end gap-2" role="search">
@@ -94,6 +95,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                     />
                     <span className="absolute left-2 top-2 flex flex-col items-start gap-1">
                       {shoe.status === "WITH_BORROWER" && <Badge tone="info">Reserve next</Badge>}
+                      {shoe.condition !== "NEW" && <Badge>{conditionShort(shoe.condition)}</Badge>}
                       {discounted && (
                         <Badge tone="good">{formatPercent(release.discount)} off</Badge>
                       )}
@@ -118,14 +120,16 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                   </div>
                   {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
                     <div className="text-xs text-subtle">
-                      Free from {formatDate(dayToDate(release.releaseDay))}
+                      {release.releaseDay < today
+                        ? "Free now"
+                        : `Free from ${formatDate(dayToDate(release.releaseDay))}`}
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-xs text-subtle">
                     <div className="w-16">
-                      <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />
+                      <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
                     </div>
-                    {formatWear(shoe.wear.toString())} / {shoe.lifespanDays} worn
+                    {formatWear(shoe.committedWear.toString())} / {shoe.lifespanDays} used
                   </div>
                 </Link>
               </li>

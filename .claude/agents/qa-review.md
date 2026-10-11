@@ -16,19 +16,29 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
 1. `npx tsc --noEmit`, lint, `npx vitest run`, `npx playwright test`. Report exact failures with output.
 2. **Pricing acceptance table** (`docs/pricing-spec.md` §11): confirm every row, including the 90-day and 800-day scenarios, has a passing test in `src/lib/pricing/__tests__/acceptance.test.ts`. No `it.todo`, no skips, no loosened tolerances or changed expected values.
 3. **E2E journeys:**
-   - 5.1 Merchant lists a shoe → curve preview shows 28.92 / 8.68 for the seeded 6,000 LKR / L = 365 shoe → publishes → Available.
-   - 5.2 Borrower builds a 4-pair bundle → sees bundle daily cost and the tokens to lock → checks out (tokens locked) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
-   - 5.3 Borrower ends one pair with a reservation pending → handoff trip → next borrower records condition.
-   - 5.4 Close → rent charged from tokens, the rest unlocked → payout eligible after 3 days → included in the weekly batch. A dispute holds it.
+   - 5.1 Merchant lists a shoe → curve preview shows 28.92 / 8.68 for the seeded 6,000 LKR / L = 365 shoe → publishes → Available. A second-hand upgraded pair (wear used + what was upgraded) shows its condition in Browse and on its page.
+   - 5.2 Borrower builds a 4-pair bundle for a term → sees the daily cost, the rent estimate locked now and the deposit → checks out (deposits and rent estimate locked, nothing charged, committed wear shown on the listings) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
+   - 5.3 A term ends (or the borrower ends on the term's last day) with a reservation pending → handoff trip → next borrower records condition.
+   - 5.4 Close → rent charged, rent lock and the pair's deposit unlocked → payout eligible after 3 days → included in the weekly batch. A dispute holds it and the deposit.
 4. **Review checklist** on the diff:
    - [ ] No price, charge, share or wear arithmetic outside `src/lib/pricing` / `src/lib/wear-ledger` (grep for `* K`, `Q(`, `/ n`, `.mul(`, `.times(` and similar in other dirs).
    - [ ] No JS `number`/`parseFloat`/`Float` for money or wear. Decimal everywhere.
    - [ ] Rounding (`toFixed`, `roundMoney`, `toDecimalPlaces`) only at display or charge boundaries.
    - [ ] Discounts and φ apply to one rental item only. The next item starts from the curve.
    - [ ] Charged amounts come from `chargedAmounts`, merchant first: the platform gets nothing on a shoe until its merchant is paid (1 + μm) × V, and `Shoe.merchantCollected` stays in step (closes, lost pairs, refunds).
+   - [ ] A listing's condition agrees with its wear used (brand new ⇒ 0, second-hand ⇒ > 0, upgraded ⇒ upgrades described) and never changes its price.
    - [ ] A listed shoe is priced with its own settings snapshot (`shoeCurve`), never `getActiveSettings()` + `curveParams` directly.
-   - [ ] Wear-ledger days are inclusive; a holding ends on the End-rental day (waiting for the driver is free); a shoe is never held by two items on one day.
-   - [ ] No hard-coded settings values (0.10, 5000, 3 days, 4 pairs, 183 / 730 lifespan limits) outside PricingSettings defaults and seed.
+   - [ ] Wear-ledger days are inclusive; day 1 is the day after delivery; a holding ends on the term's last day (waiting for the driver is free); a shoe is never held by two items on one day.
+   - [ ] Rentals are fixed-term with post-paid rent: nothing is charged at booking; deposits (`DEPOSIT`) and rent estimates (`RENT`) are locked; wear is committed at booking (`committedWear`); every plan change goes through `replan` → `lockRent`; rent is charged only by `collectRent` in `closeItem`'s transaction (no other code moves rent), so no CLOSED item lacks its rent charge.
+   - [ ] An early return needs `earlyReturnNoticeDays` notice (`scheduleEarlyReturn`); only the free-return window or the term's last day can end at once. The daily job ends terms on `termEndDay + 1`.
+   - [ ] A held pair can be reserved from its holder's day 1 (no release-window gate). A reservation's start never moves earlier, nor its estimate up, without the borrower accepting an offer (new first day + price, 24 h, in-app + email); a declined or expired offer cancels the reservation, unlocks its deposit and estimate, and notifies the borrower by app and email; the pair then stays with its holder, free, with no COLLECT booked, until a new borrower books it and gets it by handoff (`holdForNext`).
+   - [ ] Each pair's deposit stays locked at its full value while the pair is out; rent is charged from the balance at close, never from a deposit; damage or loss only touches that pair's deposit; only available tokens can be withdrawn.
+   - [ ] A pair can be booked while `committedWear` < L, for any term; never once it reaches L. With `chargePastLife` on, wear past L is charged at P(L) per wear-day (no cap at L in `wearEnd` / `chainWear` / `runLedger`), and lifetime income above R goes to the platform.
+   - [ ] The reference acceptance scenarios still run with `chargePastLife: false` and their expected values are unchanged.
+   - [ ] No trip fee or booking fee moves through tokens, payments or payouts; `Delivery.paidBy` is the receiver (borrower for DELIVER/HANDOFF, merchant for COLLECT).
+   - [ ] Addresses: one per customer and merchant account, required at sign-up with the reason shown; no address input at checkout or per listing; every trip's addresses come from `customerAddress` / `merchantAddress` at the time it is booked.
+   - [ ] Sign-up asks for the city after the address (both account types). Only white, black and #35D6ED appear as website colours (no new hex values or palette tokens); no blue text on white; UI text says "shoes", not "sneakers". Day and night mode both render (header switch, remembered by cookie; device setting when no pick).
+   - [ ] No hard-coded settings values (0.10, 3 days, 4 pairs, 183 / 730 lifespan limits, 10 days' notice, 24-hour offers) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] The release discount comes from `releaseDiscount`, is fixed on the item at checkout, and never reaches the current holder.
    - [ ] Token ledger writes are idempotent and serialised per user; no money moves without a WalletEntry; balances are never computed with JS numbers.

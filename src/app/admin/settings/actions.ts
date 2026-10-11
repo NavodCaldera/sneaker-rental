@@ -18,6 +18,7 @@ export async function saveSettingsAction(
   const parsed = settingsSchema.safeParse({
     ...Object.fromEntries(formData),
     catchUpEnabled: formData.get("catchUpEnabled") === "on",
+    chargePastLife: formData.get("chargePastLife") === "on",
   });
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
   await updateSettings(parsed.data, admin.id);

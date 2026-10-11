@@ -28,7 +28,7 @@ Flows: merchants → platform: listings · platform → merchants: payouts · bo
 | Stakeholder | Gives | Gets | Main worry we must solve |
 |---|---|---|---|
 | Merchants (shoe stores, resellers, individual collectors) | Shoes, photos, declared value, expected lifespan | Income over the shoe's life (cost + margin), demand they could not reach, a dashboard of every pair | Damage, loss, shoes sitting idle |
-| Shoe borrowers | A minimum deposit of 5,000 LKR for one pair, 10,000 for two, rising 5,000 per pair; care of the shoe; condition photos; the delivery fee | Many pairs for the price of wearing one, fair prices that fall as shoes age, delivery to the door | Hygiene |
+| Shoe borrowers | A deposit of each pair's declared value, locked in tokens while the pair is out (pricing-spec.md §6); care of the shoe; condition photos; the driver's fee for trips to them, paid to the driver directly | Many pairs for the price of wearing one, fair prices that fall as shoes age, delivery to the door | Hygiene |
 | Ride-hailing apps | Drivers and couriers for pickup, delivery, return and handoff trips | Quick delivery for the shoe borrowers | Clear pickup points, sealed packages, no disputes about damage |
 | Us (the platform) | Pricing engine, listings, booking, payments, payouts, trust and dispute handling | A margin on every rental | Liquidity (enough shoes and renters in one city), fraud |
 
@@ -48,6 +48,8 @@ The merchant enters three things and the platform computes every price for the s
 | Declared value V | 6,000 LKR | Target income R |
 | Expected lifespan L (wear-days) | 365 | Length of the price curve |
 | Size, brand, model, category | UK 9, running | Search and filters |
+| Condition: brand new, second-hand, or second-hand upgraded (and what was upgraded) | Second-hand, upgraded: new insoles | Shown to borrowers on the listing and in Browse (decided 2026-10-11) |
+| Wear already used (second-hand only) | 60 wear-days | Where the pair starts on the price curve |
 
 **Target income.** Borrowers together pay R over the shoe's life: **R = (1 + μm + μp) × V**. μm is the merchant's margin and μp is the platform's margin. With both at 0.10, R = 1.20 × V, which is the 120% target used in the formula guide.
 
@@ -79,15 +81,14 @@ Every rental payment is split in a fixed ratio: with μm = μp = 0.10, the merch
 | Rental charge (wear 0 → 100) | 2,866.11 | Split below |
 | Merchant share (91.67%) | 2,627.27 | Merchant |
 | Platform share (8.33%) | 238.84 | Us |
-| Delivery and collection trips | Quoted by the ride-hailing app | Ride-hailing app, plus our booking fee |
-| Deposit hold | Released at return | Borrower (charged only for damage or loss) |
+| Delivery and collection trips | Quoted by the ride-hailing app | Paid to the driver directly by whoever receives the pair; not through us |
+| Deposit (each pair's value, in tokens) | Unlocked when the pair is back | Borrower (charged only for damage or loss) |
 
 **Revenue streams**
 
 | Stream | Who pays | How it works | Launch? |
 |---|---|---|---|
 | Rental margin μp | Borrowers | 8.33% of every rental payment | Yes |
-| Delivery booking fee | Borrowers | Flat fee per trip booked through us | Yes |
 | Damage protection add-on | Borrowers | Small daily fee; covers minor damage instead of the deposit | Phase 2 |
 | Featured listings | Merchants | Pay to appear first in search for a week | Phase 2 |
 | Borrower membership | Borrowers | Monthly fee for free deliveries and early access to new pairs | Phase 3 |
@@ -95,24 +96,25 @@ Every rental payment is split in a fixed ratio: with μm = μp = 0.10, the merch
 
 **Rules for money**
 
-1. **Charge at return.** The borrower's card is pre-authorised for an estimate at booking; the final charge is computed from actual wear when the rental closes.
-2. **Deposit.** A hold on the card, released at return once the condition check passes.
+1. **Post-paid rent: locked at booking, charged at return.** At booking the borrower's tokens cover each pair's value (the deposit) plus the rent estimate for the term, and both are locked. When a pair is back, its rent lock is released and the rent for the wear it actually got is charged; the merchant's share is credited only then (pricing-spec.md §6, §6a, §7).
+2. **Deposit.** Each pair's value is locked in tokens while the pair is out and unlocked once its condition check passes.
 3. **Lost shoe.** The borrower pays what the shoe had left to earn, R − F(w), split merchant/platform as normal. The merchant is made whole for the shoe's remaining life.
 4. **Discounts.** Promotional discounts the platform runs are taken from both shares in proportion. Idle discounts the merchant switches on come out of the merchant's share only.
 5. **Payouts.** A rental's merchant share is released 3 days after it closes, the window for disputes. Payouts go out weekly.
-6. **Delivery fees** pass through to the ride-hailing app; we keep only the booking fee.
+6. **Delivery fees are not handled by us.** Whoever receives the pair pays the driver directly in the ride-hailing app: the borrower for deliveries, the next borrower for handoffs, the merchant for returns. We take no booking fee and never pay for a trip (decided 2026-10-11).
 
 ## 5. Core journeys
 
 Four journeys carry the business; every step records who held the shoe and when, because wear-days are computed from those records.
 
 **5.1 Merchant lists a shoe**
-1. Signs up, verifies the business and adds a payout account.
-2. Adds a shoe: photos, value V, lifespan L, size, brand, model, pickup address.
+1. Signs up with the business's one address and city (where drivers pick up and return its pairs; we say why we ask), verifies the business and adds a payout account.
+2. Adds a shoe: photos, value V, lifespan L, size, brand, model, and its condition: brand new, or second-hand with or without upgrades. A second-hand pair also gives the wear-days it has been worn, and an upgraded one what was upgraded.
 3. Sees the computed price curve before publishing: starting price, end price and lifetime income.
 4. Publishes. The shoe is Available, priced at P(w) for its current wear.
 
 **5.2 Borrower rents**
+0. Signs up as a customer with one address and city, where pairs are delivered and collected (we say why we ask). It can be changed later; there is no address to type at checkout.
 1. Browses by size, brand and style; each listing shows today's price per wear-day and the shoe's wear so far.
 2. Adds one to four pairs to a bundle and sees the daily cost of the whole bundle.
 3. Checks out: card pre-authorised for the estimate plus the deposit hold; a delivery is booked with a ride-hailing app.
@@ -185,7 +187,7 @@ Build one web app with four role views (merchant, borrower, admin, and a courier
 | Wear ledger | Records every holding period; computes wear added per item at close, splitting each day 1 ÷ n across pairs held | Booking |
 | Logistics | Delivery quotes and bookings with ride-hailing apps; trip status by webhook; handoff trips | Booking |
 | Condition | Photos and grades at every handover; damage flags | Booking, Logistics |
-| Payments | Pre-authorisation, final charge, deposit hold and release, refunds | Pricing engine, Wear ledger |
+| Payments | Token locks (deposit and rent estimate), rent charged at return, deposit release, refunds | Pricing engine, Wear ledger |
 | Payouts | Merchant share after the dispute window, weekly batches | Payments |
 | Disputes and admin | Review queue, decisions, settings (μm, μp, floor, curve, caps) | All |
 
@@ -205,7 +207,7 @@ Build one web app with four role views (merchant, borrower, admin, and a courier
 
 **Shoe status values:** Draft, Available, Reserved, Out for delivery, With borrower, In handoff, Cleaning, Retired, Sold.
 
-**Wear at close.** A rental item's wear depends on the other pairs its borrower held on the same days. When an item closes, the wear ledger rebuilds that borrower's phases over the item's dates (other open items count as held), adds 1 ÷ n per day capped at L, and passes w_start and w_end to the pricing engine.
+**Wear at close.** A rental item's wear depends on the other pairs its borrower held on the same days. When an item closes, the wear ledger rebuilds that borrower's phases over the item's dates (other open items count as held), adds 1 ÷ n per day (past L each wear-day is charged at the end-of-life price, pricing-spec.md §3), and passes w_start and w_end to the pricing engine.
 
 ## 9. Agent plan for Claude Code
 
@@ -270,11 +272,16 @@ The MVP proves the core loop in one city; Phase 2 starts once the pilot is live 
 
 **Open decisions**
 - [ ] Split of the 20% margin: μm = μp = 0.10, or another split?
-- [ ] Deposit size: a fixed amount, or a share of R − F(w) with a cap?
-- [ ] Delivery booking fee amount, and who pays for return trips
+- [x] Deposit size: each pair's declared value V, locked per pair while it is out (decided 2026-10-11)
+- [x] Delivery fees: not handled by us; the receiver pays the driver (the merchant for returns); no booking fee (decided 2026-10-11)
 - [ ] Is a direct handoff allowed without merchant cleaning, and for which categories?
 - [ ] Minimum and maximum lifespan a merchant may declare
 - [ ] Catch-up pricing (φ) at launch, or margin-funded discounts only?
 - [ ] Which ride-hailing app to integrate first, and whether it offers a delivery API
 - [ ] Payment gateway, and whether it supports pre-authorisation
 - [ ] Platform name and brand
+- [ ] How long a reserved-next borrower has to accept a higher price after an early return (24 hours for now, `offerResponseHours`)
+- [x] A pair whose reserved-next borrower turns down an early handover (or doesn't answer) stays with its holder, free, until a new borrower books it; the reservation is cancelled and unlocked (decided 2026-10-11)
+- [ ] How long such a pair may wait at a borrower's home before it is collected anyway (no limit for now: it waits until someone books it)
+- [x] Reservations open from the holder's day 1, not only in the last 10 days (decided 2026-10-11)
+- [ ] Email provider for notices (a mock mailer for now)

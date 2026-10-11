@@ -30,13 +30,13 @@ export const DEFAULT_SETTINGS = {
   releaseDiscountStep: "0.005",
   capitalRate: "0.12",
   holdCost: "0",
-  topUpLeadDays: 3, // locked tokens must cover rent so far + 3 days
-  topUpGraceDays: 3, // days to top up before the pairs are recalled
+  offerResponseHours: 24, // OPEN DECISION: time to accept a higher price after an early return
+  earlyReturnNoticeDays: 10, // an early return is asked for at least 10 days ahead
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
   freeReturnHours: 24,
-  deliveryBookingFee: null, // OPEN DECISION
   catchUpEnabled: false, // OPEN DECISION
+  chargePastLife: true, // wear past L charged at the end-of-life price
 };
 
 const PASSWORD = "password123";
@@ -68,23 +68,53 @@ function placeholderPhoto(brand: string, model: string, kind: string, colour: st
 </svg>`;
 }
 
-const users: { email: string; name: string; role: Role; businessName?: string }[] = [
+const users: {
+  email: string;
+  name: string;
+  role: Role;
+  businessName?: string;
+  /** The account's one address and its city (customers and merchants) */
+  address?: string;
+  city?: string;
+}[] = [
   { email: "admin@sneakers.test", name: "Admin", role: "ADMIN" },
   {
     email: "kicks@sneakers.test",
     name: "Kasun Perera",
     role: "MERCHANT",
     businessName: "Colombo Kicks",
+    address: "Colombo Kicks, 12 Galle Road",
+    city: "Colombo 03",
   },
   {
     email: "sole@sneakers.test",
     name: "Dilani Fernando",
     role: "MERCHANT",
     businessName: "Sole Republic",
+    address: "Sole Republic, 45 Duplication Road",
+    city: "Colombo 04",
   },
-  { email: "amaya@sneakers.test", name: "Amaya Silva", role: "BORROWER" },
-  { email: "ravi@sneakers.test", name: "Ravi Jayasuriya", role: "BORROWER" },
-  { email: "nimal@sneakers.test", name: "Nimal Wickrama", role: "BORROWER" },
+  {
+    email: "amaya@sneakers.test",
+    name: "Amaya Silva",
+    role: "BORROWER",
+    address: "No. 8, Flower Road",
+    city: "Colombo 07",
+  },
+  {
+    email: "ravi@sneakers.test",
+    name: "Ravi Jayasuriya",
+    role: "BORROWER",
+    address: "21/3 Hill Street",
+    city: "Dehiwala",
+  },
+  {
+    email: "nimal@sneakers.test",
+    name: "Nimal Wickrama",
+    role: "BORROWER",
+    address: "17 Temple Road",
+    city: "Nugegoda",
+  },
 ];
 
 type SeedShoe = {
@@ -210,6 +240,8 @@ async function main() {
         verified: true,
         passwordHash,
         phone: "+94 77 000 0000",
+        address: u.address ?? null,
+        city: u.city ?? null,
         merchant: u.businessName
           ? {
               create: {
@@ -222,6 +254,15 @@ async function main() {
       },
       include: { merchant: true },
     });
+
+    // Sample accounts seeded before addresses (or cities) existed get theirs; an account
+    // that already has a city is left alone.
+    if (u.address && u.city && !user.city) {
+      await db.user.update({
+        where: { id: user.id },
+        data: { address: u.address, city: u.city },
+      });
+    }
 
     // Borrowers start with tokens so they can book (1 token = 1 LKR).
     if (u.role === "BORROWER") {
@@ -260,7 +301,6 @@ async function main() {
           ...s,
           merchantId: user.merchant.id,
           settingsId: settings.id,
-          pickupAddress: `${u.businessName}, 12 Galle Road, Colombo 03`,
           status: "AVAILABLE",
           latestGrade: "A",
           publishedAt: new Date(),

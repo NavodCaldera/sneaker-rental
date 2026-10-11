@@ -1,5 +1,13 @@
 import "server-only";
 import type { DeliveryType, PartyPays } from "@/generated/prisma/client";
+
+/**
+ * Who pays the driver: whoever receives the pair, directly in the ride-hailing app. The
+ * platform never charges or collects trip fees.
+ */
+export function receiverPays(type: DeliveryType): PartyPays {
+  return type === "COLLECT" ? "MERCHANT" : "BORROWER";
+}
 import type { Tx } from "../db";
 
 /**
@@ -14,8 +22,6 @@ export async function requestDelivery(
     fromRentalItemId?: string;
     fromAddress: string;
     toAddress: string;
-    paidBy?: PartyPays;
-    bookingFee?: string | null;
   },
 ) {
   return tx.delivery.create({
@@ -26,8 +32,7 @@ export async function requestDelivery(
       fromRentalItemId: input.fromRentalItemId,
       fromAddress: input.fromAddress,
       toAddress: input.toAddress,
-      paidBy: input.paidBy ?? "BORROWER",
-      bookingFee: input.bookingFee ?? null,
+      paidBy: receiverPays(input.type),
       tripLog: [{ at: new Date().toISOString(), status: "REQUESTED" }],
     },
   });

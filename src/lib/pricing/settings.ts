@@ -25,12 +25,18 @@ export interface PricingSettings {
   maxLife: number;
   /** Highest discount a borrower can get (release discount cap): 0.10 */
   maxDiscount: Decimal.Value;
-  /** Days before a holder's planned last day that the pair is shown, discounted, to the next borrower: 10 */
+  /** Days before a holder's planned last day that the release discount starts for the next borrower: 10 */
   releaseLeadDays: number;
   /** Release discount added per day from the start of that window: 0.005 */
   releaseDiscountStep: Decimal.Value;
   /** Option B: spread past discounts over the remaining life (OPEN DECISION; off at launch) */
   catchUp: boolean;
+  /**
+   * After a pair reaches its lifespan L, keep counting wear and charge the end-of-life price
+   * P(L) = K · q for every further wear-day, even past the target R (product decision
+   * 2026-10-11). Off = the reference engine: wear and rent stop at L.
+   */
+  chargePastLife: boolean;
   /** r: yearly return on money tied up in a shoe (idle-cost test only) */
   capitalRate: Decimal.Value;
   /** h: storage / logistics cost per idle day, LKR (idle-cost test only) */
@@ -51,6 +57,7 @@ export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   releaseLeadDays: 10,
   releaseDiscountStep: "0.005",
   catchUp: false,
+  chargePastLife: true,
   capitalRate: "0.12",
   holdCostPerDay: "0",
 };

@@ -5,6 +5,7 @@ import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { Card } from "@/components/ui";
 import { D } from "@/lib/decimal";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { conditionLabel } from "@/lib/shoe-condition";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { getActiveSettings } from "@/server/settings";
 import { getCurrentUser } from "@/server/auth/session";
@@ -54,10 +55,10 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
         <Card>
           <h2 className="mb-1 font-medium">How the price changes</h2>
           <p className="mb-3 text-sm text-subtle">
-            You pay for the wear you add, at the price for the pair&apos;s age. The next borrower
-            pays less.
+            You pay upfront for the days you book, at the price for the pair&apos;s age. The next
+            borrower pays less.
           </p>
-          <CurveChart points={preview.points} currentWear={shoe.wear.toString()} />
+          <CurveChart points={preview.points} currentWear={shoe.committedWear.toString()} />
         </Card>
       </div>
 
@@ -67,7 +68,8 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
             {shoe.brand} {shoe.model}
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-subtle">
-            {shoe.size} · {shoe.category} · {shoe.merchant.businessName}
+            {shoe.size} · {shoe.category} · {conditionLabel(shoe.condition)} ·{" "}
+            {shoe.merchant.businessName}
             <ShoeStatusBadge status={shoe.status} />
           </p>
         </div>
@@ -85,27 +87,31 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           )}
           {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
             <p className="mt-1 text-sm text-subtle">
-              Its current rental ends {formatDate(dayToDate(release.releaseDay))}.
-              {!release.open &&
-                release.opensOn !== null &&
-                ` Reservations open ${formatDate(dayToDate(release.opensOn))}.`}
+              {release.releaseDay < colomboDay(new Date())
+                ? "Free now: the last borrower is keeping it for you. Book it and a driver brings it straight from them."
+                : `Booked until ${formatDate(dayToDate(release.releaseDay))}. Reserve it now and it comes to you right after, priced at the wear it will have then.`}
             </p>
           )}
         </div>
         <div className="text-sm">
-          <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />
+          <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
           <p className="mt-1 text-subtle">
-            Worn {formatWear(shoe.wear.toString())} of {shoe.lifespanDays} wear-days ·{" "}
+            {formatWear(shoe.committedWear.toString())} of {shoe.lifespanDays} wear-days used
+            {shoe.status === "WITH_BORROWER" && " (counting the current booking)"} ·{" "}
             {new D(pricing.lifeLeft).times(100).toFixed(0)}% of life left · grade{" "}
             {shoe.latestGrade ?? "—"}
           </p>
         </div>
+        {shoe.upgradeNotes && (
+          <p className="text-sm">
+            <span className="font-medium">Upgrades:</span> {shoe.upgradeNotes}
+          </p>
+        )}
         {shoe.description && <p className="text-sm">{shoe.description}</p>}
         <RentPanel
           shoeId={shoe.id}
           status={shoe.status}
           handoffTaken={shoe.rentalItems.length > 0}
-          releaseOpen={release.open}
           signedInAs={user?.role ?? null}
           inBundle={bundle.includes(shoe.id)}
         />

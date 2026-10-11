@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/server/auth/session";
 import { WalletError, topUp, withdraw } from "@/server/wallet";
-import { checkWalletCover } from "@/server/wallet/cover";
 
 export type WalletState = { error?: string; ok?: string };
 
@@ -22,8 +21,6 @@ export async function topUpAction(_prev: WalletState, formData: FormData): Promi
     if (e instanceof WalletError) return { error: e.message };
     throw e;
   }
-  // New tokens cover any rental that asked for a top-up.
-  await checkWalletCover(new Date(), { borrowerId: user.id });
   revalidatePath("/wallet");
   const next = safeNext(formData.get("next"));
   if (next) redirect(next);

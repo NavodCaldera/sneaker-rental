@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui";
+import { fullAddress } from "@/lib/address";
 import { requireUser } from "@/server/auth/session";
 import {
   CATEGORIES,
@@ -30,6 +31,7 @@ export default async function NewShoePage() {
         lifespanMax={limits.maxLifespanDays}
         monthsMin={daysToMonths(limits.minLifespanDays)}
         monthsMax={daysToMonths(limits.maxLifespanDays)}
+        pickupAddress={fullAddress(user)}
       />
     </main>
   );

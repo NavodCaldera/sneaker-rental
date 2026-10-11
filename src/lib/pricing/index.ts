@@ -11,6 +11,7 @@ export {
   IQ,
   priceAt,
   Q,
+  rentIntegral,
   shownPrice,
   targetIncome,
   validateListing,

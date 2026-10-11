@@ -1,13 +1,14 @@
 import type Decimal from "decimal.js";
 import { D, roundMoney } from "../decimal";
-import { type CurveParams, IQ, curveIncome } from "./curve";
+import { type CurveParams, IQ, curveIncome, rentIntegral } from "./curve";
 import type { PricingSettings } from "./settings";
 
 const ONE = new D(1);
 
 /**
  * Income for one rental item moving the shoe from wStart to wEnd
- * (docs/pricing-spec.md "Prices"). wEnd is clamped to L.
+ * (docs/pricing-spec.md "Prices"). Wear past L is charged at P(L) per wear-day when the
+ * shoe's settings say so (`pastLife`), and earns nothing otherwise.
  * Discounts apply to this item only; they never change the curve for the next item.
  */
 export function incomeBetween(
@@ -22,7 +23,9 @@ export function incomeBetween(
   const end = new D(wEnd);
   if (end.lt(start)) throw new RangeError("wEnd must be ≥ wStart");
 
-  const undiscounted = new D(phi).times(p.K).times(IQ(p, end).minus(IQ(p, start)));
+  const undiscounted = new D(phi)
+    .times(p.K)
+    .times(rentIntegral(p, end).minus(rentIntegral(p, start)));
   const discountCost = undiscounted.times(discount);
   return { income: undiscounted.minus(discountCost), undiscounted, discountCost };
 }
@@ -155,8 +158,9 @@ type ReleaseSettings = Pick<
 >;
 
 /**
- * First day a held pair is shown to the next borrower: `releaseLeadDays` before the current
- * holder's planned last day (day 81 of a 90-day plan, both days inclusive).
+ * First day of the release discount for the next borrower: `releaseLeadDays` before the
+ * current holder's planned last day (day 81 of a 90-day plan, both days inclusive). A held
+ * pair can be reserved before then, without a discount.
  */
 export function releaseWindowStart(releaseDay: number, settings: ReleaseSettings): number {
   return releaseDay - settings.releaseLeadDays + 1;

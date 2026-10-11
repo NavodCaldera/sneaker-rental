@@ -1,7 +1,9 @@
 "use client";
 
+import { PasswordInput } from "@/components/password-input";
 import { useActionState, useState } from "react";
-import { Alert, Button, Field, Input, cx } from "@/components/ui";
+import { Alert, Button, Field, Input, Textarea, cx } from "@/components/ui";
+import { ADDRESS_LABEL, ADDRESS_REASON } from "@/lib/address";
 import { signUpAction, type FormState } from "@/server/auth/actions";
 
 export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWER" }) {
@@ -13,11 +15,11 @@ export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWE
     <form action={action} className="flex flex-col gap-4">
       {state.error && <Alert>{state.error}</Alert>}
       <fieldset className="grid grid-cols-2 gap-2">
-        <legend className="mb-1.5 text-sm font-medium">I want to</legend>
+        <legend className="sr-only">Account type</legend>
         {(
           [
-            ["BORROWER", "Rent sneakers"],
-            ["MERCHANT", "List my shoes"],
+            ["BORROWER", "Customer"],
+            ["MERCHANT", "Merchant"],
           ] as const
         ).map(([value, label]) => (
           <label
@@ -53,8 +55,34 @@ export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWE
       <Field label="Phone" name="phone" error={errors.phone}>
         <Input name="phone" type="tel" autoComplete="tel" placeholder="+94 77 123 4567" />
       </Field>
+      <Field
+        label={ADDRESS_LABEL[role]}
+        name="address"
+        error={errors.address}
+        hint={ADDRESS_REASON[role]}
+      >
+        <Textarea
+          name="address"
+          autoComplete="street-address"
+          rows={2}
+          required
+          minLength={5}
+          maxLength={300}
+          placeholder="No. 12, Flower Road"
+        />
+      </Field>
+      <Field label="City" name="city" error={errors.city}>
+        <Input
+          name="city"
+          autoComplete="address-level2"
+          required
+          minLength={2}
+          maxLength={60}
+          placeholder="Colombo 07"
+        />
+      </Field>
       <Field label="Password" name="password" error={errors.password} hint="At least 8 characters">
-        <Input name="password" type="password" autoComplete="new-password" required minLength={8} />
+        <PasswordInput name="password" autoComplete="new-password" required minLength={8} />
       </Field>
       <Button type="submit" disabled={pending}>
         {pending ? "Creating account…" : "Create account"}

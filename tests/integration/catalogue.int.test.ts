@@ -35,10 +35,11 @@ const input = shoeSchema(LIMITS).parse({
   model: "Pegasus 41",
   size: "UK 9",
   category: "Running",
-  pickupAddress: "12 Galle Road, Colombo",
   value: "6000",
   lifespanDays: "365",
+  condition: "NEW",
 });
+const secondHand = { ...input, condition: "SECOND_HAND" as const };
 
 describe("listing a shoe", () => {
   it("creates a draft with five photos, and publishes once the merchant is verified", async () => {
@@ -94,9 +95,28 @@ describe("listing a shoe", () => {
     expect(schema.safeParse({ ...input, lifespanDays: "730" }).success).toBe(true);
     expect(schema.safeParse({ ...input, value: "6,000" }).success).toBe(false);
     expect(schema.safeParse({ ...input, value: "0" }).success).toBe(false);
-    expect(schema.safeParse({ ...input, initialWear: "365" }).success).toBe(false);
-    expect(schema.safeParse({ ...input, initialWear: "abc" }).success).toBe(false);
+    expect(schema.safeParse({ ...secondHand, initialWear: "365" }).success).toBe(false);
+    expect(schema.safeParse({ ...secondHand, initialWear: "abc" }).success).toBe(false);
     expect(schema.parse({ ...input, initialWear: "" }).initialWear).toBe("0");
+  });
+
+  it("the declared condition must match the wear used, and upgrades must be described", () => {
+    const schema = shoeSchema(LIMITS);
+    const error = (data: object) =>
+      schema.safeParse(data).error?.flatten().fieldErrors as Record<string, string[]>;
+    expect(error({ ...input, condition: undefined }).condition).toEqual(["Choose the condition"]);
+    expect(error({ ...input, initialWear: "10" }).initialWear).toEqual([
+      "A brand-new pair has no wear used",
+    ]);
+    expect(error({ ...secondHand, initialWear: "" }).initialWear).toEqual([
+      "Enter how many days the pair has been worn",
+    ]);
+    const upgraded = { ...input, condition: "SECOND_HAND_UPGRADED", initialWear: "60" };
+    expect(error(upgraded).upgradeNotes).toEqual(["Say what was upgraded"]);
+    expect(schema.parse({ ...upgraded, upgradeNotes: "New insoles" }).upgradeNotes).toBe(
+      "New insoles",
+    );
+    expect(schema.safeParse({ ...secondHand, initialWear: "60" }).success).toBe(true);
   });
 
   it("rejects a lifespan the active settings no longer allow", async () => {
@@ -132,12 +152,51 @@ describe("listing a shoe", () => {
     expect(shoePricing(stored).priceNew.startsWith("9.64")).toBe(true); // 28.92 / 3
   });
 
+  it("pairs are picked up from the merchant's one address: no address, no listing", async () => {
+    const { merchant } = await makeUser("MERCHANT", { address: null });
+    await expect(createShoe(merchant!.id, input, allPhotos())).rejects.toThrow(
+      /pickup address in your account/,
+    );
+  });
+
   it("lists a second-hand pair at its declared wear", async () => {
     const { merchant } = await makeUser("MERCHANT");
-    const shoe = await createShoe(merchant!.id, { ...input, initialWear: "120.5" }, allPhotos());
+    const shoe = await createShoe(
+      merchant!.id,
+      { ...secondHand, initialWear: "120.5", upgradeNotes: "ignored" },
+      allPhotos(),
+    );
     expect(shoe.wear.toString()).toBe("120.5");
     expect(shoe.initialWear.toString()).toBe("120.5");
     expect(shoe.collectedSoFar.toString()).toBe("0");
+    expect([shoe.condition, shoe.upgradeNotes]).toEqual(["SECOND_HAND", null]);
+  });
+
+  it("stores an upgraded pair's condition and upgrades; the price still comes from its wear", async () => {
+    const { merchant } = await makeUser("MERCHANT");
+    const plain = await createShoe(merchant!.id, { ...secondHand, initialWear: "60" }, allPhotos());
+    const upgraded = await createShoe(
+      merchant!.id,
+      {
+        ...input,
+        condition: "SECOND_HAND_UPGRADED",
+        initialWear: "60",
+        upgradeNotes: "New insoles and laces",
+      },
+      allPhotos(),
+    );
+    expect([upgraded.condition, upgraded.upgradeNotes]).toEqual([
+      "SECOND_HAND_UPGRADED",
+      "New insoles and laces",
+    ]);
+    const [a, b] = await Promise.all(
+      [plain, upgraded].map((s) =>
+        db.shoe.findUniqueOrThrow({ where: { id: s.id }, include: { settings: true } }),
+      ),
+    );
+    expect(shoePricing(b).priceToday).toBe(shoePricing(a).priceToday);
+    const brandNew = await createShoe(merchant!.id, input, allPhotos());
+    expect(brandNew.condition).toBe("NEW");
   });
 
   it("prices a shoe with the settings version active when it was published", async () => {
@@ -167,7 +226,7 @@ describe("browsing and prices", () => {
     const unverified = await makeUser("MERCHANT");
     await db.merchant.update({ where: { id: unverified.merchant!.id }, data: { verified: false } });
     const { id: settingsId } = await getActiveSettings();
-    const base = { ...input, pickupAddress: input.pickupAddress, description: null, settingsId };
+    const base = { ...input, description: null, settingsId };
     await db.shoe.createMany({
       data: [
         { ...base, merchantId: verified.merchant!.id, status: "AVAILABLE", size: "UK 9" },
@@ -177,7 +236,7 @@ describe("browsing and prices", () => {
           status: "WITH_BORROWER",
           size: "UK 10",
           brand: "Adidas",
-          // Holder's plan ends in 5 days: inside the 10-day release window, so shown.
+          // Held, ending in 5 days: reservable next.
           releaseDay: dayToDate(colomboDay(new Date()) + 5),
         },
         {
@@ -185,7 +244,7 @@ describe("browsing and prices", () => {
           merchantId: verified.merchant!.id,
           status: "WITH_BORROWER",
           brand: "Puma",
-          // Plan ends in 30 days: not open for reservations yet, so hidden.
+          // Held for 30 more days: reservable next too, from the holder's day 1.
           releaseDay: dayToDate(colomboDay(new Date()) + 30),
         },
         { ...base, merchantId: verified.merchant!.id, status: "DRAFT" },
@@ -193,10 +252,10 @@ describe("browsing and prices", () => {
         { ...base, merchantId: unverified.merchant!.id, status: "AVAILABLE" },
       ],
     });
-    expect(await browseShoes({})).toHaveLength(2);
+    expect(await browseShoes({})).toHaveLength(3);
     expect(await browseShoes({ size: "UK 10" })).toHaveLength(1);
     expect(await browseShoes({ q: "adi" })).toHaveLength(1);
-    expect(await browseShoes({ brand: "Puma" })).toHaveLength(0);
+    expect(await browseShoes({ brand: "Puma" })).toHaveLength(1);
   });
 
   it("prices the 6,000 LKR / 365-day shoe at 28.9248 new and 8.6774 at end of life", async () => {

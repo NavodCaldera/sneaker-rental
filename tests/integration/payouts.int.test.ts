@@ -9,7 +9,10 @@ import { arrive, day, deliveryFor, makeShoe, makeUser, photos, resetDb } from ".
 
 beforeEach(resetDb);
 
-/** A full rental of `heldDays`, returned and closed by the merchant on day `closeDay`. */
+/**
+ * A full term of `heldDays` (the days before `closeDay`), returned and closed by the merchant
+ * on day `closeDay`.
+ */
 async function closedRental(
   ctx: { merchantUserId: string; merchantId: string },
   closeDay: number,
@@ -19,11 +22,10 @@ async function closedRental(
   const borrower = await makeUser("BORROWER");
   const shoe = await makeShoe(ctx.merchantId);
   const rental = await checkout(borrower.id, [shoe.id], {
-    deliveryAddress: "Home 123",
     plannedDays: heldDays,
   });
   const item = await db.rentalItem.findFirstOrThrow({ where: { rentalId: rental.id } });
-  await arrive(await deliveryFor(item.id, "DELIVER"), day(closeDay - heldDays));
+  await arrive(await deliveryFor(item.id, "DELIVER"), day(closeDay - heldDays - 1));
   await endRental(borrower.id, item.id, day(closeDay - 1));
   await arrive(await deliveryFor(item.id, "COLLECT"), day(closeDay));
   await recordCondition(
@@ -86,7 +88,7 @@ describe("weekly payouts (§4 rule 5)", () => {
     expect(waiting.waiting.find((w) => w.id === disputed.item.id)?.state).toBe("disputed");
   });
 
-  it("merchant + platform shares equal the captured charges to the cent", async () => {
+  it("merchant + platform shares equal the rent charged at close, to the cent", async () => {
     const ctx = await merchantCtx();
     for (const d of [10, 11, 12]) await closedRental(ctx, d, 7 + d);
     const items = await db.rentalItem.findMany({ where: { status: "CLOSED" } });
@@ -94,11 +96,18 @@ describe("weekly payouts (§4 rule 5)", () => {
       expect(item.merchantShare!.plus(item.platformShare!).toFixed(2)).toBe(
         item.charge!.toFixed(2),
       );
-      const rent = await db.walletEntry.findUniqueOrThrow({
-        where: { idempotencyKey: `rent:${item.id}` },
+      const rent = await db.walletEntry.findMany({
+        where: { rentalItemId: item.id, idempotencyKey: { startsWith: `rent:${item.id}:` } },
       });
-      expect(rent.kind).toBe("CHARGE");
-      expect(rent.amount.toFixed(2)).toBe(item.charge!.toFixed(2));
+      const paid = rent.reduce(
+        (sum, e) => (e.kind === "CHARGE" ? sum.plus(e.amount) : sum.minus(e.amount)),
+        item.charge!.minus(item.charge!),
+      );
+      expect(paid.toFixed(2)).toBe(item.charge!.toFixed(2));
+      // Post-paid: one charge, taken when the item closed, and no rent left locked.
+      expect(rent.map((e) => e.kind)).toEqual(["CHARGE"]);
+      expect(item.rentPaid.toFixed(2)).toBe(item.charge!.toFixed(2));
+      expect(item.rentLocked.toFixed(2)).toBe("0.00");
     }
   });
 
@@ -160,7 +169,7 @@ describe("disputes (§6)", () => {
       decision: "Courier delay",
     });
     const refund = await db.walletEntry.findFirstOrThrow({
-      where: { rentalId: rental.id, kind: "CREDIT" },
+      where: { rentalId: rental.id, kind: "CREDIT", note: "Refund of rent" },
     });
     expect(refund.amount.toFixed(2)).toBe("50.00");
 

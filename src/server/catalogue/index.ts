@@ -3,7 +3,6 @@ import { z } from "zod";
 import { D } from "@/lib/decimal";
 import type { PhotoKind, Prisma } from "@/generated/prisma/client";
 import { validateListing } from "@/lib/pricing";
-import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { db } from "../db";
 import { type SettingsRow, getActiveSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
@@ -35,7 +34,6 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
       size: z.string().trim().min(1, "Enter the size").max(20),
       category: z.enum(CATEGORIES as [string, ...string[]]),
       description: z.string().trim().max(1000).optional().or(z.literal("")),
-      pickupAddress: z.string().trim().min(5, "Enter the pickup address").max(300),
       value: z
         .string()
         .trim()
@@ -50,6 +48,12 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
         .int("Whole days only")
         .min(limits.minLifespanDays, `At least ${limits.minLifespanDays} wear-days`)
         .max(limits.maxLifespanDays, `At most ${limits.maxLifespanDays} wear-days`),
+      /** Brand new, or second-hand with or without upgrades */
+      condition: z.enum(["NEW", "SECOND_HAND", "SECOND_HAND_UPGRADED"], {
+        error: "Choose the condition",
+      }),
+      /** What was upgraded (upgraded pairs only) */
+      upgradeNotes: z.string().trim().max(300).optional().or(z.literal("")),
       /** Wear already used if listed second-hand (w₀) */
       initialWear: z
         .string()
@@ -61,6 +65,21 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
     .refine((s) => !WEAR_FORMAT.test(s.initialWear) || new D(s.initialWear).lt(s.lifespanDays), {
       message: "Wear used must be less than the lifespan",
       path: ["initialWear"],
+    })
+    // The declared condition must agree with the wear the price is based on (w₀).
+    .refine(
+      (s) =>
+        s.condition !== "NEW" || !WEAR_FORMAT.test(s.initialWear) || new D(s.initialWear).isZero(),
+      { message: "A brand-new pair has no wear used", path: ["initialWear"] },
+    )
+    .refine(
+      (s) =>
+        s.condition === "NEW" || !WEAR_FORMAT.test(s.initialWear) || new D(s.initialWear).gt(0),
+      { message: "Enter how many days the pair has been worn", path: ["initialWear"] },
+    )
+    .refine((s) => s.condition !== "SECOND_HAND_UPGRADED" || !!s.upgradeNotes, {
+      message: "Say what was upgraded",
+      path: ["upgradeNotes"],
     });
 
 export type ShoeInput = z.infer<ReturnType<typeof shoeSchema>>;
@@ -111,8 +130,9 @@ function checkListing(value: string, lifespanDays: number, limits: LifespanLimit
 }
 
 /**
- * Creates a Draft listing with its five listing photos (§5.1 step 2). A second-hand pair
- * starts at its declared wear w₀.
+ * Creates a Draft listing with its five listing photos (§5.1 step 2), with the condition the
+ * merchant declared (brand new, second-hand, or second-hand upgraded). A second-hand pair
+ * starts at its declared wear w₀; the condition itself doesn't change the price.
  */
 export async function createShoe(
   merchantId: string,
@@ -120,7 +140,14 @@ export async function createShoe(
   photos: Partial<Record<PhotoKind, File>>,
 ) {
   const settings = await getActiveSettings();
-  const merchant = await db.merchant.findUniqueOrThrow({ where: { id: merchantId } });
+  const merchant = await db.merchant.findUniqueOrThrow({
+    where: { id: merchantId },
+    include: { user: true },
+  });
+  // Pairs are picked up from, and returned to, the merchant's one address.
+  if (!merchant.user.address) {
+    throw new CatalogueError("Add your pickup address in your account before listing");
+  }
   checkListing(input.value, input.lifespanDays, listingLimits(settings, merchant));
   for (const { kind, label } of LISTING_PHOTOS) checkPhoto(photos[kind] as File, label);
   const saved = [];
@@ -131,7 +158,9 @@ export async function createShoe(
     data: {
       ...input,
       description: input.description || null,
+      upgradeNotes: input.condition === "SECOND_HAND_UPGRADED" ? input.upgradeNotes || null : null,
       wear: input.initialWear,
+      committedWear: input.initialWear,
       merchantId,
       settingsId: settings.id,
       photos: { create: saved },
@@ -156,8 +185,14 @@ export async function publishShoe(merchantId: string, shoeId: string) {
   const shoe = await ownShoe(merchantId, shoeId);
   if (shoe.status !== "DRAFT") throw new CatalogueError("Only drafts can be published");
   const settings = await getActiveSettings();
-  const merchant = await db.merchant.findUniqueOrThrow({ where: { id: merchantId } });
+  const merchant = await db.merchant.findUniqueOrThrow({
+    where: { id: merchantId },
+    include: { user: true },
+  });
   checkListing(shoe.value.toString(), shoe.lifespanDays, listingLimits(settings, merchant));
+  if (!merchant.user.address) {
+    throw new CatalogueError("Add your pickup address in your account before publishing");
+  }
   if (!merchant.verified)
     throw new CatalogueError("Your business must be verified before publishing");
   if (!merchant.payoutAccount) throw new CatalogueError("Add a payout account before publishing");
@@ -213,24 +248,25 @@ export async function getMerchantShoe(merchantId: string, shoeId: string) {
 }
 
 /**
- * Available pairs, plus held pairs whose release window has opened: from `releaseLeadDays`
- * before the holder's planned last day (day 81 of a 90-day rental), so the next borrower
- * can reserve them at the release discount (pricing-spec.md §8).
+ * Available pairs, plus held pairs nobody has reserved next yet: from the holder's day 1,
+ * the next borrower can reserve one for a direct handoff after the holder's term
+ * (pricing-spec.md §6a).
  */
-async function browsableWhere(now: Date): Promise<Prisma.ShoeWhereInput> {
-  const active = await getActiveSettings(now);
-  const openBy = dayToDate(colomboDay(now) + active.releaseLeadDays - 1);
+function browsableWhere(): Prisma.ShoeWhereInput {
   return {
     merchant: { verified: true },
-    OR: [{ status: "AVAILABLE" }, { status: "WITH_BORROWER", releaseDay: { lte: openBy } }],
+    OR: [
+      { status: "AVAILABLE" },
+      { status: "WITH_BORROWER", rentalItems: { none: { status: "WAITING_HANDOFF" } } },
+    ],
   };
 }
 
 export type BrowseFilters = { size?: string; brand?: string; category?: string; q?: string };
 
-export async function browseShoes(filters: BrowseFilters, now = new Date()) {
+export async function browseShoes(filters: BrowseFilters) {
   const where: Prisma.ShoeWhereInput = {
-    AND: [await browsableWhere(now)],
+    AND: [browsableWhere()],
     ...(filters.size && { size: filters.size }),
     ...(filters.brand && { brand: filters.brand }),
     ...(filters.category && { category: filters.category }),
@@ -252,9 +288,9 @@ export async function browseShoes(filters: BrowseFilters, now = new Date()) {
   });
 }
 
-export async function browseFacets(now = new Date()) {
+export async function browseFacets() {
   const shoes = await db.shoe.findMany({
-    where: await browsableWhere(now),
+    where: browsableWhere(),
     select: { size: true, brand: true, category: true },
   });
   const uniq = (xs: string[]) =>

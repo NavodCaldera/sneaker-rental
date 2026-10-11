@@ -86,9 +86,13 @@ export default async function MerchantHome() {
                     </div>
                     <div className="mt-2 flex items-center gap-3 text-xs text-subtle">
                       <div className="w-32">
-                        <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />
+                        <WearBar
+                          wear={shoe.committedWear.toString()}
+                          lifespan={shoe.lifespanDays}
+                        />
                       </div>
-                      {formatWear(shoe.wear.toString())} / {shoe.lifespanDays} wear-days
+                      {formatWear(shoe.committedWear.toString())} / {shoe.lifespanDays} wear-days
+                      used
                     </div>
                   </div>
                   <div className="hidden text-right text-sm sm:block">

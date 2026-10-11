@@ -44,8 +44,8 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
       { name: "maxDiscount", label: "Maximum discount", hint: "0.10 = 10%" },
       {
         name: "releaseLeadDays",
-        label: "Show this many days before release",
-        hint: "10: day 81 of a 90-day rental",
+        label: "Discount starts this many days before release",
+        hint: "10: from day 81 of a 90-day rental (pairs can be reserved any time)",
       },
       { name: "releaseDiscountStep", label: "Discount added per day", hint: "0.005 = 0.5%" },
     ],
@@ -65,23 +65,18 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
     title: "Rentals",
     fields: [
       {
-        name: "topUpLeadDays",
-        label: "Token cover: days of rent ahead",
-        hint: "Locked tokens must cover rent so far plus this many days (3)",
+        name: "offerResponseHours",
+        label: "Hours to accept a new price",
+        hint: "A reserved pair that comes back early and costs more: time to accept (24). Open decision",
       },
       {
-        name: "topUpGraceDays",
-        label: "Days to top up before recall",
-        hint: "3",
+        name: "earlyReturnNoticeDays",
+        label: "Notice for an early return (days)",
+        hint: "A borrower ending a term early picks a last day at least this far ahead (10)",
       },
       { name: "maxPairsPerBundle", label: "Max pairs held at once" },
       { name: "disputeWindowDays", label: "Dispute window (days)" },
       { name: "freeReturnHours", label: "Free return window (hours)" },
-      {
-        name: "deliveryBookingFee",
-        label: "Delivery booking fee (LKR)",
-        hint: "OPEN DECISION: leave empty until decided",
-      },
     ],
   },
 ];
@@ -113,6 +108,19 @@ export function SettingsForm({ values }: { values: Values }) {
         <span>
           <strong>Catch-up pricing (φ).</strong> Raise later prices so a discounted pair still
           reaches R. Off at launch: discounts come out of the margin. (OPEN DECISION)
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="chargePastLife"
+          defaultChecked={values.chargePastLife === true}
+          className="mt-0.5"
+        />
+        <span>
+          <strong>Charge past the lifespan.</strong> Once a pair has used its lifespan, each further
+          wear-day is charged at the end-of-life price until it is returned, even if that takes it
+          past R. Off: wear and rent stop at the lifespan. Applies to new listings.
         </span>
       </label>
       <Button type="submit" disabled={pending} className="self-start">

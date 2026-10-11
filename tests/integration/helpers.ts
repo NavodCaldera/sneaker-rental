@@ -19,11 +19,12 @@ export const TEST_SETTINGS = {
   releaseDiscountStep: "0.005",
   capitalRate: "0.12",
   holdCost: "0",
-  topUpLeadDays: 3,
-  topUpGraceDays: 3,
+  offerResponseHours: 24,
+  earlyReturnNoticeDays: 10,
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
   freeReturnHours: 24,
+  chargePastLife: true,
 };
 
 /** Empty every table and restore default settings. */
@@ -49,7 +50,13 @@ let cachedHash: string | undefined;
  */
 export async function makeUser(
   role: Role,
-  overrides: { email?: string; name?: string; tokens?: string } = {},
+  overrides: {
+    email?: string;
+    name?: string;
+    tokens?: string;
+    address?: string | null;
+    city?: string | null;
+  } = {},
 ) {
   cachedHash ??= await hashPassword("password123");
   counter += 1;
@@ -59,6 +66,23 @@ export async function makeUser(
       name: overrides.name ?? `${role.toLowerCase()} ${counter}`,
       email: overrides.email ?? `${role.toLowerCase()}${counter}@test.local`,
       passwordHash: cachedHash,
+      // Every customer and merchant has one address; admins have none.
+      address:
+        overrides.address !== undefined
+          ? overrides.address
+          : role === "MERCHANT"
+            ? `Shop ${counter}, 12 Galle Road`
+            : role === "BORROWER"
+              ? `${counter} Flower Road`
+              : null,
+      city:
+        overrides.city !== undefined
+          ? overrides.city
+          : overrides.address === null || role === "ADMIN"
+            ? null
+            : role === "MERCHANT"
+              ? "Colombo 03"
+              : "Colombo 07",
       verified: true,
       merchant:
         role === "MERCHANT"
@@ -92,6 +116,9 @@ export const photos = () => [new File([PNG as BlobPart], "c.png", { type: "image
 export const day = (n: number) =>
   new Date(Date.parse("2026-01-01T12:00:00+05:30") + n * 86_400_000);
 
+/** The Colombo calendar date of `day(n)`, as YYYY-MM-DD (a date-picker value). */
+export const isoDay = (n: number) => day(n).toISOString().slice(0, 10);
+
 /** An available shoe, listed under the settings version active now. */
 export async function makeShoe(
   merchantId: string,
@@ -105,7 +132,6 @@ export async function makeShoe(
       model: "Pegasus 41",
       size: "UK 9",
       category: "Running",
-      pickupAddress: "Shop, 12 Galle Road, Colombo 03",
       value: overrides.value ?? "6000",
       lifespanDays: overrides.lifespanDays ?? 365,
       initialWear: overrides.initialWear ?? "0",

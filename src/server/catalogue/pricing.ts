@@ -12,7 +12,6 @@ import {
   merchantTarget,
   priceAt,
   releaseDiscount,
-  releaseWindowStart,
   remainingValue,
   shownPrice,
   splitCharge,
@@ -28,6 +27,8 @@ export type PricedShoe = {
   value: Num;
   lifespanDays: number;
   wear: Num;
+  /** Settled wear plus open bookings' planned wear; the next rental starts here */
+  committedWear?: Num;
   initialWear: Num;
   collectedSoFar: Num;
   merchantCollected: Num;
@@ -49,10 +50,18 @@ export function shoeCurve(shoe: PricedShoe): {
   return { params, settings, collected };
 }
 
+/**
+ * The wear the next rental of this shoe starts from: its committed wear (pricing-spec.md
+ * §6a), so a pair booked for 90 days is priced for the next borrower at wear + 90.
+ */
+export function nextWear(shoe: PricedShoe): D {
+  return toD(shoe.committedWear ?? shoe.wear);
+}
+
 /** φ for the next rental of this shoe: catch-up factor if its settings turn it on, else 1. */
 export function nextPhi(shoe: PricedShoe): D {
   const { params, settings, collected } = shoeCurve(shoe);
-  return settings.catchUp ? catchUpPhi(params, collected, toD(shoe.wear)) : toD(1);
+  return settings.catchUp ? catchUpPhi(params, collected, nextWear(shoe)) : toD(1);
 }
 
 /**
@@ -80,22 +89,17 @@ export async function merchantFundedDiscounts(tx: Tx, shoeId: string): Promise<D
 /**
  * Release discount for the next borrower of a pair (pricing-spec.md §8), from the active
  * settings: it grows from `releaseLeadDays` before the current or last holder's planned
- * last day, up to `maxDiscount`. `opensOn` is the first day a held pair is shown.
+ * last day, up to `maxDiscount`. A held pair can be reserved at any time; booking before the
+ * window just gets no discount.
  */
 export function releaseInfo(
   shoe: { releaseDay: Date | null },
   active: SettingsRow,
   today: Day,
-): { discount: D; releaseDay: Day | null; opensOn: Day | null; open: boolean } {
+): { discount: D; releaseDay: Day | null } {
   const settings = toPricingSettings(active);
   const releaseDay = shoe.releaseDay ? dateToDay(shoe.releaseDay) : null;
-  const opensOn = releaseDay === null ? null : releaseWindowStart(releaseDay, settings);
-  return {
-    discount: releaseDiscount(today, releaseDay, settings),
-    releaseDay,
-    opensOn,
-    open: opensOn !== null && today >= opensOn,
-  };
+  return { discount: releaseDiscount(today, releaseDay, settings), releaseDay };
 }
 
 /**
@@ -121,7 +125,7 @@ export type ShoePricing = {
 
 export function shoePricing(shoe: PricedShoe, discount: Decimal.Value = 0): ShoePricing {
   const { params: p, settings, collected } = shoeCurve(shoe);
-  const wear = toD(shoe.wear);
+  const wear = nextWear(shoe);
   const phi = nextPhi(shoe);
   return {
     priceToday: shownPrice(p, wear, discount, phi).toString(),

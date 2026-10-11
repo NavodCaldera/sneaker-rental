@@ -28,6 +28,12 @@ model User {
   name         String
   email        String   @unique
   phone        String?
+  /// The account's one address, entered at sign-up (customers and merchants; null for
+  /// admins). Customers: where pairs are delivered and collected. Merchants: where drivers
+  /// pick pairs up and bring them back. Trips copy it when they are booked.
+  address      String?
+  /// The town or city of that address, asked for separately at sign-up (both roles)
+  city         String?
   passwordHash String
   verified     Boolean  @default(false)
   /// Locked after a lost shoe (§6)
@@ -44,6 +50,7 @@ model User {
   disputesDecided  Dispute[]         @relation("DisputeDecidedBy")
   walletEntries    WalletEntry[]
   payments         Payment[]
+  notifications    Notification[]
 }
 
 model Session {
@@ -95,40 +102,58 @@ enum Grade {
   D
 }
 
+/// The condition a merchant declares when listing a pair
+enum ShoeCondition {
+  /// Brand new, never worn
+  NEW
+  /// Second-hand, as it is
+  SECOND_HAND
+  /// Second-hand with upgrades (e.g. new insoles, laces, sole work)
+  SECOND_HAND_UPGRADED
+}
+
 model Shoe {
-  id                String     @id @default(cuid())
+  id                String        @id @default(cuid())
   merchantId        String
   brand             String
   model             String
   size              String
   category          String
   description       String?
-  pickupAddress     String
   /// Declared value V (LKR)
-  value             Decimal    @db.Decimal(14, 2)
+  value             Decimal       @db.Decimal(14, 2)
   /// Expected lifespan L (wear-days)
   lifespanDays      Int
-  /// Accumulated wear w (wear-days)
-  wear              Decimal    @default(0) @db.Decimal(28, 12)
+  /// Settled wear w (wear-days): updated when an item closes
+  wear              Decimal       @default(0) @db.Decimal(28, 12)
+  /// Settled wear plus the planned wear of every open booking (pricing-spec.md §6a): what
+  /// listings show, and the wear the next borrower is priced at
+  committedWear     Decimal       @default(0) @db.Decimal(28, 12)
+  /// Condition the merchant declared when listing: brand new (w₀ = 0) or second-hand, with
+  /// or without upgrades. Shown to borrowers; the price comes only from w₀.
+  condition         ShoeCondition @default(NEW)
+  /// What was upgraded (SECOND_HAND_UPGRADED only), e.g. "new insoles and laces"
+  upgradeNotes      String?
   /// Wear already used when listed second-hand (w₀)
-  initialWear       Decimal    @default(0) @db.Decimal(28, 12)
+  initialWear       Decimal       @default(0) @db.Decimal(28, 12)
   /// Charged on the platform so far, after discounts (excludes F(w₀))
-  collectedSoFar    Decimal    @default(0) @db.Decimal(28, 12)
-  lostToDiscounts   Decimal    @default(0) @db.Decimal(28, 12)
+  collectedSoFar    Decimal       @default(0) @db.Decimal(28, 12)
+  lostToDiscounts   Decimal       @default(0) @db.Decimal(28, 12)
   /// Merchant shares charged so far, net of refunds. Rent goes to the merchant until this
   /// reaches their target (merchant first), then to the platform.
-  merchantCollected Decimal    @default(0) @db.Decimal(14, 2)
-  /// The current or last holder's planned last day: the release discount counts from it
-  releaseDay        DateTime?  @db.Date
+  merchantCollected Decimal       @default(0) @db.Decimal(14, 2)
+  /// The current or last holder's term end (or the day they ended early): the release
+  /// discount counts from it
+  releaseDay        DateTime?     @db.Date
   /// Settings version the shoe is priced with: snapshotted when listed, so its curve
   /// never changes under a running rental
   settingsId        String
-  status            ShoeStatus @default(DRAFT)
+  status            ShoeStatus    @default(DRAFT)
   latestGrade       Grade?
   publishedAt       DateTime?
   retiredAt         DateTime?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   merchant         Merchant          @relation(fields: [merchantId], references: [id])
   settings         PricingSettings   @relation(fields: [settingsId], references: [id])
@@ -172,41 +197,43 @@ model Photo {
 
 /// Append-only: the active row is the latest with effectiveFrom ≤ now.
 model PricingSettings {
-  id                  String   @id @default(cuid())
-  effectiveFrom       DateTime @default(now())
-  merchantMargin      Decimal  @db.Decimal(20, 16)
-  platformMargin      Decimal  @db.Decimal(20, 16)
-  floor               Decimal  @db.Decimal(20, 16)
-  midpointRatio       Decimal  @db.Decimal(20, 16)
-  baseSteepness       Decimal  @db.Decimal(20, 16)
+  id                    String   @id @default(cuid())
+  effectiveFrom         DateTime @default(now())
+  merchantMargin        Decimal  @db.Decimal(20, 16)
+  platformMargin        Decimal  @db.Decimal(20, 16)
+  floor                 Decimal  @db.Decimal(20, 16)
+  midpointRatio         Decimal  @db.Decimal(20, 16)
+  baseSteepness         Decimal  @db.Decimal(20, 16)
   /// Lifespan the base curve was tuned for: β = baseSteepness · refLife / L
-  refLife             Int      @default(365)
+  refLife               Int      @default(365)
   /// Lifespan a merchant may declare, in wear-days: 6 to 24 months. An admin can grant a
   /// merchant a longer maximum (Merchant.maxLifespanDays).
-  minLifespanDays     Int      @default(183)
-  maxLifespanDays     Int      @default(730)
+  minLifespanDays       Int      @default(183)
+  maxLifespanDays       Int      @default(730)
   /// Highest discount a borrower can get (the release discount's cap)
-  maxDiscount         Decimal  @default(0.10) @db.Decimal(20, 16)
+  maxDiscount           Decimal  @default(0.10) @db.Decimal(20, 16)
   /// Release discount: shown from this many days before a holder's planned last day...
-  releaseLeadDays     Int      @default(10)
+  releaseLeadDays       Int      @default(10)
   /// ...growing by this much a day, up to maxDiscount
-  releaseDiscountStep Decimal  @default(0.005) @db.Decimal(20, 16)
+  releaseDiscountStep   Decimal  @default(0.005) @db.Decimal(20, 16)
   /// Capital rate r (yearly) and hold cost h (LKR per idle day) for the idle-cost test
-  capitalRate         Decimal  @default(0.12) @db.Decimal(20, 16)
-  holdCost            Decimal  @default(0) @db.Decimal(20, 16)
-  /// Overrun check: locked tokens must cover the next N days' rent...
-  topUpLeadDays       Int      @default(3)
-  /// ...and a borrower who falls short has this many days to top up before the pairs are recalled
-  topUpGraceDays      Int      @default(3)
-  maxPairsPerBundle   Int
-  disputeWindowDays   Int
-  freeReturnHours     Int
-  /// OPEN DECISION: booking fee amount (null = not set yet)
-  deliveryBookingFee  Decimal? @db.Decimal(14, 2)
+  capitalRate           Decimal  @default(0.12) @db.Decimal(20, 16)
+  holdCost              Decimal  @default(0) @db.Decimal(20, 16)
+  /// OPEN DECISION: hours a reserved-next borrower has to accept a higher price after an
+  /// early return, before the reservation is cancelled
+  offerResponseHours    Int      @default(24)
+  /// An early return must be asked for at least this many days before the new last day
+  earlyReturnNoticeDays Int      @default(10)
+  maxPairsPerBundle     Int
+  disputeWindowDays     Int
+  freeReturnHours       Int
   /// Catch-up pricing (OPEN DECISION; off at launch)
-  catchUpEnabled      Boolean  @default(false)
-  createdById         String?
-  createdAt           DateTime @default(now())
+  catchUpEnabled        Boolean  @default(false)
+  /// After a pair reaches its lifespan L, keep counting wear and charge the end-of-life price
+  /// P(L) per wear-day until it is returned, even past the target R (off = reference engine)
+  chargePastLife        Boolean  @default(true)
+  createdById           String?
+  createdAt             DateTime @default(now())
 
   shoes Shoe[]
 
@@ -223,20 +250,15 @@ enum RentalStatus {
 }
 
 model Rental {
-  id              String       @id @default(cuid())
-  borrowerId      String
-  status          RentalStatus @default(PENDING_PAYMENT)
-  deliveryAddress String
-  /// Rent estimate for the planned days (locked in tokens with the pairs' value)
-  estimate        Decimal      @db.Decimal(14, 2)
+  id            String       @id @default(cuid())
+  borrowerId    String
+  status        RentalStatus @default(PENDING_PAYMENT)
+  /// Rent estimate for the booked terms, locked at booking (charged per item when it closes)
+  estimatedRent Decimal      @db.Decimal(14, 2)
   /// Merchant value of the pairs (Σ V), locked in tokens while they are out
-  shoeValue       Decimal      @db.Decimal(14, 2)
-  /// Locked tokens no longer cover the rent: top up by this time or the pairs are recalled
-  topUpDueAt      DateTime?
-  topUpAmount     Decimal?     @db.Decimal(14, 2)
-  recalledAt      DateTime?
-  createdAt       DateTime     @default(now())
-  closedAt        DateTime?
+  shoeValue     Decimal      @db.Decimal(14, 2)
+  createdAt     DateTime     @default(now())
+  closedAt      DateTime?
 
   borrower      User          @relation(fields: [borrowerId], references: [id])
   items         RentalItem[]
@@ -273,13 +295,38 @@ model RentalItem {
   /// When the pair reached this borrower, and when it reached the next holder
   startDate         DateTime?
   endDate           DateTime?
-  /// Wear-ledger days, both inclusive (Asia/Colombo calendar dates): first = delivery day,
-  /// last = the day the borrower ended the rental (waiting for pickup is free).
+  /// Wear-ledger days, both inclusive (Asia/Colombo calendar dates): first = the day after
+  /// delivery (day 1 of the term), last = the day the borrower ended the rental or the
+  /// term's last day (waiting for pickup is free).
   firstDay          DateTime?        @db.Date
   lastDay           DateTime?        @db.Date
   returnRequestedAt DateTime?
-  /// Days the borrower planned at checkout (their release day = firstDay + plannedDays − 1)
+  /// The term booked, in days (plus extensions)
   plannedDays       Int?
+  /// The term's last day = firstDay + plannedDays − 1 (set on delivery; an early return
+  /// moves it forward)
+  termEndDay        DateTime?        @db.Date
+  /// When the borrower gave notice of an early return (the new last day is termEndDay)
+  earlyReturnAt     DateTime?
+  /// A reservation on this pair was declined (or not answered) after an early return: when
+  /// this holding ends the pair stays with the borrower, free, until a new borrower books it,
+  /// then goes to them by direct handoff (never back to the merchant meanwhile)
+  holdForNext       Boolean          @default(false)
+  /// The plan (pricing-spec.md §6a): first day, wear before and after the planned term, and
+  /// its rent. For a reservation these are what the borrower agreed to.
+  plannedFirstDay   DateTime?        @db.Date
+  plannedWearStart  Decimal?         @db.Decimal(28, 12)
+  plannedWearEnd    Decimal?         @db.Decimal(28, 12)
+  plannedCharge     Decimal?         @db.Decimal(14, 2)
+  /// Tokens locked for the rent estimate (plannedCharge less anything already charged)
+  rentLocked        Decimal          @default(0) @db.Decimal(14, 2)
+  /// Rent tokens charged for this item, net of refunds: 0 until it closes, then the charge
+  rentPaid          Decimal          @default(0) @db.Decimal(14, 2)
+  /// New dates and price a reserved-next borrower must accept (the holder returns early)
+  offerFirstDay     DateTime?        @db.Date
+  offerCharge       Decimal?         @db.Decimal(14, 2)
+  offerWearStart    Decimal?         @db.Decimal(28, 12)
+  offerDueAt        DateTime?
   wearStart         Decimal?         @db.Decimal(28, 12)
   wearEnd           Decimal?         @db.Decimal(28, 12)
   discount          Decimal          @default(0) @db.Decimal(20, 16)
@@ -312,6 +359,7 @@ model RentalItem {
 
   @@index([shoeId, status])
   @@index([status, payableAt])
+  @@index([status, termEndDay])
 }
 
 // ─── Logistics ─────────────────────────────────────────────────────────────
@@ -335,10 +383,11 @@ enum DeliveryStatus {
   FAILED
 }
 
+/// Who pays the ride-hailing driver, directly in the app: whoever receives the pair. The
+/// platform never charges or collects trip fees.
 enum PartyPays {
   BORROWER
   MERCHANT
-  PLATFORM
 }
 
 model Delivery {
@@ -353,11 +402,10 @@ model Delivery {
   fromRentalItemId     String?
   fromAddress          String
   toAddress            String
-  /// Provider's quoted trip fee (passes through to the provider)
+  /// The ride-hailing app's quoted trip fee, for information: the receiver pays it to the
+  /// driver directly, never through us
   quote                Decimal?       @db.Decimal(14, 2)
-  /// Platform booking fee kept by us
-  bookingFee           Decimal?       @db.Decimal(14, 2)
-  /// OPEN DECISION: who pays for return trips
+  /// The receiver: the borrower for DELIVER and HANDOFF, the merchant for COLLECT
   paidBy               PartyPays      @default(BORROWER)
   /// SHA-256 of the courier link token
   courierTokenHash     String?        @unique
@@ -468,15 +516,21 @@ enum WalletEntryKind {
   TOP_UP
   /// Refunded to the card (−balance)
   WITHDRAWAL
-  /// Reserved for a rental: pair values + rent (+locked)
+  /// Reserved for a rental: a pair's value (deposit) or its rent estimate (+locked)
   LOCK
   /// Released from a rental (−locked)
   UNLOCK
-  /// Rent, delivery fee, damage or a lost pair (−balance). A charge taken from a rental's
-  /// locked tokens is written with a matching UNLOCK.
+  /// Rent when an item closes, damage or a lost pair (−balance; trip fees never go through tokens). A charge taken from a pair's
+  /// deposit is written with a matching UNLOCK.
   CHARGE
   /// Given back, e.g. an upheld overcharge (+balance)
   CREDIT
+}
+
+/// Why tokens are locked: a pair's deposit (its value V) or the rent estimate for its term
+enum LockPurpose {
+  DEPOSIT
+  RENT
 }
 
 model WalletEntry {
@@ -487,6 +541,8 @@ model WalletEntry {
   amount         Decimal         @db.Decimal(14, 2)
   rentalId       String?
   rentalItemId   String?
+  /// LOCK / UNLOCK only: what the tokens are held for
+  purpose        LockPurpose?
   paymentId      String?
   note           String?
   idempotencyKey String          @unique
@@ -557,4 +613,36 @@ model Dispute {
   decidedBy  User?      @relation("DisputeDecidedBy", fields: [decidedById], references: [id])
 
   @@index([status])
+}
+
+// ─── Notifications ─────────────────────────────────────────────────────────
+
+enum NotificationKind {
+  /// A reserved pair came back early and costs more: accept or reject
+  PRICE_OFFER
+  /// A reservation was cancelled (offer rejected or expired, pair retired)
+  RESERVATION_CANCELLED
+  /// Tokens given back (unused days, a lower price)
+  REFUND
+  /// The term ended and a driver is on the way
+  TERM_ENDED
+}
+
+/// In-app notice, also sent by email (an outbox: emailedAt is set once sent).
+model Notification {
+  id           String           @id @default(cuid())
+  userId       String
+  kind         NotificationKind
+  title        String
+  body         String
+  link         String?
+  rentalItemId String?
+  readAt       DateTime?
+  emailedAt    DateTime?
+  createdAt    DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, readAt])
+  @@index([emailedAt])
 }

@@ -17,8 +17,10 @@ You build logistics. Read `CLAUDE.md` and `docs/business-model.md` §2, §4 (rul
 1. **Provider adapter interface** `LogisticsProvider`: `quote(from, to, type)`, `book(delivery)`, `cancel(id)`, `parseWebhook(req)` → normalised status events. Types: DELIVER (merchant → borrower), COLLECT (borrower → merchant), HANDOFF (borrower → borrower).
 2. **Manual provider (MVP default):** an admin enters the quote, books the trip by hand with whichever ride-hailing app, and updates status. The roadmap says "deliveries booked by admin" for MVP. Which app to integrate first is an open decision, so no real API adapter until asked.
 3. **Delivery records:** each Delivery is linked to a RentalItem and stores type, provider, quote, fee, status, timestamps and trip log. The signed courier link lets a driver upload **sealed-bag photos at pickup and drop-off** without an account.
-4. **Status → booking events:** trip status changes emit events booking-wear consumes, with the delivery time (delivered → the receiver's first wear-day is that day, or the next day if the giver ended their rental that same day). The borrower's charge already stopped when they ended the rental, so slow pickups cost the borrower nothing; report the real delivery time anyway, it decides when the next borrower starts paying.
-5. **Fees:** the delivery fee passes through to the provider and the platform keeps only `deliveryBookingFee` from PricingSettings (an open decision; nullable, and if unset show "TBD" and charge 0 with an `// OPEN DECISION:` note). Who pays for return trips is also open, so make the payer configurable.
+4. **Status → booking events:** trip status changes emit events booking-wear consumes, with the delivery time. Delivered on day D → the receiver's term starts on D + 1 (day 1 is the day after delivery), or the day after the giver's last day if later, and its last day is fixed. The giver's term already ended (their last day is the term's last day), so slow pickups cost nobody anything; report the real delivery time anyway, it fixes the next borrower's term.
+   4b. **Who books trips:** booking requests every trip through `requestDelivery`: DELIVER at checkout; COLLECT or HANDOFF when a term ends (the daily job runs on the day after the last day); a HANDOFF straight away when someone books a pair whose holder has ended and is waiting. A pair may wait at a borrower's home with no trip at all: while the reserved-next borrower decides on an offer of earlier dates, and, if they decline or don't answer, until a new borrower books it (`holdForNext`); booking then requests a HANDOFF from that holder. No COLLECT is booked for such a pair.
+   4c. **Addresses:** each customer and merchant account has one address; booking passes the accounts' current addresses to `requestDelivery`, which stores them on the trip (`fromAddress` / `toAddress`), so a later address change never moves a trip already booked.
+5. **Fees are not handled by us** (decided 2026-10-11). Whoever receives the pair pays the driver directly in the ride-hailing app: the borrower for DELIVER, the next borrower for HANDOFF, the merchant for COLLECT (`receiverPays(type)` sets `Delivery.paidBy` in `requestDelivery`; callers can't override it). There is no booking fee and the platform never pays a trip, not even a free (wrong-size) return. The admin may record the app's quote (`Delivery.quote`) for information; no tokens move for a trip.
 6. **Handoffs** include a "sealed bag + cleaning kit" checklist the driver confirms.
 
 ## Must not
@@ -26,6 +28,7 @@ You build logistics. Read `CLAUDE.md` and `docs/business-model.md` §2, §4 (rul
 - Compute rental prices or wear.
 - Change shoe status directly. Emit events, and booking-wear owns the transitions.
 - Store provider API keys in code. Use env vars.
+- Charge, collect or refund a trip fee, or add a platform fee to a trip.
 
 ## Done when
 

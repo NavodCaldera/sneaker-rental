@@ -21,6 +21,8 @@ export interface CurveParams {
   A: D;
   /** Price per wear-day when new, K = R / A */
   K: D;
+  /** Wear past L is charged at P(L) (settings.chargePastLife); otherwise it earns nothing */
+  pastLife: boolean;
   // Precomputed normalisation terms
   readonly S0: D;
   readonly SL: D;
@@ -87,7 +89,7 @@ export function curveParams(
 
   const partial = { V: v, L: l, R, m, beta, q, S0, SL, IS0 };
   const A = integralAt(partial, l);
-  return { ...partial, A, K: R.div(A) };
+  return { ...partial, A, K: R.div(A), pastLife: settings.chargePastLife };
 }
 
 type CurveShape = Pick<CurveParams, "L" | "m" | "beta" | "q" | "S0" | "SL" | "IS0">;
@@ -107,19 +109,31 @@ function integralAt(p: CurveShape, w: Decimal.Value): D {
 
 /**
  * Normalised curve Q(w) = q + (1 − q) · (S(w) − S(L)) / (S(0) − S(L)).
- * Q(0) = 1, Q(L) = q, and 0 beyond L (the shoe stops earning).
+ * Q(0) = 1, Q(L) = q. Beyond L it stays at q when wear past the lifespan is charged
+ * (`pastLife`), and is 0 otherwise (the reference engine: the shoe stops earning).
  */
 export function Q(p: CurveParams, w: Decimal.Value): D {
   const x = new D(w);
   if (x.lt(0)) throw new RangeError("Wear cannot be negative");
-  if (x.gt(p.L)) return new D(0);
+  if (x.gt(p.L)) return p.pastLife ? p.q : new D(0);
   const s = logistic(x, p.m, p.beta);
   return p.q.plus(ONE.minus(p.q).times(s.minus(p.SL)).div(p.S0.minus(p.SL)));
 }
 
-/** IQ(w) = ∫₀ʷ Q, with w clamped to L. */
+/** IQ(w) = ∫₀ʷ Q, with w clamped to L. A = IQ(L). */
 export function IQ(p: CurveParams, w: Decimal.Value): D {
   return integralAt(p, w);
+}
+
+/**
+ * The integral rent is charged on: IQ(w), plus q · (w − L) for wear past L when it is
+ * charged (`pastLife`). Rent for w0 → w1 is (1 − d) · φ · K · [rentIntegral(w1) −
+ * rentIntegral(w0)], so every wear-day past L costs P(L) = K · q. Equal to IQ up to L.
+ */
+export function rentIntegral(p: CurveParams, w: Decimal.Value): D {
+  const x = new D(w);
+  const past = p.pastLife && x.gt(p.L) ? p.q.times(x.minus(p.L)) : new D(0);
+  return IQ(p, x).plus(past);
 }
 
 /** Price per wear-day at wear w: P(w) = K · Q(w). */
