@@ -42,6 +42,8 @@ model User {
   conditionReports ConditionReport[]
   disputesOpened   Dispute[]         @relation("DisputeOpenedBy")
   disputesDecided  Dispute[]         @relation("DisputeDecidedBy")
+  walletEntries    WalletEntry[]
+  payments         Payment[]
 }
 
 model Session {
@@ -94,39 +96,39 @@ enum Grade {
 }
 
 model Shoe {
-  id              String     @id @default(cuid())
-  merchantId      String
-  brand           String
-  model           String
-  size            String
-  category        String
-  description     String?
-  pickupAddress   String
+  id                String     @id @default(cuid())
+  merchantId        String
+  brand             String
+  model             String
+  size              String
+  category          String
+  description       String?
+  pickupAddress     String
   /// Declared value V (LKR)
-  value           Decimal    @db.Decimal(14, 2)
+  value             Decimal    @db.Decimal(14, 2)
   /// Expected lifespan L (wear-days)
-  lifespanDays    Int
+  lifespanDays      Int
   /// Accumulated wear w (wear-days)
-  wear            Decimal    @default(0) @db.Decimal(28, 12)
+  wear              Decimal    @default(0) @db.Decimal(28, 12)
   /// Wear already used when listed second-hand (w₀)
-  initialWear     Decimal    @default(0) @db.Decimal(28, 12)
+  initialWear       Decimal    @default(0) @db.Decimal(28, 12)
   /// Charged on the platform so far, after discounts (excludes F(w₀))
-  collectedSoFar  Decimal    @default(0) @db.Decimal(28, 12)
-  lostToDiscounts Decimal    @default(0) @db.Decimal(28, 12)
+  collectedSoFar    Decimal    @default(0) @db.Decimal(28, 12)
+  lostToDiscounts   Decimal    @default(0) @db.Decimal(28, 12)
   /// Merchant shares charged so far, net of refunds. Rent goes to the merchant until this
   /// reaches their target (merchant first), then to the platform.
-  merchantCollected Decimal  @default(0) @db.Decimal(14, 2)
+  merchantCollected Decimal    @default(0) @db.Decimal(14, 2)
   /// The current or last holder's planned last day: the release discount counts from it
-  releaseDay      DateTime?  @db.Date
+  releaseDay        DateTime?  @db.Date
   /// Settings version the shoe is priced with: snapshotted when listed, so its curve
   /// never changes under a running rental
-  settingsId      String
-  status          ShoeStatus @default(DRAFT)
-  latestGrade     Grade?
-  publishedAt     DateTime?
-  retiredAt       DateTime?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  settingsId        String
+  status            ShoeStatus @default(DRAFT)
+  latestGrade       Grade?
+  publishedAt       DateTime?
+  retiredAt         DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   merchant         Merchant          @relation(fields: [merchantId], references: [id])
   settings         PricingSettings   @relation(fields: [settingsId], references: [id])
@@ -170,38 +172,41 @@ model Photo {
 
 /// Append-only: the active row is the latest with effectiveFrom ≤ now.
 model PricingSettings {
-  id                 String   @id @default(cuid())
-  effectiveFrom      DateTime @default(now())
-  merchantMargin     Decimal  @db.Decimal(20, 16)
-  platformMargin     Decimal  @db.Decimal(20, 16)
-  floor              Decimal  @db.Decimal(20, 16)
-  midpointRatio      Decimal  @db.Decimal(20, 16)
-  baseSteepness      Decimal  @db.Decimal(20, 16)
+  id                  String   @id @default(cuid())
+  effectiveFrom       DateTime @default(now())
+  merchantMargin      Decimal  @db.Decimal(20, 16)
+  platformMargin      Decimal  @db.Decimal(20, 16)
+  floor               Decimal  @db.Decimal(20, 16)
+  midpointRatio       Decimal  @db.Decimal(20, 16)
+  baseSteepness       Decimal  @db.Decimal(20, 16)
   /// Lifespan the base curve was tuned for: β = baseSteepness · refLife / L
-  refLife            Int      @default(365)
+  refLife             Int      @default(365)
   /// Lifespan a merchant may declare, in wear-days: 6 to 24 months. An admin can grant a
   /// merchant a longer maximum (Merchant.maxLifespanDays).
-  minLifespanDays    Int      @default(183)
-  maxLifespanDays    Int      @default(730)
+  minLifespanDays     Int      @default(183)
+  maxLifespanDays     Int      @default(730)
   /// Highest discount a borrower can get (the release discount's cap)
-  maxDiscount        Decimal  @default(0.10) @db.Decimal(20, 16)
+  maxDiscount         Decimal  @default(0.10) @db.Decimal(20, 16)
   /// Release discount: shown from this many days before a holder's planned last day...
-  releaseLeadDays    Int      @default(10)
+  releaseLeadDays     Int      @default(10)
   /// ...growing by this much a day, up to maxDiscount
-  releaseDiscountStep Decimal @default(0.005) @db.Decimal(20, 16)
+  releaseDiscountStep Decimal  @default(0.005) @db.Decimal(20, 16)
   /// Capital rate r (yearly) and hold cost h (LKR per idle day) for the idle-cost test
-  capitalRate        Decimal  @default(0.12) @db.Decimal(20, 16)
-  holdCost           Decimal  @default(0) @db.Decimal(20, 16)
-  depositPerPair     Decimal  @db.Decimal(14, 2)
-  maxPairsPerBundle  Int
-  disputeWindowDays  Int
-  freeReturnHours    Int
+  capitalRate         Decimal  @default(0.12) @db.Decimal(20, 16)
+  holdCost            Decimal  @default(0) @db.Decimal(20, 16)
+  /// Overrun check: locked tokens must cover the next N days' rent...
+  topUpLeadDays       Int      @default(3)
+  /// ...and a borrower who falls short has this many days to top up before the pairs are recalled
+  topUpGraceDays      Int      @default(3)
+  maxPairsPerBundle   Int
+  disputeWindowDays   Int
+  freeReturnHours     Int
   /// OPEN DECISION: booking fee amount (null = not set yet)
-  deliveryBookingFee Decimal? @db.Decimal(14, 2)
+  deliveryBookingFee  Decimal? @db.Decimal(14, 2)
   /// Catch-up pricing (OPEN DECISION; off at launch)
-  catchUpEnabled     Boolean  @default(false)
-  createdById        String?
-  createdAt          DateTime @default(now())
+  catchUpEnabled      Boolean  @default(false)
+  createdById         String?
+  createdAt           DateTime @default(now())
 
   shoes Shoe[]
 
@@ -222,18 +227,21 @@ model Rental {
   borrowerId      String
   status          RentalStatus @default(PENDING_PAYMENT)
   deliveryAddress String
-  /// Pre-authorised estimate for the whole bundle
+  /// Rent estimate for the planned days (locked in tokens with the pairs' value)
   estimate        Decimal      @db.Decimal(14, 2)
-  depositAmount   Decimal      @db.Decimal(14, 2)
-  /// Gateway reference of the deposit hold
-  depositHoldRef  String?
-  preAuthRef      String?
+  /// Merchant value of the pairs (Σ V), locked in tokens while they are out
+  shoeValue       Decimal      @db.Decimal(14, 2)
+  /// Locked tokens no longer cover the rent: top up by this time or the pairs are recalled
+  topUpDueAt      DateTime?
+  topUpAmount     Decimal?     @db.Decimal(14, 2)
+  recalledAt      DateTime?
   createdAt       DateTime     @default(now())
   closedAt        DateTime?
 
-  borrower User         @relation(fields: [borrowerId], references: [id])
-  items    RentalItem[]
-  payments Payment[]
+  borrower      User          @relation(fields: [borrowerId], references: [id])
+  items         RentalItem[]
+  payments      Payment[]
+  walletEntries WalletEntry[]
 
   @@index([borrowerId, status])
 }
@@ -300,6 +308,7 @@ model RentalItem {
   conditionReports ConditionReport[]
   disputes         Dispute[]
   payments         Payment[]
+  walletEntries    WalletEntry[]
 
   @@index([shoeId, status])
   @@index([status, payableAt])
@@ -401,6 +410,11 @@ model ConditionReport {
 // ─── Payments, payouts, disputes ───────────────────────────────────────────
 
 enum PaymentKind {
+  /// Card → tokens (a sale through the gateway)
+  TOP_UP
+  /// Tokens → card (a refund of an earlier top-up)
+  WITHDRAWAL
+  // Card holds and deposits before tokens replaced them (history only)
   PREAUTH
   PREAUTH_VOID
   CAPTURE
@@ -416,9 +430,12 @@ enum PaymentStatus {
   FAILED
 }
 
+/// A call to the payment gateway: token top-ups and withdrawals (and, before tokens,
+/// card holds and captures).
 model Payment {
   id             String        @id @default(cuid())
-  rentalId       String
+  userId         String
+  rentalId       String?
   rentalItemId   String?
   kind           PaymentKind
   status         PaymentStatus @default(PENDING)
@@ -427,12 +444,61 @@ model Payment {
   gatewayRef     String?
   idempotencyKey String        @unique
   note           String?
+  /// For a WITHDRAWAL: the top-up it refunds (refunds go back to the card that paid)
+  refundOfId     String?
   createdAt      DateTime      @default(now())
 
-  rental     Rental      @relation(fields: [rentalId], references: [id])
-  rentalItem RentalItem? @relation(fields: [rentalItemId], references: [id])
+  refundOf      Payment?      @relation("PaymentRefunds", fields: [refundOfId], references: [id])
+  refunds       Payment[]     @relation("PaymentRefunds")
+  user          User          @relation(fields: [userId], references: [id])
+  rental        Rental?       @relation(fields: [rentalId], references: [id])
+  rentalItem    RentalItem?   @relation(fields: [rentalItemId], references: [id])
+  walletEntries WalletEntry[]
 
   @@index([rentalId])
+  @@index([userId])
+}
+
+// ─── Tokens ────────────────────────────────────────────────────────────────
+
+/// Append-only token ledger (1 token = 1 LKR). Balance = top-ups + credits − charges −
+/// withdrawals; locked = locks − unlocks; available = balance − locked.
+enum WalletEntryKind {
+  /// Paid in through the gateway (+balance)
+  TOP_UP
+  /// Refunded to the card (−balance)
+  WITHDRAWAL
+  /// Reserved for a rental: pair values + rent (+locked)
+  LOCK
+  /// Released from a rental (−locked)
+  UNLOCK
+  /// Rent, delivery fee, damage or a lost pair (−balance). A charge taken from a rental's
+  /// locked tokens is written with a matching UNLOCK.
+  CHARGE
+  /// Given back, e.g. an upheld overcharge (+balance)
+  CREDIT
+}
+
+model WalletEntry {
+  id             String          @id @default(cuid())
+  userId         String
+  kind           WalletEntryKind
+  /// Always positive; the kind gives the direction
+  amount         Decimal         @db.Decimal(14, 2)
+  rentalId       String?
+  rentalItemId   String?
+  paymentId      String?
+  note           String?
+  idempotencyKey String          @unique
+  createdAt      DateTime        @default(now())
+
+  user       User        @relation(fields: [userId], references: [id])
+  rental     Rental?     @relation(fields: [rentalId], references: [id])
+  rentalItem RentalItem? @relation(fields: [rentalItemId], references: [id])
+  payment    Payment?    @relation(fields: [paymentId], references: [id])
+
+  @@index([userId, kind])
+  @@index([rentalId, kind])
 }
 
 enum PayoutStatus {

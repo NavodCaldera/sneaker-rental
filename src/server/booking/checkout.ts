@@ -20,7 +20,7 @@ import {
 } from "../catalogue/pricing";
 import { db } from "../db";
 import { requestDelivery } from "../logistics/requests";
-import { PaymentError, authorizeRental } from "../payments";
+import { WalletError, lockForRental, walletBalance } from "../wallet";
 import { type SettingsRow, getActiveSettings } from "../settings";
 import { asOfToday } from "./holdings";
 
@@ -60,8 +60,15 @@ export type BundleQuote = {
   maxPairs: number;
   plannedDays: number;
   dailyCost: string;
+  /** Merchant value of the pairs (Σ V), locked while they are out */
+  shoeValue: string;
+  /** Tokens to lock: shoeValue + estimate */
+  required: string;
+  /** The borrower's available tokens (null when signed out) */
+  available: string | null;
+  /** Tokens to top up before booking (0 if enough) */
+  shortfall: string;
   estimate: string;
-  deposit: string;
   problems: string[];
 };
 
@@ -166,6 +173,17 @@ export async function quoteBundle(
   });
 
   const estimate = lines.reduce((sum, l) => sum.plus(l.estimate), new D(0));
+  // Minimum balance: the pairs' merchant value plus the rent estimate, locked at booking.
+  const shoeValue = listed.reduce((sum, s) => sum.plus(toD(s.value)), new D(0));
+  const required = shoeValue.plus(estimate);
+  const available = borrowerId ? (await walletBalance(borrowerId)).available : null;
+  const shortfall = available === null ? new D(0) : D.max(0, required.minus(available));
+  if (shortfall.gt(0)) {
+    problems.push(
+      `Top up ${shortfall.toFixed(2)} tokens: you need ${required.toFixed(2)} available ` +
+        `(pair values ${shoeValue.toFixed(2)} + rent estimate ${estimate.toFixed(2)})`,
+    );
+  }
   return {
     lines,
     pairsHeld: held,
@@ -174,7 +192,10 @@ export async function quoteBundle(
     plannedDays,
     dailyCost: bundleDailyCost(lines.map((l) => l.priceToday)).toString(),
     estimate: estimate.toFixed(2),
-    deposit: toD(row.depositPerPair).times(lines.length).toFixed(2),
+    shoeValue: shoeValue.toFixed(2),
+    required: required.toFixed(2),
+    available: available?.toFixed(2) ?? null,
+    shortfall: shortfall.toFixed(2),
     problems,
   };
 }
@@ -217,8 +238,9 @@ export const checkoutSchema = z.object({
 /**
  * Books a bundle (§5.2 step 3). Available pairs are reserved and a delivery is requested;
  * pairs held by another borrower join the handoff queue. Each item keeps its planned days
- * (its release day) and the release discount of the day of booking. Payment (pre-auth +
- * deposit) is attached by the payments module.
+ * (its release day) and the release discount of the day of booking. The pairs' merchant
+ * value plus the rent estimate is locked from the borrower's tokens in the same
+ * transaction, so a short balance books nothing.
  */
 export async function checkout(
   borrowerId: string,
@@ -238,16 +260,22 @@ export async function checkout(
     throw new BookingError("Some pairs are no longer listed");
   if (quote.problems.length) throw new BookingError(quote.problems[0]);
 
-  const rental = await db.$transaction(async (tx) => {
+  return db.$transaction(async (tx) => {
     const rental = await tx.rental.create({
       data: {
         borrowerId,
-        status: "PENDING_PAYMENT",
+        status: "ACTIVE",
         deliveryAddress: input.deliveryAddress,
         estimate: quote.estimate,
-        depositAmount: quote.deposit,
+        shoeValue: quote.shoeValue,
       },
     });
+    try {
+      await lockForRental(tx, borrowerId, rental.id, new D(quote.required));
+    } catch (e) {
+      if (e instanceof WalletError) throw new BookingError(e.message);
+      throw e;
+    }
 
     for (const line of quote.lines) {
       const terms = {
@@ -288,34 +316,5 @@ export async function checkout(
       }
     }
     return rental;
-  });
-
-  try {
-    return await authorizeRental(rental.id);
-  } catch (e) {
-    if (!(e instanceof PaymentError)) throw e;
-    await cancelRental(rental.id);
-    throw new BookingError(`Payment failed: ${e.message}`);
-  }
-}
-
-/** Undo a booking whose payment failed: free the pairs and cancel its deliveries. */
-export async function cancelRental(rentalId: string) {
-  await db.$transaction(async (tx) => {
-    const items = await tx.rentalItem.findMany({ where: { rentalId } });
-    for (const item of items) {
-      if (item.status === "AWAITING_DELIVERY") {
-        await tx.shoe.updateMany({
-          where: { id: item.shoeId, status: "RESERVED" },
-          data: { status: "AVAILABLE" },
-        });
-      }
-    }
-    await tx.delivery.updateMany({
-      where: { rentalItem: { rentalId } },
-      data: { status: "CANCELLED" },
-    });
-    await tx.rentalItem.updateMany({ where: { rentalId }, data: { status: "CANCELLED" } });
-    await tx.rental.update({ where: { id: rentalId }, data: { status: "CANCELLED" } });
   });
 }

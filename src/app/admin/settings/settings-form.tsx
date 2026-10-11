@@ -64,7 +64,16 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
   {
     title: "Rentals",
     fields: [
-      { name: "depositPerPair", label: "Deposit per pair (LKR)" },
+      {
+        name: "topUpLeadDays",
+        label: "Token cover: days of rent ahead",
+        hint: "Locked tokens must cover rent so far plus this many days (3)",
+      },
+      {
+        name: "topUpGraceDays",
+        label: "Days to top up before recall",
+        hint: "3",
+      },
       { name: "maxPairsPerBundle", label: "Max pairs held at once" },
       { name: "disputeWindowDays", label: "Dispute window (days)" },
       { name: "freeReturnHours", label: "Free return window (hours)" },

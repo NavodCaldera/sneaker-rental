@@ -7,7 +7,7 @@ An asset-light marketplace for renting sneakers by wear. Merchants list shoes, b
 
 ## Stack
 
-Next.js (App Router) + TypeScript · PostgreSQL + Prisma · decimal.js for every money and wear value · Vitest (unit) + Playwright (e2e) · object storage for photos behind an adapter · payment gateway behind an adapter (PayHere is a candidate; pre-auth support still unconfirmed, so ship a mock first).
+Next.js (App Router) + TypeScript · PostgreSQL + Prisma · decimal.js for every money and wear value · Vitest (unit) + Playwright (e2e) · object storage for photos behind an adapter · payment gateway behind an adapter for token top-ups (sales) and withdrawals (refunds); PayHere is a candidate, the mock ships first.
 
 Versions: Next 16.4, React 19.3, Prisma 7.10 (config in `prisma.config.ts`, client generated to `src/generated/prisma`, uses the `@prisma/adapter-pg` driver adapter), Vitest 5, Playwright 1.64. Next 16 differs from older versions, so read @AGENTS.md before writing Next.js code.
 
@@ -19,7 +19,7 @@ Conventions:
 - **Auth:** call `requireUser(...roles)` from `src/server/auth/session.ts` at the top of every page, server action and route handler that needs a user. It redirects on failure. Sessions are random tokens in an httpOnly cookie, stored as SHA-256 hashes.
 - **Server code** lives in `src/server/<module>/`, imports `server-only`, and uses `db` from `src/server/db.ts`. Pages call services; services hold the business logic and are integration-tested.
 - **Prisma 7:** `prisma migrate dev` does not regenerate the client, so use `npm run db:migrate` (migrate + generate).
-- **Settings:** a listed shoe is priced with the settings version it was listed under (`Shoe.settingsId`). Use `shoeCurve(shoe)` / `shoePricing(shoe)` from `src/server/catalogue/pricing.ts` (include `settings: true` in the query). `getActiveSettings()` is for operational values (deposit, bundle size, windows, fees), new listings and previews.
+- **Settings:** a listed shoe is priced with the settings version it was listed under (`Shoe.settingsId`). Use `shoeCurve(shoe)` / `shoePricing(shoe)` from `src/server/catalogue/pricing.ts` (include `settings: true` in the query). `getActiveSettings()` is for operational values (token cover, bundle size, windows, fees), new listings and previews.
 - **Days:** wear-ledger days are Asia/Colombo calendar dates in `RentalItem.firstDay` / `lastDay`, both counted. The first day is the delivery day; the last day is the day the borrower presses End rental, so waiting for the driver is free. A handoff receiver starts on the delivery day, or the day after the giver's last day if that is later.
 
 ## Databases
@@ -47,24 +47,24 @@ pricing engine → schema and roles → catalogue → booking and wear ledger �
 
 ## Scope
 
-Build the **MVP only** (§10 roadmap): pricing engine and tests, listings with curve preview, bundles of up to 4 pairs, booking and wear ledger, card pre-auth and deposits, deliveries booked by admin, direct handoffs, weekly merchant payouts. The release discount for the next borrower was built on request (pricing-spec.md §8). Phase 2/3 features (buy-out, merchant idle discounts, tiers, event packs, membership, etc.) stay out until asked for. Keep the data model ready for them.
+Build the **MVP only** (§10 roadmap): pricing engine and tests, listings with curve preview, bundles of up to 4 pairs, booking and wear ledger, a token wallet (replaces card pre-auth and deposits), deliveries booked by admin, direct handoffs, weekly merchant payouts. The release discount for the next borrower was built on request (pricing-spec.md §8). Phase 2/3 features (buy-out, merchant idle discounts, tiers, event packs, membership, etc.) stay out until asked for. Keep the data model ready for them.
 
 ## Launch defaults (all configurable; never hard-coded outside settings)
 
-| Setting                                 | Default                                        | Note                                                            |
-| --------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------- |
-| μm / μp                                 | 0.10 / 0.10                                    | Open decision: the split may change                             |
-| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03                            | PricingSettings; reference lifespan 365                         |
-| Declared lifespan limits                | 6–24 months (183–730)                          | Admin can extend a merchant's maximum on request                |
-| φ (catch-up)                            | 1, off                                         | Discounts funded from margin                                    |
-| Deposit                                 | 5,000 LKR × pairs held                         | §2 fixes it; §10 still lists it as open, so keep it in settings |
-| Max pairs per bundle                    | 4                                              |                                                                 |
-| Dispute window / payout hold            | 3 days after close                             |                                                                 |
-| Payout cadence                          | Weekly                                         |                                                                 |
-| Release discount                        | +0.5%/day from 10 days before release, max 10% | Next borrower only; platform-funded (open decision)             |
-| Idle-cost test r / h                    | 0.12 / 0 LKR a day                             | Phase 2; r is an assumption                                     |
-| Currency / timezone                     | LKR / Asia/Colombo                             |                                                                 |
-| Delivery booking fee                    | TBD                                            | Open decision                                                   |
+| Setting                                 | Default                                        | Note                                                              |
+| --------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
+| μm / μp                                 | 0.10 / 0.10                                    | Open decision: the split may change                               |
+| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03                            | PricingSettings; reference lifespan 365                           |
+| Declared lifespan limits                | 6–24 months (183–730)                          | Admin can extend a merchant's maximum on request                  |
+| φ (catch-up)                            | 1, off                                         | Discounts funded from margin                                      |
+| Tokens locked at booking                | Pair values + rent estimate (no deposit)       | Overrun: cover rent + 3 days ahead; 3 days to top up, then recall |
+| Max pairs per bundle                    | 4                                              |                                                                   |
+| Dispute window / payout hold            | 3 days after close                             |                                                                   |
+| Payout cadence                          | Weekly                                         |                                                                   |
+| Release discount                        | +0.5%/day from 10 days before release, max 10% | Next borrower only; platform-funded (open decision)               |
+| Idle-cost test r / h                    | 0.12 / 0 LKR a day                             | Phase 2; r is an assumption                                       |
+| Currency / timezone                     | LKR / Asia/Colombo                             |                                                                   |
+| Delivery booking fee                    | TBD                                            | Open decision                                                     |
 
 Open decisions are listed in §10. When code depends on one, read it from settings and leave a `// OPEN DECISION:` comment. Don't pick a value silently.
 

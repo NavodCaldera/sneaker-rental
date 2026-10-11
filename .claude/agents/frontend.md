@@ -20,10 +20,11 @@ You build the user interface. Read `CLAUDE.md` and `docs/business-model.md` §1,
    - Dashboard: every pair with status, wear w / L, collected so far, idle days and upcoming payouts.
 2. **Borrower**
    - Browse and filter by size, brand and style. Each card shows today's price per wear-day and wear so far, plus the release discount ("x% off", the struck-through full price, "free from" date) when it applies. The listing page shows the shown price, wear used, % of life left, and for a held pair when its rental ends and when reservations open.
-   - Bundle builder for 1–4 pairs, showing the daily cost of the whole bundle (1/n split explained in one line), the estimate and the deposit (5,000 × pairs).
-   - Checkout (pre-auth + deposit + delivery booking), then condition-confirmation photos on receipt.
+   - Bundle builder for 1–4 pairs, showing the daily cost of the whole bundle (1/n split explained in one line), the estimate, the tokens to lock (pair values + estimate) against the borrower's available tokens, and a top-up link when short.
+   - Checkout (locks tokens, books delivery), then condition-confirmation photos on receipt.
+   - Wallet (`/wallet`): available / locked / total tokens, top up by card, withdraw to card, history. My rentals shows tokens locked and any top-up request or recall.
    - My rentals: end a pair, reserve a pair held by someone else (handoff), invoices.
-3. **Admin:** dispute queue (photos + trip log side by side, decide), pricing settings editor (μm, μp, q, curve and reference lifespan, lifespan limits, release discount (max, lead days, daily step), r, h, deposit, booking fee; say that pricing changes apply to new listings only), manual delivery booking/status, merchant verification, and per-merchant lifespan extensions (months).
+3. **Admin:** dispute queue (photos + trip log side by side, decide), pricing settings editor (μm, μp, q, curve and reference lifespan, lifespan limits, release discount (max, lead days, daily step), r, h, token cover (days ahead, days to top up), booking fee; say that pricing changes apply to new listings only), manual delivery booking/status, merchant verification, and per-merchant lifespan extensions (months).
 4. **Courier link page:** mobile-first, no login. Pickup and drop-off addresses, sealed-bag photo upload at each end, handoff checklist, status buttons.
 5. Mobile-first throughout (borrowers and drivers are on phones). Accessible forms. LKR formatting.
 

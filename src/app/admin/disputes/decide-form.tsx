@@ -7,15 +7,19 @@ import { type DisputeState, decideAction } from "./actions";
 const OPTIONS = [
   {
     value: "CHARGE_DEPOSIT",
-    label: "Charge the borrower's deposit",
-    hint: "Damage or loss. Paid to the merchant.",
+    label: "Charge the borrower's tokens",
+    hint: "Damage. Up to the pair's value, from their locked tokens. Paid to the merchant.",
   },
   {
     value: "REFUND_BORROWER",
     label: "Refund the borrower",
-    hint: "Overcharge. Comes off the merchant's share.",
+    hint: "Overcharge. Given back as tokens; comes off the merchant's share first.",
   },
-  { value: "NO_ACTION", label: "No action", hint: "Reject the dispute and release the deposit." },
+  {
+    value: "NO_ACTION",
+    label: "No action",
+    hint: "Reject the dispute and unlock the pair's tokens.",
+  },
 ] as const;
 
 export function DecideForm({ disputeId }: { disputeId: string }) {

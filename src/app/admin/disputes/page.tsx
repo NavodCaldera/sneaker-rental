@@ -9,7 +9,7 @@ import { DecideForm } from "./decide-form";
 export const metadata: Metadata = { title: "Disputes" };
 
 const RESOLUTION = {
-  CHARGE_DEPOSIT: "Charged deposit",
+  CHARGE_DEPOSIT: "Charged tokens",
   REFUND_BORROWER: "Refunded borrower",
   NO_ACTION: "No action",
 } as const;

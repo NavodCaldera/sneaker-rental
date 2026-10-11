@@ -30,7 +30,8 @@ export const DEFAULT_SETTINGS = {
   releaseDiscountStep: "0.005",
   capitalRate: "0.12",
   holdCost: "0",
-  depositPerPair: "5000",
+  topUpLeadDays: 3, // locked tokens must cover rent so far + 3 days
+  topUpGraceDays: 3, // days to top up before the pairs are recalled
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
   freeReturnHours: 24,
@@ -39,6 +40,8 @@ export const DEFAULT_SETTINGS = {
 };
 
 const PASSWORD = "password123";
+/** Sample tokens for each seed borrower. */
+const STARTING_TOKENS = "200000";
 
 const storage = new LocalDiskStorage(storageDir());
 const PHOTO_KINDS = ["FRONT", "SIDE", "SOLE", "INSIDE", "BOX"] as const;
@@ -219,6 +222,21 @@ async function main() {
       },
       include: { merchant: true },
     });
+
+    // Borrowers start with tokens so they can book (1 token = 1 LKR).
+    if (u.role === "BORROWER") {
+      await db.walletEntry.upsert({
+        where: { idempotencyKey: `seed:${user.id}` },
+        update: {},
+        create: {
+          userId: user.id,
+          kind: "TOP_UP",
+          amount: STARTING_TOKENS,
+          idempotencyKey: `seed:${user.id}`,
+          note: "Starting tokens (sample data)",
+        },
+      });
+    }
 
     const shoes = shoesByMerchant[u.email];
     if (!shoes || !user.merchant) continue;

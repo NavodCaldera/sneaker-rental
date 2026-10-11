@@ -95,9 +95,9 @@ test("delivery → condition → return → close → restock, across all four r
   await expect(page.getByText("Nothing being cleaned")).toBeVisible();
   await signOut(page);
 
-  // The borrower sees the closed rental and the released deposit.
+  // The borrower sees the closed rental, with nothing left locked.
   await signIn(page, ACCOUNTS.borrower3);
   await page.goto("/rentals");
   await expect(page.getByText("Closed", { exact: true })).toBeVisible();
-  await expect(page.getByText("released")).toBeVisible();
+  await expect(page.getByText(/0\.00 tokens locked/)).toBeVisible();
 });

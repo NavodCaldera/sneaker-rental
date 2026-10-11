@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { D, toD } from "@/lib/decimal";
 import { db } from "../db";
-import { captureFromDeposit, finishRentalIfDone, refundItem } from "../payments";
+import { chargeDamage, refundItem, releaseAfterDispute } from "../payments";
 import { merchantPartOfRefund } from "../payouts";
 
 export class DisputeError extends Error {}
@@ -68,12 +68,13 @@ export type Decision = z.infer<typeof decisionSchema>;
 
 /**
  * An admin decides after reviewing the photos and trip log.
- * - CHARGE_DEPOSIT: capture up to the deposit left; the amount is added to the merchant's payout.
- * - REFUND_BORROWER: refund up to what was charged. Up to this rental's merchant share comes
+ * - CHARGE_DEPOSIT: charge up to the pair's merchant value from the borrower's locked tokens
+ *   (then their free balance); the amount is added to the merchant's payout.
+ * - REFUND_BORROWER: give back up to what was charged, as tokens. Up to this rental's merchant share comes
  *   off the merchant's payout and their running total, so later rentals of the shoe pay them
  *   back first (merchant first); any more is the platform's cost.
  * - NO_ACTION: dispute rejected.
- * Then the deposit is released and the payout unblocked.
+ * Then the pair's locked value is released and the payout unblocked.
  */
 export async function decideDispute(
   adminId: string,
@@ -90,19 +91,14 @@ export async function decideDispute(
 
   let amount: string | null = null;
   if (input.resolution === "CHARGE_DEPOSIT") {
-    const captured = await captureFromDeposit(
-      item.rentalId,
-      item.id,
-      input.amount,
-      `dispute:${dispute.id}`,
-    );
-    amount = captured ? captured.amount.toFixed(2) : "0.00";
+    const charged = await chargeDamage(item.id, input.amount, `dispute:${dispute.id}`);
+    amount = charged.toFixed(2);
   } else if (input.resolution === "REFUND_BORROWER") {
     if (new D(input.amount).gt(toD(item.charge ?? 0))) {
       throw new DisputeError("A refund can't be more than this rental's charge");
     }
     const refunded = await refundItem(item.id, input.amount, `dispute:${dispute.id}`);
-    amount = refunded ? refunded.amount.toFixed(2) : "0.00";
+    amount = refunded ? refunded.toFixed(2) : "0.00";
     const fromMerchant = merchantPartOfRefund(amount, item.merchantShare ?? 0);
     if (fromMerchant.gt(0)) {
       const shoe = await db.shoe.findUniqueOrThrow({ where: { id: item.shoeId } });
@@ -124,7 +120,7 @@ export async function decideDispute(
       decidedAt: now,
     },
   });
-  await finishRentalIfDone(item.rentalId);
+  await releaseAfterDispute(item.id);
   return decided;
 }
 
@@ -148,7 +144,7 @@ export async function listDisputes(scope: "open" | "decided") {
           conditionReports: { include: { photos: true }, orderBy: { createdAt: "asc" } },
           deliveries: { include: { photos: true } },
           outgoing: { include: { photos: true } },
-          payments: { where: { status: "SUCCEEDED" } },
+          walletEntries: { where: { kind: "CHARGE" }, orderBy: { createdAt: "asc" } },
         },
       },
     },

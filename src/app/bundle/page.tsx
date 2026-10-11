@@ -2,13 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { D } from "@/lib/decimal";
 import { PhotoImg } from "@/components/shoe-bits";
-import { Alert, Badge, Button, Card, EmptyState, Input, PageHeader } from "@/components/ui";
-import { formatLKR, formatPercent, formatWear } from "@/lib/format";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  LinkButton,
+  PageHeader,
+} from "@/components/ui";
+import { formatLKR, formatPercent, formatTokens, formatWear } from "@/lib/format";
 import { removeFromBundleAction } from "@/app/rentals/actions";
 import { requireUser } from "@/server/auth/session";
 import { getBundle } from "@/server/booking/bundle";
 import { DEFAULT_PLANNED_DAYS, quoteBundle } from "@/server/booking/checkout";
-import { gateway } from "@/server/payments/gateway";
 import { CheckoutForm } from "./checkout-form";
 
 export const metadata: Metadata = { title: "Bundle" };
@@ -93,15 +101,33 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
               Update
             </Button>
           </form>
-          <Row label={`Estimate for ${plannedDays} days`}>{formatLKR(quote.estimate)}</Row>
-          <Row label="Deposit hold">{formatLKR(quote.deposit)}</Row>
+          <Row label={`Rent estimate for ${plannedDays} days`}>{formatLKR(quote.estimate)}</Row>
+          <Row label="Pair values">{formatLKR(quote.shoeValue)}</Row>
+          <Row label="Tokens locked while you rent">
+            <strong>{formatTokens(quote.required)}</strong>
+          </Row>
+          <Row label="Your available tokens">
+            <Link href="/wallet" className="underline">
+              {formatTokens(quote.available ?? "0")}
+            </Link>
+          </Row>
           <p className="text-xs text-subtle">
-            We pre-authorise the estimate and hold the deposit on your card. You&apos;re charged for
-            the wear you actually add when each pair is returned, and the deposit is released once
-            its condition is checked. Delivery fees are quoted by the ride-hailing app.
-            {gateway().name === "mock" && " Test mode: no real card is charged."}
+            Booking locks the pairs&apos; value plus the rent estimate from your tokens. You pay
+            only for the wear you actually add, taken from those tokens when each pair is returned;
+            the rest is unlocked. If you keep the pairs longer, we&apos;ll ask you to top up.
           </p>
         </Card>
+        {new D(quote.shortfall).gt(0) && (
+          <Card className="flex flex-col gap-2 text-sm">
+            <p>
+              You need <strong>{formatTokens(quote.shortfall)}</strong> more tokens to book this
+              bundle.
+            </p>
+            <LinkButton href={`/wallet?amount=${quote.shortfall}&next=/bundle`}>
+              Top up {formatTokens(quote.shortfall)}
+            </LinkButton>
+          </Card>
+        )}
         {quote.problems.length > 0 ? (
           <Alert>{quote.problems[0]}</Alert>
         ) : (

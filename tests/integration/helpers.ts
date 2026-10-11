@@ -19,7 +19,8 @@ export const TEST_SETTINGS = {
   releaseDiscountStep: "0.005",
   capitalRate: "0.12",
   holdCost: "0",
-  depositPerPair: "5000",
+  topUpLeadDays: 3,
+  topUpGraceDays: 3,
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
   freeReturnHours: 24,
@@ -42,10 +43,17 @@ export async function resetDb() {
 let counter = 0;
 let cachedHash: string | undefined;
 
-export async function makeUser(role: Role, overrides: { email?: string; name?: string } = {}) {
+/**
+ * A user. Borrowers start with 1,000,000 tokens so bookings never fail for lack of them,
+ * unless `tokens` says otherwise (use 0 to test top-ups).
+ */
+export async function makeUser(
+  role: Role,
+  overrides: { email?: string; name?: string; tokens?: string } = {},
+) {
   cachedHash ??= await hashPassword("password123");
   counter += 1;
-  return db.user.create({
+  const user = await db.user.create({
     data: {
       role,
       name: overrides.name ?? `${role.toLowerCase()} ${counter}`,
@@ -58,6 +66,23 @@ export async function makeUser(role: Role, overrides: { email?: string; name?: s
           : undefined,
     },
     include: { merchant: true },
+  });
+  const tokens = overrides.tokens ?? "1000000";
+  if (role === "BORROWER" && tokens !== "0") await fund(user.id, tokens);
+  return user;
+}
+
+/** Give a user tokens directly (as if topped up), without the gateway. */
+export async function fund(userId: string, amount: string) {
+  counter += 1;
+  return db.walletEntry.create({
+    data: {
+      userId,
+      kind: "TOP_UP",
+      amount,
+      idempotencyKey: `test-fund:${userId}:${counter}`,
+      note: "Test tokens",
+    },
   });
 }
 

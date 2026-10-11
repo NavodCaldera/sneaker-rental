@@ -16,7 +16,8 @@ test("5.2 borrower builds a 4-pair bundle and checks out", async ({ page }) => {
   }
 
   await expect(page.getByText("Daily cost (4 pairs held)")).toBeVisible();
-  await expect(page.getByText("LKR 20,000.00")).toBeVisible(); // deposit: 5,000 × 4
+  // Booking locks the four pairs' value plus the rent estimate from the borrower's tokens.
+  await expect(page.getByText("Tokens locked while you rent")).toBeVisible();
 
   // A fifth pair breaks the 4-pair cap.
   await page.goto("/browse?category=Running");

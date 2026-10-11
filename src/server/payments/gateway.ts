@@ -5,18 +5,18 @@ import { D } from "@/lib/decimal";
  * Payment gateway adapter. Amounts are 2-dp decimal strings in LKR; an adapter converts
  * to the gateway's minor units at its own boundary. Every call carries an idempotency key.
  *
- * OPEN DECISION: which gateway (PayHere is a candidate; confirm card pre-authorisation).
- * Until then the mock below is the only implementation.
+ * Borrowers buy tokens with a plain card sale and get unused tokens back as a refund of
+ * that sale, so no card holds are needed (they expire long before a 90-day rental ends).
+ *
+ * OPEN DECISION: which gateway (PayHere is a candidate). Until then the mock below is the
+ * only implementation.
  */
 export interface PaymentGateway {
   readonly name: string;
-  /** Hold `amount` on the card for a later capture. */
-  preAuthorise(amount: string, key: string): Promise<GatewayResult>;
-  /** Take money against an authorisation (may be called several times, one per item). */
-  capture(authRef: string, amount: string, key: string): Promise<GatewayResult>;
-  /** Release what's left of an authorisation. */
-  void(authRef: string, key: string): Promise<GatewayResult>;
-  refund(captureRef: string, amount: string, key: string): Promise<GatewayResult>;
+  /** Take `amount` from the borrower's card (a token top-up). */
+  charge(amount: string, key: string): Promise<GatewayResult>;
+  /** Give back up to the amount of an earlier charge (a token withdrawal). */
+  refund(chargeRef: string, amount: string, key: string): Promise<GatewayResult>;
 }
 
 export type GatewayResult = { ok: true; ref: string } | { ok: false; error: string };
@@ -34,27 +34,20 @@ export class MockGateway implements PaymentGateway {
   readonly name = "mock";
   private readonly seen = new Map<string, GatewayResult>();
 
-  private run(key: string, amount: string | null): GatewayResult {
+  private run(key: string, amount: string): GatewayResult {
     const prior = this.seen.get(key);
     if (prior) return prior;
-    const result: GatewayResult =
-      amount !== null && new D(amount).eq("13.13")
-        ? { ok: false, error: "Card declined (mock)" }
-        : { ok: true, ref: `mock_${randomUUID()}` };
+    const result: GatewayResult = new D(amount).eq("13.13")
+      ? { ok: false, error: "Card declined (mock)" }
+      : { ok: true, ref: `mock_${randomUUID()}` };
     this.seen.set(key, result);
     return result;
   }
 
-  async preAuthorise(amount: string, key: string) {
+  async charge(amount: string, key: string) {
     return this.run(key, amount);
   }
-  async capture(_authRef: string, amount: string, key: string) {
-    return this.run(key, amount);
-  }
-  async void(_authRef: string, key: string) {
-    return this.run(key, null);
-  }
-  async refund(_captureRef: string, amount: string, key: string) {
+  async refund(_chargeRef: string, amount: string, key: string) {
     return this.run(key, amount);
   }
 }
