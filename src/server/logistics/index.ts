@@ -3,7 +3,6 @@ import type { Delivery, DeliveryStatus, Prisma } from "@/generated/prisma/client
 import { db } from "../db";
 import { hashToken, newToken } from "../auth/service";
 import { onDeliveryDelivered, onDeliveryPickedUp } from "../booking/lifecycle";
-import { chargeDeliveryFee } from "../payments";
 import { checkPhoto, savePhoto } from "../storage";
 import { provider } from "./provider";
 
@@ -27,7 +26,10 @@ function appendLog(delivery: Delivery, entry: LogEntry): Prisma.InputJsonValue {
   return [...log, entry];
 }
 
-/** The admin enters the ride-hailing app's quote for the trip fee (passes through to them). */
+/**
+ * The admin records the ride-hailing app's quote for the trip, for information only: the
+ * receiver pays it to the driver directly.
+ */
 export async function setQuote(deliveryId: string, quote: string, by = "admin") {
   if (!/^\d+(\.\d{1,2})?$/.test(quote.trim())) throw new LogisticsError("Enter the quote in LKR");
   const delivery = await db.delivery.findUniqueOrThrow({ where: { id: deliveryId } });
@@ -97,7 +99,7 @@ export async function renewCourierLink(deliveryId: string, now = new Date()) {
 
 /**
  * Moves a trip to its next status and tells booking: picked up (shoe in transit) or
- * delivered (holding starts / stops). Delivery fees are charged on delivery.
+ * delivered (holding starts / stops). No money moves: the receiver pays the driver directly.
  */
 export async function updateStatus(
   deliveryId: string,
@@ -127,7 +129,6 @@ export async function updateStatus(
     if (status === "DELIVERED") await onDeliveryDelivered(tx, updated, at);
     return updated;
   });
-  if (updated?.status === "DELIVERED") await chargeDeliveryFee(updated.id);
   return updated;
 }
 

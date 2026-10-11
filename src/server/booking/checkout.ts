@@ -303,7 +303,6 @@ export async function checkout(
           rentalItemId: item.id,
           fromAddress: shoe.pickupAddress,
           toAddress: input.deliveryAddress,
-          bookingFee: settingsRow.deliveryBookingFee?.toString() ?? null,
         });
       } else {
         const taken = await tx.rentalItem.count({
@@ -345,7 +344,7 @@ export async function checkout(
       _sum: { rentPaid: true },
     });
     for (const line of quote.lines) {
-      if (line.mode === "handoff") await handOffIfWaiting(tx, line.shoeId, settingsRow);
+      if (line.mode === "handoff") await handOffIfWaiting(tx, line.shoeId);
     }
     return tx.rental.update({
       where: { id: rental.id },

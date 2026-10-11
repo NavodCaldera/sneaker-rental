@@ -68,7 +68,6 @@ export const settingsSchema = z
     maxPairsPerBundle: z.coerce.number().int().min(1).max(10),
     disputeWindowDays: z.coerce.number().int().min(0).max(30),
     freeReturnHours: z.coerce.number().int().min(0).max(168),
-    deliveryBookingFee: money.optional().or(z.literal("")),
     catchUpEnabled: z.boolean(),
   })
   .refine((s) => s.minLifespanDays <= s.maxLifespanDays, {
@@ -81,6 +80,6 @@ export type SettingsInput = z.infer<typeof settingsSchema>;
 /** Settings are append-only: each change is a new row, so past rentals keep their history. */
 export async function updateSettings(input: SettingsInput, adminId: string) {
   return db.pricingSettings.create({
-    data: { ...input, deliveryBookingFee: input.deliveryBookingFee || null, createdById: adminId },
+    data: { ...input, createdById: adminId },
   });
 }

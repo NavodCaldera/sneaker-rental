@@ -31,7 +31,7 @@ async function bookedRental() {
 }
 
 describe("manual provider: quote → book → courier pickup → drop-off", () => {
-  it("moves the shoe, starts the clock and charges the delivery fee", async () => {
+  it("moves the shoe and starts the clock; the trip fee is the receiver's to pay the driver", async () => {
     const { shoe, rental, item, delivery } = await bookedRental();
     expect(delivery.status).toBe("REQUESTED");
     expect(delivery.fromAddress).toMatch(/Galle Road/);
@@ -58,11 +58,12 @@ describe("manual provider: quote → book → courier pickup → drop-off", () =
       "WITH_BORROWER",
     );
 
-    const fee = await db.walletEntry.findFirstOrThrow({
-      where: { rentalId: rental.id, kind: "CHARGE", note: { startsWith: "Delivery fee" } },
+    // Not handled by us: no tokens move for the trip, the borrower pays the driver.
+    expect(delivery.paidBy).toBe("BORROWER");
+    const charges = await db.walletEntry.findMany({
+      where: { rentalId: rental.id, kind: "CHARGE" },
     });
-    expect(fee.amount.toFixed(2)).toBe("450.00");
-    expect(fee.note).toMatch(/Delivery fee/);
+    expect(charges.every((c) => c.note?.startsWith("Rent"))).toBe(true);
 
     const done = await db.delivery.findUniqueOrThrow({
       where: { id: delivery.id },

@@ -35,7 +35,6 @@ export const DEFAULT_SETTINGS = {
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
   freeReturnHours: 24,
-  deliveryBookingFee: null, // OPEN DECISION
   catchUpEnabled: false, // OPEN DECISION
 };
 

@@ -31,8 +31,9 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
    - [ ] Rentals are fixed-term and prepaid: wear is committed at payment (`committedWear`), and every plan change goes through `replan` and `settleRent` (no other code moves rent).
    - [ ] An early return needs `earlyReturnNoticeDays` notice (`scheduleEarlyReturn`); only the free-return window or the term's last day can end at once. The daily job ends terms on `termEndDay + 1`.
    - [ ] A reservation's price never rises without the borrower accepting an offer (24 h, in-app + email); a rejected or expired offer leaves the pair with its holder (`holdForNext`).
-   - [ ] Each pair's deposit stays locked at its full value while the pair is out; rent and delivery fees come from free tokens; damage or loss only touches that pair's deposit; only available tokens can be withdrawn.
+   - [ ] Each pair's deposit stays locked at its full value while the pair is out; rent comes from free tokens; damage or loss only touches that pair's deposit; only available tokens can be withdrawn.
    - [ ] A pair can be booked while `committedWear` < L, for any term; never once it reaches L.
+   - [ ] No trip fee or booking fee moves through tokens, payments or payouts; `Delivery.paidBy` is the receiver (borrower for DELIVER/HANDOFF, merchant for COLLECT).
    - [ ] No hard-coded settings values (0.10, 3 days, 4 pairs, 183 / 730 lifespan limits, 10 days' notice, 24-hour offers) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] The release discount comes from `releaseDiscount`, is fixed on the item at checkout, and never reaches the current holder.

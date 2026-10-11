@@ -28,7 +28,7 @@ Flows: merchants → platform: listings · platform → merchants: payouts · bo
 | Stakeholder | Gives | Gets | Main worry we must solve |
 |---|---|---|---|
 | Merchants (shoe stores, resellers, individual collectors) | Shoes, photos, declared value, expected lifespan | Income over the shoe's life (cost + margin), demand they could not reach, a dashboard of every pair | Damage, loss, shoes sitting idle |
-| Shoe borrowers | A deposit of each pair's declared value, locked in tokens while the pair is out (pricing-spec.md §6); care of the shoe; condition photos; the delivery fee | Many pairs for the price of wearing one, fair prices that fall as shoes age, delivery to the door | Hygiene |
+| Shoe borrowers | A deposit of each pair's declared value, locked in tokens while the pair is out (pricing-spec.md §6); care of the shoe; condition photos; the driver's fee for trips to them, paid to the driver directly | Many pairs for the price of wearing one, fair prices that fall as shoes age, delivery to the door | Hygiene |
 | Ride-hailing apps | Drivers and couriers for pickup, delivery, return and handoff trips | Quick delivery for the shoe borrowers | Clear pickup points, sealed packages, no disputes about damage |
 | Us (the platform) | Pricing engine, listings, booking, payments, payouts, trust and dispute handling | A margin on every rental | Liquidity (enough shoes and renters in one city), fraud |
 
@@ -79,15 +79,14 @@ Every rental payment is split in a fixed ratio: with μm = μp = 0.10, the merch
 | Rental charge (wear 0 → 100) | 2,866.11 | Split below |
 | Merchant share (91.67%) | 2,627.27 | Merchant |
 | Platform share (8.33%) | 238.84 | Us |
-| Delivery and collection trips | Quoted by the ride-hailing app | Ride-hailing app, plus our booking fee |
-| Deposit hold | Released at return | Borrower (charged only for damage or loss) |
+| Delivery and collection trips | Quoted by the ride-hailing app | Paid to the driver directly by whoever receives the pair; not through us |
+| Deposit (each pair's value, in tokens) | Unlocked when the pair is back | Borrower (charged only for damage or loss) |
 
 **Revenue streams**
 
 | Stream | Who pays | How it works | Launch? |
 |---|---|---|---|
 | Rental margin μp | Borrowers | 8.33% of every rental payment | Yes |
-| Delivery booking fee | Borrowers | Flat fee per trip booked through us | Yes |
 | Damage protection add-on | Borrowers | Small daily fee; covers minor damage instead of the deposit | Phase 2 |
 | Featured listings | Merchants | Pay to appear first in search for a week | Phase 2 |
 | Borrower membership | Borrowers | Monthly fee for free deliveries and early access to new pairs | Phase 3 |
@@ -95,12 +94,12 @@ Every rental payment is split in a fixed ratio: with μm = μp = 0.10, the merch
 
 **Rules for money**
 
-1. **Charge at return.** The borrower's card is pre-authorised for an estimate at booking; the final charge is computed from actual wear when the rental closes.
-2. **Deposit.** A hold on the card, released at return once the condition check passes.
+1. **Prepaid term.** The borrower pays the rent for the booked term upfront in tokens; unused days are refunded after an early return with notice, and changes are settled to actual wear (pricing-spec.md §6, §6a).
+2. **Deposit.** Each pair's value is locked in tokens while the pair is out and unlocked once its condition check passes.
 3. **Lost shoe.** The borrower pays what the shoe had left to earn, R − F(w), split merchant/platform as normal. The merchant is made whole for the shoe's remaining life.
 4. **Discounts.** Promotional discounts the platform runs are taken from both shares in proportion. Idle discounts the merchant switches on come out of the merchant's share only.
 5. **Payouts.** A rental's merchant share is released 3 days after it closes, the window for disputes. Payouts go out weekly.
-6. **Delivery fees** pass through to the ride-hailing app; we keep only the booking fee.
+6. **Delivery fees are not handled by us.** Whoever receives the pair pays the driver directly in the ride-hailing app: the borrower for deliveries, the next borrower for handoffs, the merchant for returns. We take no booking fee and never pay for a trip (decided 2026-10-11).
 
 ## 5. Core journeys
 
@@ -271,7 +270,7 @@ The MVP proves the core loop in one city; Phase 2 starts once the pilot is live 
 **Open decisions**
 - [ ] Split of the 20% margin: μm = μp = 0.10, or another split?
 - [x] Deposit size: each pair's declared value V, locked per pair while it is out (decided 2026-10-11)
-- [ ] Delivery booking fee amount, and who pays for return trips
+- [x] Delivery fees: not handled by us; the receiver pays the driver (the merchant for returns); no booking fee (decided 2026-10-11)
 - [ ] Is a direct handoff allowed without merchant cleaning, and for which categories?
 - [ ] Minimum and maximum lifespan a merchant may declare
 - [ ] Catch-up pricing (φ) at launch, or margin-funded discounts only?

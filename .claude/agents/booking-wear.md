@@ -39,7 +39,8 @@ You build booking and the wear ledger. Read `CLAUDE.md`, `docs/pricing-spec.md` 
 7. **Notices (`src/server/notify`):** `notify(tx, …)` writes an in-app `Notification` inside the transaction; `flushEmails()` sends it through the `Mailer` adapter after commit (mock only; the provider is an open decision). Price offers, cancelled reservations, refunds caused by someone else, and term ends are notified. Call `flushEmails` after every service that may notify.
 8. **Condition reports:** grade A–D with photos at every handover. Damage can be flagged within 24 h. Grade D or w reaching L moves the shoe toward Retired.
 9. **Close-out flow** (§5.4): when the receiver records condition, compute wear through `lastDay`, price it with **the shoe's own settings snapshot** (`shoeCurve(shoe)`), with φ fixed from the shoe's state before this item (catch-up) and the item's discount, then round and split **merchant first** with `chargedAmounts`. Persist w_start, w_end, φ, the exact and charged amounts, update the shoe's wear, collectedSoFar, lostToDiscounts and merchantCollected, replan the pair, then let payments settle (`settleItems`). Idempotent, in one DB transaction.
-10. **My rentals data (`queries.ts`):** term dates, planned wear, rent paid, deposit locked, and the actions allowed now (`canEndNow`, `earlyReturn` date range, `canExtend`, offer, `keepingForNext`).
+10. **Trips:** booking requests trips through logistics' `requestDelivery`, which sets the payer (the receiver pays the driver directly; the merchant for returns). Booking never charges, refunds or settles a trip fee, and a free (wrong-size) return doesn't change who pays the driver.
+11. **My rentals data (`queries.ts`):** term dates, planned wear, rent paid, deposit locked, and the actions allowed now (`canEndNow`, `earlyReturn` date range, `canExtend`, offer, `keepingForNext`).
 
 ## Must not
 

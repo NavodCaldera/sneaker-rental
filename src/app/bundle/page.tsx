@@ -119,11 +119,12 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
             </Link>
           </Row>
           <p className="text-xs text-subtle">
-            You pay the rent for the whole term now, and the pairs&apos; value stays locked as a
-            deposit until they&apos;re back. Day 1 is the day after delivery. Return early and the
-            unused days are refunded to your tokens; extend before the term ends to keep them
-            longer. On the day after the term ends a driver collects them, and you aren&apos;t
-            charged for waiting.
+            You pay the rent for the whole term now, and each pair&apos;s value stays locked as a
+            deposit until it&apos;s back. Day 1 is the day after delivery. To return early, give 10
+            days&apos; notice and the unused days are refunded to your tokens; extend before the
+            term ends to keep them longer. On the day after the term ends a driver collects them,
+            and you aren&apos;t charged for waiting. Delivery isn&apos;t paid through us: you pay
+            the driver directly in the ride-hailing app when a pair is brought to you.
           </p>
         </Card>
         {new D(quote.shortfall).gt(0) && (

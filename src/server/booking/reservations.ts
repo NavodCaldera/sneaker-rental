@@ -5,7 +5,7 @@ import { type Tx, db } from "../db";
 import { requestDelivery } from "../logistics/requests";
 import { flushEmails, notify } from "../notify";
 import { finishRentalIfDone, settleRent, unlockPairValue } from "../payments";
-import { type SettingsRow, getActiveSettings } from "../settings";
+import { getActiveSettings } from "../settings";
 import { walletBalance } from "../wallet";
 import { BookingError } from "./errors";
 import { replan } from "./plan";
@@ -92,7 +92,7 @@ export async function cancelReservation(
  * If a pair's holder has ended their rental and is waiting with it (no driver booked), and
  * someone has reserved it with no offer pending, book the direct handoff now.
  */
-export async function handOffIfWaiting(tx: Tx, shoeId: string, settings: SettingsRow) {
+export async function handOffIfWaiting(tx: Tx, shoeId: string) {
   const giver = await tx.rentalItem.findFirst({
     where: {
       shoeId,
@@ -115,7 +115,6 @@ export async function handOffIfWaiting(tx: Tx, shoeId: string, settings: Setting
     fromRentalItemId: giver.id,
     fromAddress: giver.rental.deliveryAddress,
     toAddress: next.rental.deliveryAddress,
-    bookingFee: settings.deliveryBookingFee?.toString() ?? null,
   });
 }
 
@@ -156,7 +155,7 @@ export async function acceptOffer(borrowerId: string, itemId: string, now = new 
     if (available.lt(0)) {
       throw new BookingError(`Top up ${available.neg().toFixed(2)} tokens to accept the new price`);
     }
-    await handOffIfWaiting(tx, item.shoeId, settings);
+    await handOffIfWaiting(tx, item.shoeId);
   });
   await flushEmails(now);
 }

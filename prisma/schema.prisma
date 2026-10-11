@@ -207,8 +207,6 @@ model PricingSettings {
   maxPairsPerBundle     Int
   disputeWindowDays     Int
   freeReturnHours       Int
-  /// OPEN DECISION: booking fee amount (null = not set yet)
-  deliveryBookingFee    Decimal? @db.Decimal(14, 2)
   /// Catch-up pricing (OPEN DECISION; off at launch)
   catchUpEnabled        Boolean  @default(false)
   createdById           String?
@@ -357,10 +355,11 @@ enum DeliveryStatus {
   FAILED
 }
 
+/// Who pays the ride-hailing driver, directly in the app: whoever receives the pair. The
+/// platform never charges or collects trip fees.
 enum PartyPays {
   BORROWER
   MERCHANT
-  PLATFORM
 }
 
 model Delivery {
@@ -375,11 +374,10 @@ model Delivery {
   fromRentalItemId     String?
   fromAddress          String
   toAddress            String
-  /// Provider's quoted trip fee (passes through to the provider)
+  /// The ride-hailing app's quoted trip fee, for information: the receiver pays it to the
+  /// driver directly, never through us
   quote                Decimal?       @db.Decimal(14, 2)
-  /// Platform booking fee kept by us
-  bookingFee           Decimal?       @db.Decimal(14, 2)
-  /// OPEN DECISION: who pays for return trips
+  /// The receiver: the borrower for DELIVER and HANDOFF, the merchant for COLLECT
   paidBy               PartyPays      @default(BORROWER)
   /// SHA-256 of the courier link token
   courierTokenHash     String?        @unique
@@ -494,7 +492,7 @@ enum WalletEntryKind {
   LOCK
   /// Released from a rental (−locked)
   UNLOCK
-  /// Rent, delivery fee, damage or a lost pair (−balance). A charge taken from a rental's
+  /// Rent, damage or a lost pair (−balance; trip fees never go through tokens). A charge taken from a rental's
   /// locked tokens is written with a matching UNLOCK.
   CHARGE
   /// Given back, e.g. unused days or an upheld overcharge (+balance)

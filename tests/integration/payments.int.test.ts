@@ -5,7 +5,6 @@ import { BookingError, checkout, quoteBundle } from "@/server/booking/checkout";
 import { endRental, extendRental, recordCondition } from "@/server/booking/lifecycle";
 import { finishRentalIfDone, markLost } from "@/server/payments";
 import { MockGateway, setGatewayForTests } from "@/server/payments/gateway";
-import { chargeDeliveryFee } from "@/server/payments";
 import {
   WalletError,
   pairLocked,
@@ -153,7 +152,7 @@ describe("tokens: top up, pay the rent and lock the value at booking, unlock at 
 });
 
 describe("deposits: each pair's full value stays locked while it is out (pricing-spec.md §6)", () => {
-  it("rent and delivery fees never touch a deposit; only free tokens can be withdrawn", async () => {
+  it("deposits stay whole through delivery and a lost pair; only free tokens can be withdrawn", async () => {
     const { merchantId } = await setup();
     const borrower = await makeUser("BORROWER", { tokens: "0" });
     const [a, b] = await Promise.all([makeShoe(merchantId), makeShoe(merchantId)]);
@@ -168,14 +167,13 @@ describe("deposits: each pair's full value stays locked while it is out (pricing
       available: "1000.00",
     });
 
-    // A 450 delivery fee comes from the free tokens; both deposits stay at 6,000.
+    // A delivered trip costs nothing in tokens: the borrower pays the driver directly.
     const delivery = await deliveryFor(items[0].id, "DELIVER");
     await db.delivery.update({ where: { id: delivery.id }, data: { quote: "450" } });
     await arrive(delivery, day(0));
-    await chargeDeliveryFee(delivery.id);
     for (const i of items) expect((await pairLocked(i.id)).toFixed(2)).toBe("6000.00");
-    expect((await balances(borrower.id)).available).toBe("550.00");
-    await expect(withdraw(borrower.id, "550.01")).rejects.toThrow(/up to 550.00/);
+    expect((await balances(borrower.id)).available).toBe("1000.00");
+    await expect(withdraw(borrower.id, "1000.01")).rejects.toThrow(/up to 1000.00/);
 
     // Losing one pair charges its own deposit (then free tokens); the other's stays whole.
     await arrive(await deliveryFor(items[1].id, "DELIVER"), day(0));

@@ -61,7 +61,9 @@ describe("rent, return and close (§5.2–5.4)", () => {
     // Ended on day 100; the driver collects on day 101 and the merchant inspects the same
     // day. The borrower pays for days 1–100 only: waiting for the driver is free.
     await endRental(borrower.id, item.id, day(100));
-    await arrive(await deliveryFor(item.id, "COLLECT"), day(101));
+    const collect = await deliveryFor(item.id, "COLLECT");
+    expect(collect.paidBy).toBe("MERCHANT"); // the merchant receiving it pays the driver
+    await arrive(collect, day(101));
     expect((await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).status).toBe("CLEANING");
 
     const result = await recordCondition(
@@ -169,6 +171,7 @@ describe("direct handoff chain (§5.3)", () => {
     expect(itemB.plannedWearStart!.toString()).toBe("30");
     await endRental(a.id, itemA.id, day(30)); // A's term: days 1–30
     const handoffAB = await deliveryFor(itemB.id, "HANDOFF");
+    expect(handoffAB.paidBy).toBe("BORROWER"); // B, receiving it, pays the driver
     expect(handoffAB.fromRentalItemId).toBe(itemA.id);
     expect(handoffAB.fromAddress).toBe("A street");
     expect(handoffAB.toAddress).toBe("B street");

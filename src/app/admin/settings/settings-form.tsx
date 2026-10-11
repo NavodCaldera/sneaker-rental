@@ -77,11 +77,6 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
       { name: "maxPairsPerBundle", label: "Max pairs held at once" },
       { name: "disputeWindowDays", label: "Dispute window (days)" },
       { name: "freeReturnHours", label: "Free return window (hours)" },
-      {
-        name: "deliveryBookingFee",
-        label: "Delivery booking fee (LKR)",
-        hint: "OPEN DECISION: leave empty until decided",
-      },
     ],
   },
 ];

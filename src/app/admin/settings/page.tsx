@@ -33,7 +33,6 @@ export default async function AdminSettings() {
     maxPairsPerBundle: String(active.maxPairsPerBundle),
     disputeWindowDays: String(active.disputeWindowDays),
     freeReturnHours: String(active.freeReturnHours),
-    deliveryBookingFee: active.deliveryBookingFee?.toFixed(2) ?? "",
     catchUpEnabled: active.catchUpEnabled,
   };
 
@@ -55,8 +54,7 @@ export default async function AdminSettings() {
             <li key={h.id} className="rounded-lg border border-line p-2">
               <div className="font-medium text-ink">{formatDateTime(h.effectiveFrom)}</div>
               μm {h.merchantMargin.toString()} · μp {h.platformMargin.toString()} · floor{" "}
-              {h.floor.toString()} · max discount {h.maxDiscount.toString()} · fee{" "}
-              {h.deliveryBookingFee?.toFixed(2) ?? "TBD"} · catch-up{" "}
+              {h.floor.toString()} · max discount {h.maxDiscount.toString()} · catch-up{" "}
               {h.catchUpEnabled ? "on" : "off"}
             </li>
           ))}

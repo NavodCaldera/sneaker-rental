@@ -103,7 +103,6 @@ describe("pricing settings", () => {
         maxPairsPerBundle: 4,
         disputeWindowDays: 3,
         freeReturnHours: 24,
-        deliveryBookingFee: "",
         catchUpEnabled: false,
       },
       admin.id,
@@ -111,7 +110,6 @@ describe("pricing settings", () => {
     const after = await getActiveSettings();
     expect(after.merchantMargin.toString()).toBe("0.12");
     expect(toPricingSettings(after)).toMatchObject({ minLife: 90, maxLife: 730, refLife: 365 });
-    expect(after.deliveryBookingFee).toBeNull();
     expect(await db.pricingSettings.count()).toBe(2); // append-only
   });
 });

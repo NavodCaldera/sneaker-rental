@@ -10,9 +10,10 @@ import { gateway } from "../payments/gateway";
  * Borrowers top up through the payment gateway. Booking locks each pair's merchant value as
  * its own deposit and charges the rent for the booked term; changes to the plan are charged
  * or credited as they happen (pricing-spec.md §6a). A pair's deposit stays locked at its full
- * value while the pair is out: rent and delivery fees come from the free balance, and only
- * damage to or loss of that pair is charged against it. Only available (unlocked) tokens can
- * be withdrawn to the card that paid for them.
+ * value while the pair is out: rent comes from the free balance (trip fees never go through
+ * us: the receiver pays the driver), and only damage to or loss of that pair is charged
+ * against it. Only available (unlocked) tokens can be withdrawn to the card that paid for
+ * them.
  *
  * Amounts here are already-rounded 2-dp values (charges come from the pricing engine via
  * booking). Every write carries an idempotency key, so a repeated call is a no-op.

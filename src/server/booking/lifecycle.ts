@@ -133,7 +133,6 @@ export async function endRental(
         fromRentalItemId: item.id,
         fromAddress: item.rental.deliveryAddress,
         toAddress: next.rental.deliveryAddress,
-        bookingFee: settings.deliveryBookingFee?.toString() ?? null,
       });
       return { delivery, cancelled };
     }
@@ -146,9 +145,6 @@ export async function endRental(
       rentalItemId: item.id,
       fromAddress: item.rental.deliveryAddress,
       toAddress: item.shoe.pickupAddress,
-      // OPEN DECISION: who pays for return trips. Free returns are on the platform.
-      paidBy: freeReturn ? "PLATFORM" : "BORROWER",
-      bookingFee: settings.deliveryBookingFee?.toString() ?? null,
     });
     return { delivery, cancelled };
   });

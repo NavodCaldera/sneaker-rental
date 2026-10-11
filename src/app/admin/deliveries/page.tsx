@@ -85,11 +85,11 @@ export default async function AdminDeliveries({ searchParams }: PageProps<"/admi
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-subtle">Fees</dt>
+                      <dt className="text-subtle">Trip fee</dt>
                       <dd>
-                        Trip {d.quote ? formatLKR(d.quote.toString()) : "not quoted"} · booking fee{" "}
-                        {d.bookingFee ? formatLKR(d.bookingFee.toString()) : "TBD"} · paid by{" "}
-                        {d.paidBy.toLowerCase()}
+                        {d.quote ? formatLKR(d.quote.toString()) : "not quoted"} · paid to the
+                        driver by the {d.paidBy === "MERCHANT" ? "merchant" : "borrower"} receiving
+                        it (not through us)
                       </dd>
                     </div>
                   </dl>

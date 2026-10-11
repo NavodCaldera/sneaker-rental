@@ -17,6 +17,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 6. **Fixed-term, prepaid rentals** (§6, §6a). The borrower books a term (e.g. 90 days) and pays its rent from their tokens at booking. The pair's wear is committed at once: a new pair booked for 90 days shows 90/365 used, and is free again after the term. Day 1 is the day after delivery (the delivery day is free). Extending is paid upfront; on the day after the term ends a driver collects the pair, and waiting for the driver is free.
 7. **Early return needs 10 days' notice** (§6a). The borrower picks a new last day at least `earlyReturnNoticeDays` (10) ahead; the term is shortened to it and the unused days are refunded at once. Only a wrong-size return within `freeReturnHours` of delivery can end at once. A borrower who reserved the pair next and whose price goes up as a result is told in the app and by email, and has `offerResponseHours` (24) to accept (§6a).
 8. **Lifespan cap at booking** (§6). A pair with any life left (`committedWear` < L) can be booked for any term; wear and rent stop at L, so days past L are free. Once a pair's committed wear reaches L nobody can book it.
+9. **Trips are not handled by us.** Whoever receives the pair pays the driver directly in the ride-hailing app: the borrower for deliveries, the next borrower for handoffs, the merchant for returns. No trip fee or booking fee ever goes through tokens.
 
 ---
 
@@ -43,7 +44,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | `capitalRate` | r | 0.12 | Idle-cost test only |
 | `holdCost` (`holdCostPerDay`) | h | 0 | Idle-cost test only, LKR per idle day |
 
-**Settings snapshot.** Changing pricing settings affects **new listings only**. Each shoe stores the settings version it was listed under (`Shoe.settingsId`, set when created and refreshed when published), so a shoe's curve never changes under a running rental. Price a shoe with `shoeCurve(shoe)` (`src/server/catalogue/pricing.ts`), never with the active row. Operational settings (bundle size, dispute window, free-return window, offer response time, early-return notice, delivery fee) come from the active version.
+**Settings snapshot.** Changing pricing settings affects **new listings only**. Each shoe stores the settings version it was listed under (`Shoe.settingsId`, set when created and refreshed when published), so a shoe's curve never changes under a running rental. Price a shoe with `shoeCurve(shoe)` (`src/server/catalogue/pricing.ts`), never with the active row. Operational settings (bundle size, dispute window, free-return window, offer response time, early-return notice) come from the active version.
 
 ### 1.2 Per shoe (from the merchant)
 
@@ -178,7 +179,7 @@ A shoe is never held by two items on the same day. The item **closes** (wear, ch
 
 **Deposits.**
 - A pair's deposit is its merchant value V, locked from booking until the pair is back and its item closed (and kept while a dispute on it is open). While **any** pair is still at the borrower's home (or out on a trip, or waiting for inspection), its deposit stays locked at the full V.
-- Nothing else is taken from a deposit: rent, rent changes and delivery fees come from the free balance. Only damage to that pair (an upheld claim, up to V) or its loss is charged against it (`chargeFromDeposit`), and never against another pair's deposit.
+- Nothing else is taken from a deposit: rent and rent changes come from the free balance, and trip fees never go through us (the receiver pays the driver). Only damage to that pair (an upheld claim, up to V) or its loss is charged against it (`chargeFromDeposit`), and never against another pair's deposit.
 - When the item closes, its deposit is unlocked (`unlockDeposit`); when the whole rental is settled, anything left is unlocked.
 
 **Tokens** (`src/server/wallet`, append-only `WalletEntry` ledger, 1 token = 1 LKR):
@@ -293,7 +294,7 @@ For a 90-day term (days 1–90): hidden from Browse until day 81, then 0.5% off 
 | Refund (upheld dispute) | Up to the item's charge. Up to that item's merchant share comes off the merchant's payout and `merchantCollected`, so later rentals pay the merchant back first; the rest is the platform's cost. |
 | Buy it now (Phase 2) | Price = `remainingValue`, same as a lost shoe. Close the item first, then sell. |
 | Damage | Assessed through a dispute; an upheld claim charges up to the pair's merchant value against that pair's deposit (kept locked while the dispute is open). Not part of the rent. |
-| Wrong size within 24 h | The borrower can end at once, without notice. Close the item at return; charge only the wear-days used (none if ended on the delivery day) and refund the rest. The return trip is on the platform. |
+| Wrong size within 24 h | The borrower can end at once, without notice. Close the item at return; charge only the wear-days used (none if ended on the delivery day) and refund the rest. As for every return, the merchant receiving the pair pays the driver. |
 
 ---
 
