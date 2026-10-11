@@ -47,7 +47,7 @@ The merchant enters three things and the platform computes every price for the s
 | Photos (front, side, sole, inside, box) | 5 photos | Listing page and the condition baseline |
 | Declared value V | 6,000 LKR | Target income R |
 | Expected lifespan L (wear-days) | 365 | Length of the price curve |
-| Size, brand, model, who it's for, experience | UK 9, Men, Morning Run | Search and filters |
+| Size (as on the label: UK, EU or US; shown in UK, EU, US and cm), brand, model, who it's for, experience | EU 43 (= UK 9), Men, Morning Run | Search in any size system, and filters |
 | Condition: brand new, second-hand, or second-hand upgraded (and what was upgraded) | Second-hand, upgraded: new insoles | Shown to borrowers on the listing and in Browse (decided 2026-10-11) |
 | Wear already used (second-hand only) | 60 wear-days | Where the pair starts on the price curve |
 
@@ -115,7 +115,7 @@ Four journeys carry the business; every step records who held the shoe and when,
 
 **5.2 Borrower rents**
 0. Signs up as a customer with their age and one address and city, where pairs are delivered and collected (we say why we ask). It can be changed later; there is no address to type at checkout.
-1. Browses by size, brand and style; each listing shows today's price per wear-day and the shoe's wear so far.
+1. Browses by size (in UK, EU, US or cm, whichever they know; a size guide says what it is in the others), brand and style; each listing shows today's price per wear-day and the shoe's wear so far.
 2. Adds one to four pairs to a bundle and sees the daily cost of the whole bundle.
 3. Checks out: card pre-authorised for the estimate plus the deposit hold; a delivery is booked with a ride-hailing app.
 4. Receives the shoes and confirms condition with photos in the app. The clock starts on the delivery date.

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PhotoImg, WearBar } from "@/components/shoe-bits";
+import { SizeEquivalence, SizeOptions, sizeGuideHref } from "@/components/size-bits";
 import { Badge, Button, EmptyState, Input, PageHeader, Select } from "@/components/ui";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
 import { conditionShort } from "@/lib/shoe-condition";
+import { parseSize, sizeSummary } from "@/lib/shoe-size";
 import {
   ALL_EXPERIENCES,
   EXPERIENCES,
@@ -37,6 +39,8 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
     getActiveSettings(),
   ]);
   const today = colomboDay(new Date());
+  // Cards show each pair's size in the system the borrower searched by, too.
+  const sizeSystem = parseSize(filters.size)?.system;
 
   return (
     <main>
@@ -54,9 +58,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
         />
         <Select name="size" defaultValue={filters.size ?? ""} aria-label="Size">
           <option value="">All sizes</option>
-          {facets.sizes.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
+          <SizeOptions sizes={facets.sizes} />
         </Select>
         <Select name="brand" defaultValue={filters.brand ?? ""} aria-label="Brand">
           <option value="">All brands</option>
@@ -90,7 +92,11 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
             Clear
           </Link>
         )}
+        <Link href={sizeGuideHref(filters.size)} className="px-2 text-sm underline">
+          Size guide
+        </Link>
       </form>
+      {filters.size && <SizeEquivalence size={filters.size} />}
 
       {shoes.length === 0 ? (
         <EmptyState title="No pairs match">Try another size or brand.</EmptyState>
@@ -105,7 +111,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                 <Link
                   href={`/shoes/${shoe.id}`}
                   className="group flex flex-col gap-2"
-                  aria-label={`${shoe.brand} ${shoe.model}, ${shoe.size}`}
+                  aria-label={`${shoe.brand} ${shoe.model}, ${sizeSummary(shoe, sizeSystem)}`}
                 >
                   <div className="relative">
                     <PhotoImg
@@ -126,7 +132,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                       {shoe.brand} {shoe.model}
                     </div>
                     <div className="text-xs text-subtle">
-                      {shoe.size} · {styleLabel(shoe)}
+                      {sizeSummary(shoe, sizeSystem)} · {styleLabel(shoe)}
                     </div>
                   </div>
                   <div className="text-sm">

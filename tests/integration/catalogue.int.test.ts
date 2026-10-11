@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
 import {
   CatalogueError,
+  browseFacets,
   browseShoes,
   createShoe,
   getListing,
@@ -16,6 +17,7 @@ import { curvePreview, shoeCurve, shoePricing } from "@/server/catalogue/pricing
 import { getActiveSettings, toPricingSettings } from "@/server/settings";
 import { PhotoError } from "@/server/storage";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
+import { shoeSizeFields } from "@/lib/shoe-size";
 import { TEST_SETTINGS, makeUser, resetDb } from "./helpers";
 
 beforeEach(resetDb);
@@ -35,7 +37,8 @@ const LIMITS = { minLifespanDays: 183, maxLifespanDays: 730 };
 const input = shoeSchema(LIMITS).parse({
   brand: "Nike",
   model: "Pegasus 41",
-  size: "UK 9",
+  sizeSystem: "UK",
+  size: "9",
   audience: "MEN",
   experience: "Morning Run",
   value: "6000",
@@ -229,15 +232,20 @@ describe("browsing and prices", () => {
     const unverified = await makeUser("MERCHANT");
     await db.merchant.update({ where: { id: unverified.merchant!.id }, data: { verified: false } });
     const { id: settingsId } = await getActiveSettings();
-    const base = { ...input, description: null, settingsId };
+    const base = {
+      ...input,
+      ...shoeSizeFields("MEN", "UK", "9"),
+      description: null,
+      settingsId,
+    };
     await db.shoe.createMany({
       data: [
-        { ...base, merchantId: verified.merchant!.id, status: "AVAILABLE", size: "UK 9" },
+        { ...base, merchantId: verified.merchant!.id, status: "AVAILABLE" },
         {
           ...base,
           merchantId: verified.merchant!.id,
           status: "WITH_BORROWER",
-          size: "UK 10",
+          ...shoeSizeFields("MEN", "UK", "10"),
           brand: "Adidas",
           // Held, ending in 5 days: reservable next.
           releaseDay: dayToDate(colomboDay(new Date()) + 5),
@@ -259,6 +267,80 @@ describe("browsing and prices", () => {
     expect(await browseShoes({ size: "UK 10" })).toHaveLength(1);
     expect(await browseShoes({ q: "adi" })).toHaveLength(1);
     expect(await browseShoes({ brand: "Puma" })).toHaveLength(1);
+  });
+
+  it("finds a pair by its size in any system, however the merchant listed it", async () => {
+    const user = await makeUser("MERCHANT");
+    const womens = shoeSchema(LIMITS).parse({
+      ...input,
+      audience: "WOMEN",
+      experience: "Night Out",
+      sizeSystem: "EU",
+      size: "39",
+    });
+    const shoe = await createShoe(user.merchant!.id, womens, allPhotos());
+    expect(shoe.size).toBe("EU 39");
+    expect(shoe.sizeSystem).toBe("EU");
+    expect([shoe.sizeUk, shoe.sizeEu, shoe.sizeUs, shoe.sizeCm].map((v) => v!.toString())).toEqual([
+      "6",
+      "39",
+      "8.5",
+      "24.5",
+    ]);
+    await db.shoe.update({ where: { id: shoe.id }, data: { status: "AVAILABLE" } });
+
+    // A borrower who thinks "UK 6" finds the pair listed as EU 39; so do US 8.5 and 24.5 cm.
+    for (const size of ["UK 6", "EU 39", "US 8.5", "24.5 cm", "uk6"]) {
+      expect(await browseShoes({ size }), size).toHaveLength(1);
+    }
+    // US 6.5 is UK 6 on the men's chart, not the women's.
+    expect(await browseShoes({ size: "US 6.5" })).toHaveLength(0);
+    expect(await browseShoes({ size: "nonsense" })).toHaveLength(0);
+    const facets = await browseFacets();
+    expect(facets.sizes).toEqual({
+      UK: ["UK 6"],
+      EU: ["EU 39"],
+      US: ["US 8.5"],
+      CM: ["24.5 cm"],
+    });
+
+    // Changing who it's for re-reads the label size on the new chart.
+    const mens = await updateShoeStyle(
+      user.merchant!.id,
+      shoe.id,
+      styleSchema.parse({ audience: "MEN", experience: "Night Out" }),
+    );
+    expect([mens.size, mens.sizeUk?.toString(), mens.sizeUs?.toString()]).toEqual([
+      "EU 39",
+      "6",
+      "6.5",
+    ]);
+    // Kids' pairs keep only the size on the label.
+    const kids = await updateShoeStyle(
+      user.merchant!.id,
+      shoe.id,
+      styleSchema.parse({ audience: "GIRLS", experience: "Playtime" }),
+    );
+    expect([kids.sizeEu?.toString(), kids.sizeUk, kids.sizeUs, kids.sizeCm]).toEqual([
+      "39",
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it("takes the label size as a system and a whole or half number", () => {
+    const sizeError = (v: Record<string, string>) =>
+      shoeSchema(LIMITS)
+        .safeParse({ ...input, ...v })
+        .error?.flatten().fieldErrors;
+    expect(sizeError({ size: "9.5" })).toBeUndefined();
+    expect(sizeError({ size: "UK 9" })?.size).toEqual([
+      "Enter the number on the label, e.g. 9 or 9.5",
+    ]);
+    expect(sizeError({ size: "9.3" })?.size).toBeDefined();
+    expect(sizeError({ size: "0" })?.size).toEqual(["Enter a size from 1 to 60"]);
+    expect(sizeError({ sizeSystem: "JP" })?.sizeSystem).toEqual(["Choose UK, EU or US"]);
   });
 
   it("shops by who it's for, then by experience; Unisex pairs show under Men and Women", async () => {

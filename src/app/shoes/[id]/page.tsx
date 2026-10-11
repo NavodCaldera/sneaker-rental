@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
+import { ShoeSizePanel } from "@/components/size-bits";
 import { Card } from "@/components/ui";
 import { D } from "@/lib/decimal";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { sizeSummary } from "@/lib/shoe-size";
 import { styleLabel } from "@/lib/shoe-style";
 import { conditionLabel } from "@/lib/shoe-condition";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
@@ -69,7 +71,7 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
             {shoe.brand} {shoe.model}
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-subtle">
-            {shoe.size} · {styleLabel(shoe)} · {conditionLabel(shoe.condition)} ·{" "}
+            {sizeSummary(shoe)} · {styleLabel(shoe)} · {conditionLabel(shoe.condition)} ·{" "}
             {shoe.merchant.businessName}
             <ShoeStatusBadge status={shoe.status} />
           </p>
@@ -103,6 +105,7 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
             {shoe.latestGrade ?? "—"}
           </p>
         </div>
+        <ShoeSizePanel shoe={shoe} />
         {shoe.upgradeNotes && (
           <p className="text-sm">
             <span className="font-medium">Upgrades:</span> {shoe.upgradeNotes}

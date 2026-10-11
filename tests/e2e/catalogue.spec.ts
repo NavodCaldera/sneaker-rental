@@ -14,9 +14,12 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
 
   await page.getByLabel("Brand").fill("Saucony");
   await page.getByLabel("Model").fill("Endorphin Speed 4");
-  await page.getByLabel("Size").fill("UK 11");
   await page.getByLabel("Who it's for").selectOption("Men");
   await page.getByLabel("Experience").selectOption("Morning Run");
+  // Listed in the size on its label (EU); the form shows what borrowers see in the others.
+  await page.getByLabel("Size system").selectOption("EU");
+  await page.getByLabel("Size", { exact: true }).fill("46");
+  await expect(page.getByText("Borrowers also see UK 11 · US 11.5 · 29.5 cm")).toBeVisible();
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
     await page.getByLabel(`${view} photo`, { exact: true }).setInputFiles({
       name: `${view}.png`,
@@ -41,13 +44,19 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
   await expect(page.getByText("Available", { exact: true })).toBeVisible();
   await signOut(page);
 
-  // The borrower finds it.
+  // The borrower finds it by their UK size, and sees what that is in EU.
   await signIn(page, ACCOUNTS.borrower);
-  await page.getByLabel("Size").selectOption("UK 11");
+  await page.getByLabel("Size", { exact: true }).selectOption("UK 11");
   await page.getByRole("button", { name: "Filter" }).click();
-  await page.getByRole("link", { name: /Saucony Endorphin Speed 4/ }).click();
+  await expect(page.getByRole("heading", { name: "UK 11 is the same as" })).toBeVisible();
+  await page.getByRole("link", { name: "Saucony Endorphin Speed 4, EU 46 · UK 11" }).click();
   await expect(page.getByRole("heading", { name: "Saucony Endorphin Speed 4" })).toBeVisible();
   await expect(page.locator("aside").getByText("LKR 28.92", { exact: true })).toBeVisible();
+  const size = page.getByRole("region", { name: "Size", exact: true });
+  await expect(
+    size.getByText("EU 46 is on the label (men's sizes; cm is foot length)."),
+  ).toBeVisible();
+  await expect(size.getByRole("definition")).toHaveText(["11", "46", "11.5", "29.5"]);
 });
 
 test("a merchant lists an upgraded second-hand pair; borrowers see its condition", async ({
@@ -57,7 +66,7 @@ test("a merchant lists an upgraded second-hand pair; borrowers see its condition
   await page.goto("/merchant/shoes/new");
   await page.getByLabel("Brand").fill("Adidas");
   await page.getByLabel("Model").fill("Ultraboost Restored");
-  await page.getByLabel("Size").fill("UK 8");
+  await page.getByLabel("Size", { exact: true }).fill("8");
   await page.getByLabel("Who it's for").selectOption("Men");
   await page.getByLabel("Experience").selectOption("Morning Run");
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
@@ -124,4 +133,22 @@ test("signed-out visitors can browse and view a listing", async ({ page }) => {
     .click();
   await expect(page.getByText("/ wear-day today")).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in" }).last()).toBeVisible();
+});
+
+test("a size search says what the size is in the other systems", async ({ page }) => {
+  await page.goto("/browse?size=UK+5");
+  const box = page.getByRole("region", { name: "Size conversion" });
+  await expect(box.getByRole("heading", { name: "UK 5 is the same as" })).toBeVisible();
+  await expect(box.getByRole("row", { name: /Women's EU 38 US 7.5 24 cm/ })).toBeVisible();
+  await expect(box.getByRole("row", { name: /Men's EU 38 US 5.5 23.5 cm/ })).toBeVisible();
+
+  await box.getByRole("link", { name: "Size guide" }).click();
+  await expect(page).toHaveURL("/size-guide?size=UK%205");
+  // Highlighted on the women's chart: UK 5, EU 38, US 7.5, 24 cm.
+  await expect(page.locator('tr[aria-current="true"]').first().locator("td")).toHaveText([
+    "5",
+    "38",
+    "7.5",
+    "24",
+  ]);
 });

@@ -38,6 +38,8 @@ You are the quality check. `main` is updated after every commit (product owner, 
    - [ ] No trip fee or booking fee moves through tokens, payments or payouts; `Delivery.paidBy` is the receiver (borrower for DELIVER/HANDOFF, merchant for COLLECT).
    - [ ] Addresses: one per customer and merchant account, required at sign-up with the reason shown; no address input at checkout or per listing; every trip's addresses come from `customerAddress` / `merchantAddress` at the time it is booked.
    - [ ] Sign-up asks for the city after the address (both account types). Customers (only) give their age in whole years (1–120). Only white, black and #35D6ED appear as website colours (no new hex values or palette tokens); no blue text on white; UI text says "shoes", not "sneakers". Day and night mode both render (header switch, remembered by cookie; device setting when no pick).
+   - [ ] Sizes: a pair listed in EU or US is found by a UK search (and the reverse) on the right chart (women's / men's and unisex); kids' and off-chart sizes show only as listed; the charts in `src/lib/shoe-size.ts` match the product owner's.
+   - [ ] Forgot password: same message for unknown emails, link works once and expires after 60 minutes, sessions end on reset, reset links built from `APP_URL` only.
    - [ ] No hard-coded settings values (0.10, 3 days, 4 pairs, 183 / 730 lifespan limits, 10 days' notice, 24-hour offers) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] The release discount comes from `releaseDiscount`, is fixed on the item at checkout, and never reaches the current holder.

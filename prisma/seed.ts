@@ -5,6 +5,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { type Audience, PrismaClient, type Role } from "../src/generated/prisma/client";
+import { parseSize, shoeSizeFields } from "../src/lib/shoe-size";
 import { hashPassword } from "../src/server/auth/password";
 import { LocalDiskStorage, storageDir } from "../src/server/storage/local";
 
@@ -125,6 +126,7 @@ const users: {
 type SeedShoe = {
   brand: string;
   model: string;
+  /** The size on the label, e.g. "UK 9" or "EU 38" */
   size: string;
   audience: Audience;
   experience: string;
@@ -186,7 +188,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
     {
       brand: "Adidas",
       model: "Ultraboost Light",
-      size: "UK 5",
+      // Listed in EU, so a search for UK 5 finds it
+      size: "EU 38",
       audience: "WOMEN",
       experience: "Studio & Gym",
       value: "36000",
@@ -394,9 +397,11 @@ async function main() {
         );
         photos.push({ kind, storageKey, contentType: "image/svg+xml" });
       }
+      const label = parseSize(s.size)!;
       await db.shoe.create({
         data: {
           ...s,
+          ...shoeSizeFields(s.audience, label.system as "UK" | "EU" | "US", label.value),
           merchantId: user.merchant.id,
           settingsId: settings.id,
           status: "AVAILABLE",

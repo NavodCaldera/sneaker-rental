@@ -6,6 +6,7 @@ import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { Card, PageHeader } from "@/components/ui";
 import { formatDate, formatLKR, formatWear } from "@/lib/format";
+import { sizeSummary } from "@/lib/shoe-size";
 import { styleLabel } from "@/lib/shoe-style";
 import { requireUser } from "@/server/auth/session";
 import { CatalogueError, getMerchantForUser, getMerchantShoe } from "@/server/catalogue";
@@ -33,7 +34,7 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
         title={`${shoe.brand} ${shoe.model}`}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            {shoe.size} · {styleLabel(shoe)} <ShoeStatusBadge status={shoe.status} />
+            {sizeSummary(shoe)} · {styleLabel(shoe)} <ShoeStatusBadge status={shoe.status} />
           </span>
         }
       />

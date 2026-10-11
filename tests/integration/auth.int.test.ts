@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
+import { requestPasswordReset, resetLinkWorks, resetPassword } from "@/server/auth/password-reset";
+import { MockMailer, setMailerForTests } from "@/server/notify/mailer";
 import {
   AuthError,
   authenticate,
@@ -200,5 +202,62 @@ describe("pricing settings", () => {
     expect(after.merchantMargin.toString()).toBe("0.12");
     expect(toPricingSettings(after)).toMatchObject({ minLife: 90, maxLife: 730, refLife: 365 });
     expect(await db.pricingSettings.count()).toBe(2); // append-only
+  });
+});
+
+describe("forgot password", () => {
+  let mail: MockMailer;
+  beforeEach(() => {
+    mail = new MockMailer();
+    setMailerForTests(mail);
+  });
+  afterEach(() => setMailerForTests(undefined));
+
+  const tokenOf = (link: string) => new URL(link).searchParams.get("token")!;
+
+  it("emails a one-time link; the new password works, the old one and old sessions don't", async () => {
+    const user = await makeUser("BORROWER", { email: "forgot@b.lk" });
+    const session = await startSession(user.id);
+    const now = new Date("2026-10-11T10:00:00Z");
+
+    const sent = await requestPasswordReset(" Forgot@B.lk ", now);
+    expect(mail.sent).toHaveLength(1);
+    expect(mail.sent[0].to).toBe("forgot@b.lk");
+    expect(mail.sent[0].subject).toBe("Reset your Shoe Rental password");
+    expect(mail.sent[0].text).toContain(sent!.link);
+    const token = tokenOf(sent!.link);
+    // Only the hash is stored.
+    expect(await db.passwordReset.count({ where: { id: token } })).toBe(0);
+    expect(await resetLinkWorks(token, now)).toBe(true);
+
+    await expect(resetPassword(token, "short", now)).rejects.toThrow("Use at least 8 characters");
+    await resetPassword(token, "brand-new-pass", now);
+    await expect(authenticate("forgot@b.lk", "password123")).rejects.toThrow(AuthError);
+    expect((await authenticate("forgot@b.lk", "brand-new-pass")).id).toBe(user.id);
+    expect(await userForToken(session.token)).toBeNull();
+
+    // The link works once.
+    expect(await resetLinkWorks(token, now)).toBe(false);
+    await expect(resetPassword(token, "another-pass-1", now)).rejects.toThrow(/expired/);
+  });
+
+  it("says nothing about unknown emails, sends at most one email a minute, and links expire after an hour", async () => {
+    const now = new Date("2026-10-11T10:00:00Z");
+    const later = (s: number) => new Date(now.getTime() + s * 1000);
+    expect(await requestPasswordReset("nobody@b.lk", now)).toBeNull();
+    expect(mail.sent).toHaveLength(0);
+
+    await makeUser("MERCHANT", { email: "shop@b.lk" });
+    const first = await requestPasswordReset("shop@b.lk", now);
+    expect(await requestPasswordReset("shop@b.lk", later(30))).toBeNull();
+    const second = await requestPasswordReset("shop@b.lk", later(61));
+    expect(mail.sent).toHaveLength(2);
+
+    // Both links work until one is used; using one closes the other.
+    expect(await resetLinkWorks(tokenOf(first!.link), later(120))).toBe(true);
+    expect(await resetLinkWorks(tokenOf(second!.link), later(3601 + 61))).toBe(false);
+    await resetPassword(tokenOf(second!.link), "brand-new-pass", later(120));
+    expect(await resetLinkWorks(tokenOf(first!.link), later(121))).toBe(false);
+    await expect(resetPassword("", "brand-new-pass")).rejects.toThrow(/expired/);
   });
 });

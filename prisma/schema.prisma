@@ -47,6 +47,7 @@ model User {
 
   merchant         Merchant?
   sessions         Session[]
+  passwordResets   PasswordReset[]
   rentals          Rental[]
   conditionReports ConditionReport[]
   disputesOpened   Dispute[]         @relation("DisputeOpenedBy")
@@ -63,6 +64,19 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// A "forgot password" link, emailed to the account's address. Works once, for an hour.
+model PasswordReset {
+  /// SHA-256 of the emailed token; the raw token is never stored
+  id        String    @id
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -114,6 +128,13 @@ enum Audience {
   GIRLS
 }
 
+/// The size system on a pair's label (borrowers can also search by foot length in cm)
+enum SizeSystem {
+  UK
+  EU
+  US
+}
+
 /// The condition a merchant declares when listing a pair
 enum ShoeCondition {
   /// Brand new, never worn
@@ -129,7 +150,18 @@ model Shoe {
   merchantId        String
   brand             String
   model             String
+  /// The size as listed, e.g. "EU 39": the label system (sizeSystem) and its number
   size              String
+  /// The size system on the pair's label, as the merchant listed it
+  sizeSystem        SizeSystem    @default(UK)
+  /// The same size in each system, from the size chart for who it's for
+  /// (src/lib/shoe-size.ts). Off the chart (kids' pairs, sizes outside it) only the listed
+  /// system is filled. Borrowers search by these.
+  sizeUk            Decimal?      @db.Decimal(4, 1)
+  sizeEu            Decimal?      @db.Decimal(4, 1)
+  sizeUs            Decimal?      @db.Decimal(4, 1)
+  /// Foot length in cm
+  sizeCm            Decimal?      @db.Decimal(4, 1)
   /// Who it's for (shopping tabs: Men, Women, Boys, Girls)
   audience          Audience
   /// The experience it's made for, e.g. "Night Out" (lists in src/lib/shoe-style.ts)
