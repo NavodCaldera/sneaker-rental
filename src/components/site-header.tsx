@@ -70,12 +70,6 @@ export async function SiteHeader() {
           </>
         ) : (
           <div className="ml-auto flex items-center gap-1 text-sm">
-            <Link
-              href="/sign-up?role=MERCHANT"
-              className="hidden rounded-full px-4 py-2 font-medium hover:bg-muted sm:inline"
-            >
-              List your shoes
-            </Link>
             <Link href="/browse" className="rounded-full px-3 py-2 font-medium hover:bg-muted">
               Browse
             </Link>
