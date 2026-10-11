@@ -76,8 +76,8 @@ const users: {
   /** The account's one address and its city (customers and merchants) */
   address?: string;
   city?: string;
-  /** Customers only, YYYY-MM-DD */
-  dateOfBirth?: string;
+  /** Customers only, in whole years */
+  age?: number;
 }[] = [
   { email: "admin@sneakers.test", name: "Admin", role: "ADMIN" },
   {
@@ -102,7 +102,7 @@ const users: {
     role: "BORROWER",
     address: "No. 8, Flower Road",
     city: "Colombo 07",
-    dateOfBirth: "1998-04-17",
+    age: 28,
   },
   {
     email: "ravi@sneakers.test",
@@ -110,7 +110,7 @@ const users: {
     role: "BORROWER",
     address: "21/3 Hill Street",
     city: "Dehiwala",
-    dateOfBirth: "1992-11-03",
+    age: 33,
   },
   {
     email: "nimal@sneakers.test",
@@ -118,7 +118,7 @@ const users: {
     role: "BORROWER",
     address: "17 Temple Road",
     city: "Nugegoda",
-    dateOfBirth: "2001-07-25",
+    age: 25,
   },
 ];
 
@@ -312,7 +312,7 @@ async function main() {
         phone: "+94 77 000 0000",
         address: u.address ?? null,
         city: u.city ?? null,
-        dateOfBirth: u.dateOfBirth ? new Date(`${u.dateOfBirth}T00:00:00Z`) : null,
+        age: u.age ?? null,
         merchant: u.businessName
           ? {
               create: {
@@ -326,12 +326,9 @@ async function main() {
       include: { merchant: true },
     });
 
-    // Sample customers seeded before dates of birth existed get theirs.
-    if (u.dateOfBirth && !user.dateOfBirth) {
-      await db.user.update({
-        where: { id: user.id },
-        data: { dateOfBirth: new Date(`${u.dateOfBirth}T00:00:00Z`) },
-      });
+    // Sample customers seeded before ages existed get theirs.
+    if (u.age && user.age === null) {
+      await db.user.update({ where: { id: user.id }, data: { age: u.age } });
     }
     // Sample accounts seeded before addresses (or cities) existed get theirs; an account
     // that already has a city is left alone.

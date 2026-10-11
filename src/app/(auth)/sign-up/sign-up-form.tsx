@@ -53,8 +53,17 @@ export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWE
         <Input name="email" type="email" autoComplete="email" required />
       </Field>
       {role === "BORROWER" && (
-        <Field label="Date of birth" name="dateOfBirth" error={errors.dateOfBirth}>
-          <Input name="dateOfBirth" type="date" autoComplete="bday" required />
+        <Field label="Age" name="age" error={errors.age}>
+          <Input
+            name="age"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={120}
+            step={1}
+            required
+            className="w-28"
+          />
         </Field>
       )}
       <Field label="Phone" name="phone" error={errors.phone}>

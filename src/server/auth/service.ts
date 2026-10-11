@@ -2,7 +2,6 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { addressSchema, citySchema } from "@/lib/address";
-import { MAX_AGE, ageOn, colomboToday, isCalendarDate } from "@/lib/age";
 import type { Role, User } from "@/generated/prisma/client";
 import { db } from "../db";
 import { hashPassword, verifyPassword } from "./password";
@@ -18,8 +17,8 @@ export const signUpSchema = z
     /** The account's one address (deliveries and collections, or pickups and returns) */
     address: addressSchema,
     city: citySchema,
-    /** Customers only: YYYY-MM-DD, so we know their age */
-    dateOfBirth: z.string().trim().optional().or(z.literal("")),
+    /** Customers only: their age in whole years */
+    age: z.string().trim().optional().or(z.literal("")),
     password: z.string().min(8, "Use at least 8 characters"),
     businessName: z.string().trim().optional().or(z.literal("")),
   })
@@ -29,14 +28,15 @@ export const signUpSchema = z
   })
   .superRefine((v, ctx) => {
     if (v.role !== "BORROWER") return;
-    const issue = (message: string) =>
-      ctx.addIssue({ code: "custom", message, path: ["dateOfBirth"] });
-    if (!v.dateOfBirth) return issue("Enter your date of birth");
-    if (!isCalendarDate(v.dateOfBirth)) return issue("Enter a real date");
-    const today = colomboToday();
-    if (v.dateOfBirth > today) return issue("Your date of birth can't be in the future");
-    if (ageOn(v.dateOfBirth, today) > MAX_AGE) return issue("Check the year of your date of birth");
+    const issue = (message: string) => ctx.addIssue({ code: "custom", message, path: ["age"] });
+    if (!v.age) return issue("Enter your age");
+    if (!/^\d+$/.test(v.age)) return issue("Enter your age in whole years");
+    const age = Number(v.age);
+    if (age < 1 || age > MAX_AGE) return issue(`Enter an age from 1 to ${MAX_AGE}`);
   });
+
+/** The oldest age we accept, to catch a typo. */
+export const MAX_AGE = 120;
 
 export type SignUpInput = z.infer<typeof signUpSchema>;
 
@@ -56,10 +56,7 @@ export async function registerUser(input: SignUpInput): Promise<User> {
       address: input.address,
       city: input.city,
       // Customers only: merchants aren't asked.
-      dateOfBirth:
-        input.role === "BORROWER" && input.dateOfBirth
-          ? new Date(`${input.dateOfBirth}T00:00:00Z`)
-          : null,
+      age: input.role === "BORROWER" && input.age ? Number(input.age) : null,
       passwordHash: await hashPassword(input.password),
       merchant:
         input.role === "MERCHANT" ? { create: { businessName: input.businessName! } } : undefined,
@@ -113,7 +110,7 @@ export async function endSession(token: string) {
 
 export type SessionUser = Pick<
   User,
-  "id" | "role" | "name" | "email" | "verified" | "address" | "city" | "dateOfBirth"
+  "id" | "role" | "name" | "email" | "verified" | "address" | "city" | "age"
 >;
 
 export async function userForToken(token: string, now = new Date()): Promise<SessionUser | null> {
@@ -122,8 +119,8 @@ export async function userForToken(token: string, now = new Date()): Promise<Ses
     include: { user: true },
   });
   if (!session || session.expiresAt <= now || session.user.locked) return null;
-  const { id, role, name, email, verified, address, city, dateOfBirth } = session.user;
-  return { id, role, name, email, verified, address, city, dateOfBirth };
+  const { id, role, name, email, verified, address, city, age } = session.user;
+  return { id, role, name, email, verified, address, city, age };
 }
 
 export function homeFor(role: Role): string {

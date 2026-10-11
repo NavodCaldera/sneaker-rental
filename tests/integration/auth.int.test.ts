@@ -64,7 +64,7 @@ describe("sign-up and sign-in", () => {
         role: "BORROWER",
         address: "  21/3 Hill Street ",
         city: " Dehiwala ",
-        dateOfBirth: "1992-11-03",
+        age: "33",
       }),
     );
     expect([user.address, user.city]).toEqual(["21/3 Hill Street", "Dehiwala"]);
@@ -80,39 +80,40 @@ describe("sign-up and sign-in", () => {
     });
   });
 
-  it("asks customers, not merchants, for their date of birth", async () => {
+  it("asks customers, not merchants, for their age", async () => {
     const customer = {
       role: "BORROWER",
       name: "A B",
-      email: "dob@b.lk",
+      email: "age@b.lk",
       password: "12345678",
       address: "12 Galle Road",
       city: "Colombo 03",
     };
-    const dobError = (dateOfBirth?: string) =>
-      signUpSchema.safeParse({ ...customer, dateOfBirth }).error?.flatten().fieldErrors.dateOfBirth;
-    expect(dobError()).toEqual(["Enter your date of birth"]);
-    expect(dobError("2001-02-29")).toEqual(["Enter a real date"]);
-    expect(dobError("2999-01-01")).toEqual(["Your date of birth can't be in the future"]);
-    expect(dobError("1890-01-01")).toEqual(["Check the year of your date of birth"]);
-    expect(dobError("2000-06-15")).toBeUndefined();
+    const ageError = (age?: string) =>
+      signUpSchema.safeParse({ ...customer, age }).error?.flatten().fieldErrors.age;
+    expect(ageError()).toEqual(["Enter your age"]);
+    expect(ageError("twenty")).toEqual(["Enter your age in whole years"]);
+    expect(ageError("25.5")).toEqual(["Enter your age in whole years"]);
+    expect(ageError("0")).toEqual(["Enter an age from 1 to 120"]);
+    expect(ageError("121")).toEqual(["Enter an age from 1 to 120"]);
+    expect(ageError(" 26 ")).toBeUndefined();
 
-    const user = await registerUser(signUpSchema.parse({ ...customer, dateOfBirth: "2000-06-15" }));
-    expect(user.dateOfBirth?.toISOString().slice(0, 10)).toBe("2000-06-15");
+    const user = await registerUser(signUpSchema.parse({ ...customer, age: "26" }));
+    expect(user.age).toBe(26);
     const token = (await startSession(user.id)).token;
-    expect((await userForToken(token))?.dateOfBirth?.toISOString().slice(0, 10)).toBe("2000-06-15");
+    expect((await userForToken(token))?.age).toBe(26);
 
-    // Merchants aren't asked; a date sent anyway isn't stored.
+    // Merchants aren't asked; an age sent anyway isn't stored.
     const merchant = await registerUser(
       signUpSchema.parse({
         ...customer,
         role: "MERCHANT",
         email: "shop@b.lk",
         businessName: "Shop",
-        dateOfBirth: "2000-06-15",
+        age: "26",
       }),
     );
-    expect(merchant.dateOfBirth).toBeNull();
+    expect(merchant.age).toBeNull();
   });
 
   it("requires a business name for merchants and rejects public admin sign-up", () => {
@@ -138,7 +139,7 @@ describe("sign-up and sign-in", () => {
       password: "password123",
       address: "No. 8, Flower Road",
       city: "Colombo 07",
-      dateOfBirth: "1998-04-17",
+      age: "28",
     });
     const user = await registerUser(input);
     await expect(registerUser(input)).rejects.toThrow(AuthError);
