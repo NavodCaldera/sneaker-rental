@@ -30,8 +30,8 @@ export const DEFAULT_SETTINGS = {
   releaseDiscountStep: "0.005",
   capitalRate: "0.12",
   holdCost: "0",
-  topUpLeadDays: 3, // locked tokens must cover rent so far + 3 days
-  topUpGraceDays: 3, // days to top up before the pairs are recalled
+  offerResponseHours: 24, // OPEN DECISION: time to accept a higher price after an early return
+  earlyReturnNoticeDays: 10, // an early return is asked for at least 10 days ahead
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
   freeReturnHours: 24,

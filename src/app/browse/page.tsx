@@ -123,9 +123,9 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                   )}
                   <div className="flex items-center gap-2 text-xs text-subtle">
                     <div className="w-16">
-                      <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />
+                      <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
                     </div>
-                    {formatWear(shoe.wear.toString())} / {shoe.lifespanDays} worn
+                    {formatWear(shoe.committedWear.toString())} / {shoe.lifespanDays} used
                   </div>
                 </Link>
               </li>

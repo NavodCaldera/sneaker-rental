@@ -65,14 +65,14 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
     title: "Rentals",
     fields: [
       {
-        name: "topUpLeadDays",
-        label: "Token cover: days of rent ahead",
-        hint: "Locked tokens must cover rent so far plus this many days (3)",
+        name: "offerResponseHours",
+        label: "Hours to accept a new price",
+        hint: "A reserved pair that comes back early and costs more: time to accept (24). Open decision",
       },
       {
-        name: "topUpGraceDays",
-        label: "Days to top up before recall",
-        hint: "3",
+        name: "earlyReturnNoticeDays",
+        label: "Notice for an early return (days)",
+        hint: "A borrower ending a term early picks a last day at least this far ahead (10)",
       },
       { name: "maxPairsPerBundle", label: "Max pairs held at once" },
       { name: "disputeWindowDays", label: "Dispute window (days)" },

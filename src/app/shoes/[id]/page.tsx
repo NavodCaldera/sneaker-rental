@@ -54,10 +54,10 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
         <Card>
           <h2 className="mb-1 font-medium">How the price changes</h2>
           <p className="mb-3 text-sm text-subtle">
-            You pay for the wear you add, at the price for the pair&apos;s age. The next borrower
-            pays less.
+            You pay upfront for the days you book, at the price for the pair&apos;s age. The next
+            borrower pays less.
           </p>
-          <CurveChart points={preview.points} currentWear={shoe.wear.toString()} />
+          <CurveChart points={preview.points} currentWear={shoe.committedWear.toString()} />
         </Card>
       </div>
 
@@ -85,7 +85,8 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           )}
           {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
             <p className="mt-1 text-sm text-subtle">
-              Its current rental ends {formatDate(dayToDate(release.releaseDay))}.
+              Booked until {formatDate(dayToDate(release.releaseDay))}; free from{" "}
+              {formatDate(dayToDate(release.releaseDay + 1))}.
               {!release.open &&
                 release.opensOn !== null &&
                 ` Reservations open ${formatDate(dayToDate(release.opensOn))}.`}
@@ -93,9 +94,10 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           )}
         </div>
         <div className="text-sm">
-          <WearBar wear={shoe.wear.toString()} lifespan={shoe.lifespanDays} />
+          <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
           <p className="mt-1 text-subtle">
-            Worn {formatWear(shoe.wear.toString())} of {shoe.lifespanDays} wear-days ·{" "}
+            {formatWear(shoe.committedWear.toString())} of {shoe.lifespanDays} wear-days used
+            {shoe.status === "WITH_BORROWER" && " (counting the current booking)"} ·{" "}
             {new D(pricing.lifeLeft).times(100).toFixed(0)}% of life left · grade{" "}
             {shoe.latestGrade ?? "—"}
           </p>

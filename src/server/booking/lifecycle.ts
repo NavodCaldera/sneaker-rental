@@ -1,12 +1,16 @@
 import "server-only";
 import type { Delivery, Grade } from "@/generated/prisma/client";
+import { z } from "zod";
 import { toD } from "@/lib/decimal";
+import { formatDate } from "@/lib/format";
 import { catchUpPhi, chargedAmounts, incomeBetween } from "@/lib/pricing";
 import {
   atEndOfLife,
   colomboDay,
   dateToDay,
+  dayNumber,
   dayToDate,
+  firstDayAfterDelivery,
   plannedLastDay,
   receiverFirstDay,
   wearAdded,
@@ -15,21 +19,37 @@ import {
 import { merchantFundedDiscounts, merchantOwed, shoeCurve } from "../catalogue/pricing";
 import { type Tx, db } from "../db";
 import { requestDelivery } from "../logistics/requests";
-import { settleItems } from "../payments";
+import { flushEmails, notify } from "../notify";
+import { finishRentalIfDone, settleItems } from "../payments";
 import { type SettingsRow, getActiveSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
-import { BookingError } from "./checkout";
-import { asOfToday, loadHoldings } from "./holdings";
+import { walletBalance } from "../wallet";
+import { BookingError } from "./errors";
+import { loadHoldings } from "./holdings";
+import { replan } from "./plan";
+import { cancelReservation } from "./reservations";
 
 // ─── Borrower ends a pair (§5.3) ───────────────────────────────────────────
 
 /**
- * The borrower ends a pair. If another borrower has reserved it, a direct handoff is
- * requested; otherwise it goes back to the merchant for cleaning.
+ * A held pair's term ends: the daily job calls this on the day after the term's last day
+ * (`termEnded`). A borrower can also end it themselves on the term's last day, or at once
+ * within `freeReturnHours` of delivery (wrong size); ending any earlier needs notice
+ * (`scheduleEarlyReturn`). The last day is today, or the term's last day if that came
+ * first; waiting for the driver is free. The plan is redone, so unused days are refunded
+ * (pricing-spec.md §6a). If another borrower has reserved the pair it goes to them by
+ * direct handoff, unless an early return raised their price and they haven't accepted yet:
+ * then it waits here. With no reservation it goes back to the merchant, unless a
+ * reservation on it was turned down over price: then it waits here until someone books it.
  */
-export async function endRental(borrowerId: string, itemId: string, now = new Date()) {
-  const settings = await getActiveSettings();
-  return db.$transaction(async (tx) => {
+export async function endRental(
+  borrowerId: string,
+  itemId: string,
+  now = new Date(),
+  options: { termEnded?: boolean } = {},
+) {
+  const settings = await getActiveSettings(now);
+  const result = await db.$transaction(async (tx) => {
     const item = await tx.rentalItem.findFirst({
       where: { id: itemId, rental: { borrowerId } },
       include: { rental: true, shoe: true },
@@ -37,37 +57,77 @@ export async function endRental(borrowerId: string, itemId: string, now = new Da
     if (!item) throw new BookingError("Rental not found");
     if (item.status !== "ACTIVE") throw new BookingError("Only pairs you hold can be ended");
 
+    const today = colomboDay(now);
+    const termEnd = item.termEndDay ? dateToDay(item.termEndDay) : null;
+    const lastDay = termEnd === null ? today : Math.min(today, termEnd);
     const freeReturn =
       !!item.startDate &&
       now.getTime() - item.startDate.getTime() <= settings.freeReturnHours * 3_600_000;
+    if (!options.termEnded && !freeReturn && termEnd !== null && today < termEnd) {
+      const earliest = today + settings.earlyReturnNoticeDays;
+      throw new BookingError(
+        earliest < termEnd
+          ? `To end early, give ${settings.earlyReturnNoticeDays} days' notice: pick a last ` +
+              `day from ${formatDate(dayToDate(earliest))}`
+          : `Your term ends on ${formatDate(dayToDate(termEnd))}; a driver collects the pair ` +
+              `the day after`,
+      );
+    }
     await tx.rentalItem.update({
       where: { id: item.id },
-      // Charging and wear stop today: waiting for the driver is free (pricing-spec.md §5).
       data: {
         status: "RETURNING",
         returnRequestedAt: now,
-        lastDay: dayToDate(colomboDay(now)),
+        lastDay: dayToDate(lastDay),
         freeReturn,
       },
     });
+    // The release discount for the next borrower now counts from the real last day.
+    await tx.shoe.update({ where: { id: item.shoeId }, data: { releaseDay: dayToDate(lastDay) } });
 
-    const next = await tx.rentalItem.findFirst({
+    const { offers } = await replan(
+      tx,
+      { borrowerIds: [borrowerId], shoeIds: [item.shoeId] },
+      now,
+      { actorId: borrowerId, settings },
+    );
+    if (options.termEnded) {
+      await notify(tx, {
+        userId: borrowerId,
+        kind: "TERM_ENDED",
+        rentalItemId: item.id,
+        link: "/rentals",
+        title: `${item.shoe.brand} ${item.shoe.model}: your rental has ended`,
+        body:
+          `Your term ended on ${formatDate(dayToDate(lastDay))}. A driver will collect the pair; ` +
+          `you aren't charged for the days until they come.`,
+      });
+    }
+
+    // Don't hand off a pair that reaches end of life with this holding.
+    const planned = await tx.rentalItem.findUniqueOrThrow({ where: { id: item.id } });
+    const endOfLife = atEndOfLife(
+      (planned.plannedWearEnd ?? item.shoe.wear).toString(),
+      item.shoe.lifespanDays,
+    );
+    let next = await tx.rentalItem.findFirst({
       where: { shoeId: item.shoeId, status: "WAITING_HANDOFF" },
       include: { rental: true },
       orderBy: { createdAt: "asc" },
     });
+    const cancelled: string[] = [];
+    if (next && endOfLife) {
+      await cancelReservation(tx, next.id, "the pair has reached the end of its life", now);
+      cancelled.push(next.rentalId);
+      next = null;
+    }
 
-    // Don't hand off a pair that will reach end of life with this holding.
-    const holdings = await loadHoldings(tx, borrowerId);
-    const projected = wearEnd(
-      item.shoe.wear.toString(),
-      wearAdded(holdings, item.id, asOfToday(now)),
-      item.shoe.lifespanDays,
-    );
-    const endOfLife = atEndOfLife(projected, item.shoe.lifespanDays);
-
-    if (next && !endOfLife) {
-      return requestDelivery(tx, {
+    if (next && offers.includes(next.id)) {
+      // Wait with the borrower until the next borrower decides on the new price.
+      return { delivery: null, cancelled };
+    }
+    if (next) {
+      const delivery = await requestDelivery(tx, {
         type: "HANDOFF",
         rentalItemId: next.id,
         fromRentalItemId: item.id,
@@ -75,11 +135,13 @@ export async function endRental(borrowerId: string, itemId: string, now = new Da
         toAddress: next.rental.deliveryAddress,
         bookingFee: settings.deliveryBookingFee?.toString() ?? null,
       });
+      return { delivery, cancelled };
     }
-    if (next && endOfLife) {
-      await tx.rentalItem.update({ where: { id: next.id }, data: { status: "CANCELLED" } });
+    if (item.holdForNext) {
+      // A reservation was turned down over price: keep it here for the next booking.
+      return { delivery: null, cancelled };
     }
-    return requestDelivery(tx, {
+    const delivery = await requestDelivery(tx, {
       type: "COLLECT",
       rentalItemId: item.id,
       fromAddress: item.rental.deliveryAddress,
@@ -88,7 +150,126 @@ export async function endRental(borrowerId: string, itemId: string, now = new Da
       paidBy: freeReturn ? "PLATFORM" : "BORROWER",
       bookingFee: settings.deliveryBookingFee?.toString() ?? null,
     });
+    return { delivery, cancelled };
   });
+  for (const rentalId of result.cancelled) await finishRentalIfDone(rentalId);
+  await flushEmails(now);
+  return result.delivery;
+}
+
+export const earlyReturnSchema = z.object({
+  lastDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick your last day"),
+});
+
+/**
+ * The borrower gives notice of an early return (pricing-spec.md §6a): they pick a new last
+ * day at least `earlyReturnNoticeDays` away and before the term's last day. The term is
+ * shortened to it, so the unused days are refunded now, the pair's committed wear drops,
+ * its release window moves forward, and a reserved-next borrower whose price goes up gets an
+ * offer. The borrower keeps the pair until then; the daily job ends the term the day after.
+ */
+export async function scheduleEarlyReturn(
+  borrowerId: string,
+  itemId: string,
+  lastDayIso: string,
+  now = new Date(),
+) {
+  const settings = await getActiveSettings(now);
+  const lastDay = dayNumber(lastDayIso);
+  await db.$transaction(async (tx) => {
+    const item = await tx.rentalItem.findFirst({ where: { id: itemId, rental: { borrowerId } } });
+    if (!item) throw new BookingError("Rental not found");
+    if (item.status !== "ACTIVE" || item.lastDay || !item.firstDay || !item.termEndDay) {
+      throw new BookingError("Only pairs you hold can be returned early");
+    }
+    const termEnd = dateToDay(item.termEndDay);
+    const firstDay = dateToDay(item.firstDay);
+    const earliest = Math.max(colomboDay(now) + settings.earlyReturnNoticeDays, firstDay);
+    if (earliest >= termEnd) {
+      throw new BookingError(
+        `Your term ends on ${formatDate(item.termEndDay)}, less than ` +
+          `${settings.earlyReturnNoticeDays} days away, so it can't be shortened`,
+      );
+    }
+    if (lastDay < earliest || lastDay >= termEnd) {
+      throw new BookingError(
+        `Pick a last day from ${formatDate(dayToDate(earliest))} to ` +
+          `${formatDate(dayToDate(termEnd - 1))} (${settings.earlyReturnNoticeDays} days' notice)`,
+      );
+    }
+    await tx.rentalItem.update({
+      where: { id: item.id },
+      data: {
+        plannedDays: lastDay - firstDay + 1,
+        termEndDay: dayToDate(lastDay),
+        earlyReturnAt: now,
+      },
+    });
+    await tx.shoe.update({ where: { id: item.shoeId }, data: { releaseDay: dayToDate(lastDay) } });
+    await replan(tx, { borrowerIds: [borrowerId], shoeIds: [item.shoeId] }, now, {
+      actorId: borrowerId,
+      settings,
+    });
+  });
+  await flushEmails(now);
+}
+
+export const extendSchema = z.object({
+  days: z.coerce.number().int().min(1, "At least 1 day").max(365),
+});
+
+/**
+ * Add days to a pair's term before it ends, paid upfront (pricing-spec.md §6a). Not
+ * possible once someone has reserved the pair next. Refused, with nothing changed, if the
+ * borrower's available tokens can't cover the extra rent.
+ */
+export async function extendRental(
+  borrowerId: string,
+  itemId: string,
+  days: number,
+  now = new Date(),
+) {
+  const settings = await getActiveSettings(now);
+  await db.$transaction(async (tx) => {
+    const item = await tx.rentalItem.findFirst({
+      where: { id: itemId, rental: { borrowerId } },
+      include: { shoe: true },
+    });
+    if (!item) throw new BookingError("Rental not found");
+    if (!["ACTIVE", "AWAITING_DELIVERY"].includes(item.status) || item.lastDay) {
+      throw new BookingError("Only pairs you hold or are waiting for can be extended");
+    }
+    const termEnd = item.termEndDay ? dateToDay(item.termEndDay) : null;
+    if (termEnd !== null && colomboDay(now) > termEnd) {
+      throw new BookingError("This term has already ended");
+    }
+    const queued = await tx.rentalItem.count({
+      where: { shoeId: item.shoeId, status: "WAITING_HANDOFF" },
+    });
+    if (queued > 0) {
+      throw new BookingError("Someone has reserved this pair after you, so it can't be extended");
+    }
+    const plannedDays = (item.plannedDays ?? 0) + days;
+    const newEnd = termEnd === null ? null : termEnd + days;
+    await tx.rentalItem.update({
+      where: { id: item.id },
+      data: { plannedDays, ...(newEnd !== null && { termEndDay: dayToDate(newEnd) }) },
+    });
+    if (newEnd !== null) {
+      await tx.shoe.update({ where: { id: item.shoeId }, data: { releaseDay: dayToDate(newEnd) } });
+    }
+    await replan(tx, { borrowerIds: [borrowerId], shoeIds: [item.shoeId] }, now, {
+      actorId: borrowerId,
+      settings,
+    });
+    const { available } = await walletBalance(borrowerId, tx);
+    if (available.lt(0)) {
+      throw new BookingError(
+        `Top up ${available.neg().toFixed(2)} tokens to extend by ${days} days`,
+      );
+    }
+  });
+  await flushEmails(now);
 }
 
 // ─── Delivery events (called by logistics) ─────────────────────────────────
@@ -103,25 +284,20 @@ export async function onDeliveryPickedUp(tx: Tx, delivery: Delivery) {
 }
 
 /**
- * Delivery arrived. The holding starts on the delivery date for the receiving borrower (the
- * day after, if the borrower handing over ended their rental that same day). The returning
- * or handing-over borrower's last day was set when they ended the rental; the delivery time
- * is recorded as `endDate` (pricing-spec.md §5).
+ * Delivery arrived. The receiving borrower's term starts the day after delivery (or after
+ * the giver's last day, if later) and its last day is fixed. The returning or handing-over
+ * borrower's last day was set when they ended the rental; the delivery time is recorded as
+ * `endDate` (pricing-spec.md §5). Real dates can shift the plan, so it is redone.
  */
 export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) {
   const item = await tx.rentalItem.findUniqueOrThrow({ where: { id: delivery.rentalItemId } });
   const today = dayToDate(colomboDay(at));
   switch (delivery.type) {
-    case "DELIVER":
-      await tx.rentalItem.update({
-        where: { id: item.id },
-        data: { status: "ACTIVE", startDate: at, firstDay: today },
-      });
-      await tx.shoe.update({
-        where: { id: item.shoeId },
-        data: { status: "WITH_BORROWER", releaseDay: releaseDayFor(colomboDay(at), item) },
-      });
+    case "DELIVER": {
+      const firstDay = firstDayAfterDelivery(at);
+      await startTerm(tx, item, at, firstDay);
       break;
+    }
     case "HANDOFF": {
       let giverLastDay: number | null = null;
       if (delivery.fromRentalItemId) {
@@ -134,15 +310,7 @@ export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) 
           data: { endDate: at, lastDay: dayToDate(giverLastDay) },
         });
       }
-      const firstDay = receiverFirstDay(at, giverLastDay);
-      await tx.rentalItem.update({
-        where: { id: item.id },
-        data: { status: "ACTIVE", startDate: at, firstDay: dayToDate(firstDay) },
-      });
-      await tx.shoe.update({
-        where: { id: item.shoeId },
-        data: { status: "WITH_BORROWER", releaseDay: releaseDayFor(firstDay, item) },
-      });
+      await startTerm(tx, item, at, receiverFirstDay(at, giverLastDay));
       break;
     }
     case "COLLECT":
@@ -156,11 +324,35 @@ export async function onDeliveryDelivered(tx: Tx, delivery: Delivery, at: Date) 
 }
 
 /**
- * The new holder's planned last day, from which the next borrower's release discount
- * counts (pricing-spec.md §8). Unknown plan: no discount window.
+ * The pair reached its new holder: day 1 and the term's last day are fixed. The last day is
+ * also the pair's release day, from which the next borrower's release discount counts
+ * (pricing-spec.md §8). Unknown term: no discount window.
  */
-function releaseDayFor(firstDay: number, item: { plannedDays: number | null }) {
-  return item.plannedDays ? dayToDate(plannedLastDay(firstDay, item.plannedDays)) : null;
+async function startTerm(
+  tx: Tx,
+  item: { id: string; shoeId: string; plannedDays: number | null; rentalId: string },
+  at: Date,
+  firstDay: number,
+) {
+  const termEnd = item.plannedDays ? plannedLastDay(firstDay, item.plannedDays) : null;
+  const releaseDay = termEnd === null ? null : dayToDate(termEnd);
+  const updated = await tx.rentalItem.update({
+    where: { id: item.id },
+    data: {
+      status: "ACTIVE",
+      startDate: at,
+      firstDay: dayToDate(firstDay),
+      termEndDay: releaseDay,
+    },
+    include: { rental: true },
+  });
+  await tx.shoe.update({
+    where: { id: item.shoeId },
+    data: { status: "WITH_BORROWER", releaseDay },
+  });
+  await replan(tx, { borrowerIds: [updated.rental.borrowerId], shoeIds: [item.shoeId] }, at, {
+    actorId: updated.rental.borrowerId,
+  });
 }
 
 // ─── Condition reports (§5.2 step 4, §5.3 step 3) ──────────────────────────
@@ -283,8 +475,9 @@ export async function recordCondition(
     return { reportId, closedItemIds: closed };
   });
 
-  // Charge the closed items and release deposits that are no longer needed.
+  // Settle the closed items and release deposits that are no longer needed.
   await settleItems(result.closedItemIds);
+  await flushEmails(now);
   return result;
 }
 
@@ -376,6 +569,8 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
       data: { status: "CLOSED", closedAt: now },
     });
   }
+  // The pair's settled wear moved: its committed wear and any queue follow.
+  await replan(tx, { shoeIds: [item.shoeId] }, now, { settings: settingsRow });
   return closed;
 }
 

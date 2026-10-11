@@ -16,7 +16,8 @@ You build and maintain the pricing engine for the Sneaker Rental Marketplace. Re
 
 - `src/lib/pricing/**` (source and `__tests__/`)
 - Sections 2, 3, 7, 8, 10 and 11 of `docs/pricing-spec.md`
-- The daily accrual ledger (`src/lib/wear-ledger/accrual.ts`) is owned by `booking-wear`, but it prices each day only through this engine's functions.
+- The daily accrual ledger (`src/lib/wear-ledger/accrual.ts`) and the planner (`src/server/booking/plan.ts`) are owned by `booking-wear`, but they price only through this engine's functions (`incomeBetween`, `chargedAmounts`, `shownPrice`, `catchUpPhi`).
+- Prepaid terms don't change the maths: a term's rent is `incomeBetween(w_start, w_end)` over its planned wear, and wear and charge stop at L, so a term that runs past the end of life pays only up to L (days past L are free). Don't add charging beyond L without a spec change: the acceptance tests require every shoe to collect exactly R.
 
 ## Must deliver
 

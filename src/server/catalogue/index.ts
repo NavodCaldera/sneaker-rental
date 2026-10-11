@@ -132,6 +132,7 @@ export async function createShoe(
       ...input,
       description: input.description || null,
       wear: input.initialWear,
+      committedWear: input.initialWear,
       merchantId,
       settingsId: settings.id,
       photos: { create: saved },
@@ -214,7 +215,7 @@ export async function getMerchantShoe(merchantId: string, shoeId: string) {
 
 /**
  * Available pairs, plus held pairs whose release window has opened: from `releaseLeadDays`
- * before the holder's planned last day (day 81 of a 90-day rental), so the next borrower
+ * before the holder's term ends (day 81 of a 90-day term), so the next borrower
  * can reserve them at the release discount (pricing-spec.md §8).
  */
 async function browsableWhere(now: Date): Promise<Prisma.ShoeWhereInput> {

@@ -28,6 +28,8 @@ export type PricedShoe = {
   value: Num;
   lifespanDays: number;
   wear: Num;
+  /** Settled wear plus open bookings' planned wear; the next rental starts here */
+  committedWear?: Num;
   initialWear: Num;
   collectedSoFar: Num;
   merchantCollected: Num;
@@ -49,10 +51,18 @@ export function shoeCurve(shoe: PricedShoe): {
   return { params, settings, collected };
 }
 
+/**
+ * The wear the next rental of this shoe starts from: its committed wear (pricing-spec.md
+ * §6a), so a pair booked for 90 days is priced for the next borrower at wear + 90.
+ */
+export function nextWear(shoe: PricedShoe): D {
+  return toD(shoe.committedWear ?? shoe.wear);
+}
+
 /** φ for the next rental of this shoe: catch-up factor if its settings turn it on, else 1. */
 export function nextPhi(shoe: PricedShoe): D {
   const { params, settings, collected } = shoeCurve(shoe);
-  return settings.catchUp ? catchUpPhi(params, collected, toD(shoe.wear)) : toD(1);
+  return settings.catchUp ? catchUpPhi(params, collected, nextWear(shoe)) : toD(1);
 }
 
 /**
@@ -121,7 +131,7 @@ export type ShoePricing = {
 
 export function shoePricing(shoe: PricedShoe, discount: Decimal.Value = 0): ShoePricing {
   const { params: p, settings, collected } = shoeCurve(shoe);
-  const wear = toD(shoe.wear);
+  const wear = nextWear(shoe);
   const phi = nextPhi(shoe);
   return {
     priceToday: shownPrice(p, wear, discount, phi).toString(),

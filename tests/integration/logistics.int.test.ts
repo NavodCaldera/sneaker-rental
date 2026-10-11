@@ -59,7 +59,7 @@ describe("manual provider: quote → book → courier pickup → drop-off", () =
     );
 
     const fee = await db.walletEntry.findFirstOrThrow({
-      where: { rentalId: rental.id, kind: "CHARGE" },
+      where: { rentalId: rental.id, kind: "CHARGE", note: { startsWith: "Delivery fee" } },
     });
     expect(fee.amount.toFixed(2)).toBe("450.00");
     expect(fee.note).toMatch(/Delivery fee/);
@@ -131,20 +131,20 @@ describe("handoff trips", () => {
     });
     const item2 = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r2.id } });
 
-    await endRental(borrower.id, item1.id, day(9));
+    await endRental(borrower.id, item1.id, day(10));
     const handoff = await deliveryFor(item2.id, "HANDOFF");
-    const token = await bookDelivery(handoff.id, "admin", day(9));
+    const token = await bookDelivery(handoff.id, "admin", day(10));
     await expect(
-      courierPickup(token, { photo: photo(), sealedBag: true, cleaningKit: false }, day(10)),
+      courierPickup(token, { photo: photo(), sealedBag: true, cleaningKit: false }, day(11)),
     ).rejects.toThrow(/cleaning kit/);
-    await courierPickup(token, { photo: photo(), sealedBag: true, cleaningKit: true }, day(10));
+    await courierPickup(token, { photo: photo(), sealedBag: true, cleaningKit: true }, day(11));
     expect((await db.shoe.findUniqueOrThrow({ where: { id: shoe.id } })).status).toBe("IN_HANDOFF");
-    await courierDropoff(token, { photo: photo() }, day(10));
+    await courierDropoff(token, { photo: photo() }, day(11));
 
-    await recordCondition(next.id, { itemId: item2.id, grade: "A", photos: photos() }, day(10));
+    await recordCondition(next.id, { itemId: item2.id, grade: "A", photos: photos() }, day(11));
     const closed = await db.rentalItem.findUniqueOrThrow({ where: { id: item1.id } });
     expect(closed.status).toBe("CLOSED");
-    // Days 0–9: ended on day 9; the handoff trip on day 10 is free.
+    // Days 1–10: the term's last day was day 10; the handoff trip on day 11 is free.
     expect(closed.wearEnd!.toString()).toBe("10");
   });
 });

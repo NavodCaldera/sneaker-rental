@@ -7,9 +7,12 @@ import { gateway } from "../payments/gateway";
 
 /**
  * Borrower tokens (1 token = 1 LKR), kept as an append-only ledger (pricing-spec.md §6).
- * Borrowers top up through the payment gateway. Booking locks the pairs' merchant value
- * plus the rent estimate; rent, delivery fees, damage and lost pairs are charged from the
- * locked tokens first; unused tokens can be refunded to the card that paid for them.
+ * Borrowers top up through the payment gateway. Booking locks each pair's merchant value as
+ * its own deposit and charges the rent for the booked term; changes to the plan are charged
+ * or credited as they happen (pricing-spec.md §6a). A pair's deposit stays locked at its full
+ * value while the pair is out: rent and delivery fees come from the free balance, and only
+ * damage to or loss of that pair is charged against it. Only available (unlocked) tokens can
+ * be withdrawn to the card that paid for them.
  *
  * Amounts here are already-rounded 2-dp values (charges come from the pricing engine via
  * booking). Every write carries an idempotency key, so a repeated call is a no-op.
@@ -48,11 +51,22 @@ export async function walletBalance(userId: string, tx: Tx = db): Promise<Balanc
   return { balance, locked, available: balance.minus(locked) };
 }
 
-/** Tokens still locked for one rental. */
+/** Tokens still locked for one rental (the deposits of its pairs not yet settled). */
 export async function rentalLocked(rentalId: string, tx: Tx = db): Promise<D> {
   const rows = await tx.walletEntry.groupBy({
     by: ["kind"],
     where: { rentalId, kind: { in: ["LOCK", "UNLOCK"] } },
+    _sum: { amount: true },
+  });
+  const sum = totals(rows);
+  return sum("LOCK").minus(sum("UNLOCK"));
+}
+
+/** Tokens still locked as one pair's deposit. */
+export async function pairLocked(rentalItemId: string, tx: Tx = db): Promise<D> {
+  const rows = await tx.walletEntry.groupBy({
+    by: ["kind"],
+    where: { rentalItemId, kind: { in: ["LOCK", "UNLOCK"] } },
     _sum: { amount: true },
   });
   const sum = totals(rows);
@@ -86,53 +100,64 @@ async function done(tx: Tx, key: string) {
 }
 
 /**
- * Lock `amount` tokens for a new rental, inside the booking transaction. Throws with the
- * amount to top up if the borrower's available tokens are short.
+ * Lock one pair's deposit (its merchant value V) inside the booking transaction. It stays
+ * locked, at V, until the pair is back and settled (pricing-spec.md §6): other charges never
+ * eat into it. Throws with the amount to top up if the borrower's available tokens are short.
  */
-export async function lockForRental(tx: Tx, userId: string, rentalId: string, amount: D) {
-  await lockWallet(tx, userId);
-  const { available } = await walletBalance(userId, tx);
-  if (available.lt(amount)) {
+export async function lockDeposit(
+  tx: Tx,
+  input: { userId: string; rentalId: string; rentalItemId: string; amount: D },
+) {
+  await lockWallet(tx, input.userId);
+  const { available } = await walletBalance(input.userId, tx);
+  if (available.lt(input.amount)) {
     throw new WalletError(
-      `You need ${amount.toFixed(2)} tokens available; top up ${amount.minus(D.max(available, 0)).toFixed(2)}`,
+      `You need ${input.amount.toFixed(2)} tokens available; top up ${input.amount.minus(D.max(available, 0)).toFixed(2)}`,
     );
   }
-  await entry(tx, { userId, kind: "LOCK", amount, key: `lock:${rentalId}`, rentalId });
-}
-
-/** Lock up to `amount` more of the borrower's available tokens for a rental. Returns what was locked. */
-export async function lockMore(
-  tx: Tx,
-  userId: string,
-  rentalId: string,
-  amount: D,
-  key: string,
-): Promise<D> {
-  await lockWallet(tx, userId);
-  const { available } = await walletBalance(userId, tx);
-  const take = D.min(amount, D.max(available, 0));
   await entry(tx, {
-    userId,
+    userId: input.userId,
     kind: "LOCK",
-    amount: take,
-    key,
-    rentalId,
-    note: "Top-up of rental cover",
+    amount: input.amount,
+    key: `lock:${input.rentalItemId}`,
+    rentalId: input.rentalId,
+    rentalItemId: input.rentalItemId,
+    note: "Deposit: pair value",
   });
-  return take;
 }
 
 /**
- * Charge a rental: from its locked tokens first, then the free balance. The balance may go
+ * Charge from the free balance, leaving locked tokens alone (rent for a booked term, or a
+ * change to it). The balance may go negative; callers that must not allow that check
+ * `walletBalance` afterwards and roll back.
+ */
+export async function chargeFree(
+  tx: Tx,
+  input: {
+    userId: string;
+    amount: D;
+    key: string;
+    note: string;
+    rentalId?: string;
+    rentalItemId?: string;
+  },
+) {
+  await lockWallet(tx, input.userId);
+  return entry(tx, { ...input, kind: "CHARGE" });
+}
+
+/**
+ * Charge against one pair's deposit (damage, or a lost pair): from that pair's locked tokens
+ * first, then the free balance. Other pairs' deposits are never touched. The balance may go
  * negative, a debt the borrower must top up before booking again. Returns false if this
  * charge was already taken.
  */
-export async function chargeRental(
+export async function chargeFromDeposit(
   tx: Tx,
   input: {
     userId: string;
     rentalId: string;
-    rentalItemId?: string;
+    rentalItemId: string;
     amount: D;
     key: string;
     note: string;
@@ -140,7 +165,7 @@ export async function chargeRental(
 ): Promise<boolean> {
   await lockWallet(tx, input.userId);
   if (await done(tx, input.key)) return false;
-  const fromLocked = D.min(input.amount, await rentalLocked(input.rentalId, tx));
+  const fromLocked = D.min(input.amount, D.max(0, await pairLocked(input.rentalItemId, tx)));
   const base = { userId: input.userId, rentalId: input.rentalId, rentalItemId: input.rentalItemId };
   await entry(tx, {
     ...base,
@@ -159,29 +184,29 @@ export async function chargeRental(
   return true;
 }
 
-/** Release up to `amount` (or everything) still locked for a rental. */
-export async function unlockRental(
+/** Release what is left of one pair's deposit. */
+export async function unlockDeposit(
   tx: Tx,
-  input: {
-    userId: string;
-    rentalId: string;
-    rentalItemId?: string;
-    amount: D | "all";
-    key: string;
-    note: string;
-  },
+  input: { userId: string; rentalId: string; rentalItemId: string; key: string; note: string },
 ) {
   await lockWallet(tx, input.userId);
-  const locked = await rentalLocked(input.rentalId, tx);
-  const amount = input.amount === "all" ? locked : D.min(input.amount, locked);
   return entry(tx, {
-    userId: input.userId,
+    ...input,
     kind: "UNLOCK",
-    amount,
-    key: input.key,
-    rentalId: input.rentalId,
-    rentalItemId: input.rentalItemId,
-    note: input.note,
+    amount: await pairLocked(input.rentalItemId, tx),
+  });
+}
+
+/** Release everything still locked for a rental, once all its pairs are settled. */
+export async function unlockRental(
+  tx: Tx,
+  input: { userId: string; rentalId: string; key: string; note: string },
+) {
+  await lockWallet(tx, input.userId);
+  return entry(tx, {
+    ...input,
+    kind: "UNLOCK",
+    amount: await rentalLocked(input.rentalId, tx),
   });
 }
 

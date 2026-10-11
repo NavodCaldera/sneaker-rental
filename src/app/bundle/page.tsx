@@ -12,7 +12,7 @@ import {
   LinkButton,
   PageHeader,
 } from "@/components/ui";
-import { formatLKR, formatPercent, formatTokens, formatWear } from "@/lib/format";
+import { formatDate, formatLKR, formatPercent, formatTokens, formatWear } from "@/lib/format";
 import { removeFromBundleAction } from "@/app/rentals/actions";
 import { requireUser } from "@/server/auth/session";
 import { getBundle } from "@/server/booking/bundle";
@@ -65,8 +65,13 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
                     )}
                   </div>
                   <div className="text-sm text-subtle">
-                    {line.size} · worn {formatWear(line.wear)} / {line.lifespanDays} ·{" "}
-                    {formatLKR(line.priceToday)} / wear-day
+                    {line.size} · worn {formatWear(line.wear)} → {formatWear(line.wearEnd)} /{" "}
+                    {line.lifespanDays} · {formatLKR(line.priceToday)} / wear-day · rent{" "}
+                    {formatLKR(line.estimate)}
+                  </div>
+                  <div className="text-xs text-subtle">
+                    Days {formatDate(line.firstDay)} – {formatDate(line.lastDay)}
+                    {line.mode === "handoff" && " (expected; starts the day after the handoff)"}
                   </div>
                   {line.problem && <p className="mt-1 text-sm text-danger">{line.problem}</p>}
                 </div>
@@ -94,16 +99,18 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
           </Row>
           <form className="flex items-end gap-2">
             <label className="flex flex-1 flex-col gap-1">
-              <span className="text-subtle">Planned days</span>
+              <span className="text-subtle">Rental term (days)</span>
               <Input name="days" type="number" min={1} max={365} defaultValue={plannedDays} />
             </label>
             <Button type="submit" variant="secondary">
               Update
             </Button>
           </form>
-          <Row label={`Rent estimate for ${plannedDays} days`}>{formatLKR(quote.estimate)}</Row>
-          <Row label="Pair values">{formatLKR(quote.shoeValue)}</Row>
-          <Row label="Tokens locked while you rent">
+          <Row label={`Rent for ${plannedDays} days, paid now`}>{formatLKR(quote.estimate)}</Row>
+          <Row label="Deposit: pair values, locked while you rent">
+            {formatLKR(quote.shoeValue)}
+          </Row>
+          <Row label="Tokens needed">
             <strong>{formatTokens(quote.required)}</strong>
           </Row>
           <Row label="Your available tokens">
@@ -112,9 +119,11 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
             </Link>
           </Row>
           <p className="text-xs text-subtle">
-            Booking locks the pairs&apos; value plus the rent estimate from your tokens. You pay
-            only for the wear you actually add, taken from those tokens when each pair is returned;
-            the rest is unlocked. If you keep the pairs longer, we&apos;ll ask you to top up.
+            You pay the rent for the whole term now, and the pairs&apos; value stays locked as a
+            deposit until they&apos;re back. Day 1 is the day after delivery. Return early and the
+            unused days are refunded to your tokens; extend before the term ends to keep them
+            longer. On the day after the term ends a driver collects them, and you aren&apos;t
+            charged for waiting.
           </p>
         </Card>
         {new D(quote.shortfall).gt(0) && (

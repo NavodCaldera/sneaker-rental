@@ -19,8 +19,8 @@ export const TEST_SETTINGS = {
   releaseDiscountStep: "0.005",
   capitalRate: "0.12",
   holdCost: "0",
-  topUpLeadDays: 3,
-  topUpGraceDays: 3,
+  offerResponseHours: 24,
+  earlyReturnNoticeDays: 10,
   maxPairsPerBundle: 4,
   disputeWindowDays: 3,
   freeReturnHours: 24,
@@ -91,6 +91,9 @@ export const photos = () => [new File([PNG as BlobPart], "c.png", { type: "image
 /** Noon in Colombo, `n` days after 1 Jan 2026. */
 export const day = (n: number) =>
   new Date(Date.parse("2026-01-01T12:00:00+05:30") + n * 86_400_000);
+
+/** The Colombo calendar date of `day(n)`, as YYYY-MM-DD (a date-picker value). */
+export const isoDay = (n: number) => day(n).toISOString().slice(0, 10);
 
 /** An available shoe, listed under the settings version active now. */
 export async function makeShoe(

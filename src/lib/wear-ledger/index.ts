@@ -4,8 +4,8 @@
  *
  * A wear-day is one calendar day a pair is held. On each day a borrower holds n pairs,
  * each pair gets 1/n wear-day. Holding periods are calendar days in Asia/Colombo and both
- * the first day (delivery) and the last day (the day the borrower ends the rental) count;
- * an open holding (lastDay = null) counts as held.
+ * the first day (the day after delivery) and the last day (the day the borrower ends the
+ * rental, or the term's last day) count; an open holding (lastDay = null) counts as held.
  */
 import type Decimal from "decimal.js";
 import { D } from "../decimal";
@@ -58,14 +58,19 @@ export function dayNumber(isoDate: string): Day {
   return dateToDay(new Date(`${isoDate}T00:00:00Z`));
 }
 
+/** Day 1 of a term: the day after delivery. The delivery day itself is free. */
+export function firstDayAfterDelivery(deliveredAt: Date): Day {
+  return colomboDay(deliveredAt) + 1;
+}
+
 /**
- * First day for a borrower receiving a pair by direct handoff: the delivery day, unless the
- * borrower handing over still held it that day (they ended the rental that same day), in
- * which case the next day. A shoe is never held by two items on the same day. The giver's
- * last day is the day they ended the rental; waiting days in between are nobody's.
+ * Day 1 for a borrower receiving a pair by direct handoff: the day after delivery, or the day
+ * after the giver's last day if that is later. A shoe is never held by two items on the same
+ * day. The giver's last day is the day they ended the rental (or their term's last day);
+ * waiting days in between are nobody's.
  */
 export function receiverFirstDay(deliveredAt: Date, giverLastDay: Day | null): Day {
-  const day = colomboDay(deliveredAt);
+  const day = firstDayAfterDelivery(deliveredAt);
   return giverLastDay === null ? day : Math.max(day, giverLastDay + 1);
 }
 
@@ -129,6 +134,25 @@ export function cappedWearAdded(
   lifespan: Decimal.Value,
 ): D {
   return wearEnd(wearStart, added, lifespan).minus(wearStart);
+}
+
+/**
+ * Chain the open items on one pair (pricing-spec.md §6a): the first starts at the pair's
+ * settled wear, each later one at the previous one's planned end, each capped at L. `added`
+ * is each item's planned wear in order (from `wearAdded`). The last end is the pair's
+ * committed wear.
+ */
+export function chainWear(
+  settledWear: Decimal.Value,
+  added: Decimal.Value[],
+  lifespan: Decimal.Value,
+): { start: D; end: D }[] {
+  let wear = new D(settledWear);
+  return added.map((a) => {
+    const start = wear;
+    wear = wearEnd(start, a, lifespan);
+    return { start, end: wear };
+  });
 }
 
 /** Wear-days left before the pair reaches end of life (never negative). */

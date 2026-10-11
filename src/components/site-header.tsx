@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/server/auth/session";
 import { signOutAction } from "@/server/auth/actions";
+import { unreadCount } from "@/server/notify";
 import type { Role } from "@/generated/prisma/client";
 
 const NAV: Record<Role, { href: string; label: string }[]> = {
@@ -29,6 +30,7 @@ const NAV: Record<Role, { href: string; label: string }[]> = {
 
 export async function SiteHeader() {
   const user = await getCurrentUser();
+  const unread = user ? await unreadCount(user.id) : 0;
   return (
     <header className="border-b border-line">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
@@ -49,6 +51,9 @@ export async function SiteHeader() {
               ))}
             </nav>
             <div className="ml-auto flex items-center gap-3 text-sm">
+              <Link href="/notifications" className="rounded-md px-2 py-1 hover:bg-muted">
+                Notices{unread > 0 && <span className="ml-1 font-semibold">({unread})</span>}
+              </Link>
               <span className="hidden text-subtle sm:inline">{user.name}</span>
               <form action={signOutAction}>
                 <button className="rounded-md px-2 py-1 hover:bg-muted">Sign out</button>

@@ -1,87 +1,86 @@
 import "server-only";
-import { type D, toD } from "@/lib/decimal";
-import { catchUpPhi, incomeBetween } from "@/lib/pricing";
-import { type Day, type Holding, cappedWearAdded, wearAdded, wearEnd } from "@/lib/wear-ledger";
-import { type PricedShoe, shoeCurve } from "../catalogue/pricing";
+import { colomboDay, dateToDay, dayToDate } from "@/lib/wear-ledger";
 import { db } from "../db";
+import { getActiveSettings } from "../settings";
 import { rentalLocked } from "../wallet";
-import { asOfToday, loadHoldings } from "./holdings";
 
-type LiveItem = {
-  id: string;
-  status: string;
-  firstDay: Date | null;
-  lastDay: Date | null;
-  discount: { toString(): string };
-  phi: { toString(): string };
-  shoe: PricedShoe & { lifespanDays: number };
-};
+const isoDay = (day: number) => dayToDate(day).toISOString().slice(0, 10);
 
 /**
- * Wear and rent so far for a pair still held (or on its way back): what it would cost if
- * its holding ended today, or on its last day if the borrower already ended it. Wear from
- * the ledger, rent from the pricing engine. Null for pairs not yet delivered or settled.
- */
-export function liveCharge(
-  item: LiveItem,
-  holdings: Holding[],
-  today: Day,
-): { wearSoFar: D; chargeSoFar: D; wearNow: D } | null {
-  if (!item.firstDay || (item.status !== "ACTIVE" && item.status !== "RETURNING")) return null;
-  const added = wearAdded(holdings, item.id, item.lastDay ? undefined : today);
-  const wStart = toD(item.shoe.wear);
-  const wEnd = wearEnd(wStart, added, item.shoe.lifespanDays);
-  const { params, settings, collected } = shoeCurve(item.shoe);
-  const phi = settings.catchUp ? catchUpPhi(params, collected, wStart) : toD(item.phi);
-  return {
-    wearSoFar: cappedWearAdded(wStart, added, item.shoe.lifespanDays),
-    chargeSoFar: incomeBetween(params, wStart, wEnd, toD(item.discount), phi).income,
-    wearNow: wEnd,
-  };
-}
-
-/**
- * A borrower's rentals, with wear so far and the running charge for pairs still held:
- * what each pair would cost if it reached the next holder today (today counts).
+ * A borrower's rentals. Each pair shows its term, the rent paid and its planned wear
+ * (committed when the term was paid for), plus what the borrower can do next: confirm
+ * condition, extend, end early, or answer a price offer.
  */
 export async function borrowerRentals(borrowerId: string, now = new Date()) {
-  const [rentals, holdings] = await Promise.all([
-    db.rental.findMany({
-      where: { borrowerId },
-      orderBy: { createdAt: "desc" },
-      include: {
-        items: {
-          orderBy: { createdAt: "asc" },
-          include: {
-            shoe: {
-              include: { photos: { where: { kind: "FRONT" }, take: 1 }, settings: true },
+  const settings = await getActiveSettings(now);
+  const today = colomboDay(now);
+  const rentals = await db.rental.findMany({
+    where: { borrowerId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      items: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          shoe: {
+            include: {
+              photos: { where: { kind: "FRONT" }, take: 1 },
+              rentalItems: { where: { status: "WAITING_HANDOFF" }, select: { id: true } },
             },
-            conditionReports: { select: { stage: true, recordedById: true } },
-            deliveries: { orderBy: { createdAt: "desc" } },
-            outgoing: { orderBy: { createdAt: "desc" } },
-            disputes: { select: { id: true, status: true } },
           },
+          conditionReports: { select: { stage: true, recordedById: true } },
+          deliveries: { orderBy: { createdAt: "desc" } },
+          outgoing: { orderBy: { createdAt: "desc" } },
+          disputes: { select: { id: true, status: true } },
         },
       },
-    }),
-    loadHoldings(db, borrowerId),
-  ]);
-  const today = asOfToday(now);
+    },
+  });
   const locked = await Promise.all(rentals.map((r) => rentalLocked(r.id)));
 
   return rentals.map((rental, i) => ({
     ...rental,
-    /** Tokens still locked for this rental */
+    /** Tokens still locked for this rental (the pairs' deposit) */
     locked: locked[i].toFixed(2),
     items: rental.items.map((item) => {
-      const charge = liveCharge(item, holdings, today);
-      const live = charge && {
-        wearSoFar: charge.wearSoFar.toString(),
-        chargeSoFar: charge.chargeSoFar.toString(),
-      };
       const needsReceipt =
         item.status === "ACTIVE" && !item.conditionReports.some((r) => r.stage === "RECEIPT");
-      return { ...item, live, needsReceipt };
+      const canExtend =
+        (item.status === "ACTIVE" || item.status === "AWAITING_DELIVERY") &&
+        !item.lastDay &&
+        item.shoe.rentalItems.length === 0;
+      // Ended, but no driver yet: the next borrower is deciding, or nobody has booked it.
+      const keepingForNext =
+        item.status === "RETURNING" &&
+        !item.outgoing.some((d) => d.status !== "CANCELLED") &&
+        !item.deliveries.some((d) => d.type === "COLLECT" && d.status !== "CANCELLED");
+      // Ending at once: within the free-return window (wrong size) or on the term's last day.
+      const termEnd = item.termEndDay ? dateToDay(item.termEndDay) : null;
+      const freeReturn =
+        !!item.startDate &&
+        now.getTime() - item.startDate.getTime() <= settings.freeReturnHours * 3_600_000;
+      const canEndNow =
+        item.status === "ACTIVE" && (freeReturn || termEnd === null || today >= termEnd);
+      // Ending early needs notice: a last day at least earlyReturnNoticeDays away.
+      const earliest =
+        item.firstDay && Math.max(today + settings.earlyReturnNoticeDays, dateToDay(item.firstDay));
+      const earlyReturn =
+        item.status === "ACTIVE" &&
+        !item.lastDay &&
+        termEnd !== null &&
+        earliest &&
+        earliest < termEnd
+          ? { min: isoDay(earliest), max: isoDay(termEnd - 1) }
+          : null;
+      return {
+        ...item,
+        needsReceipt,
+        canExtend,
+        keepingForNext,
+        canEndNow,
+        freeReturn,
+        earlyReturn,
+        noticeDays: settings.earlyReturnNoticeDays,
+      };
     }),
   }));
 }
@@ -108,7 +107,11 @@ export async function merchantReturns(merchantId: string) {
     }),
     db.rentalItem.findMany({
       where: { shoe: { merchantId }, status: "RETURNING", endDate: null },
-      include: { shoe: true, deliveries: true },
+      include: {
+        shoe: true,
+        deliveries: { where: { status: { not: "CANCELLED" } } },
+        outgoing: { where: { status: { not: "CANCELLED" } } },
+      },
     }),
   ]);
   return { returned, cleaning, inTransit };

@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { RentalItemStatus } from "@/generated/prisma/client";
 import { PhotoImg } from "@/components/shoe-bits";
-import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
-import { formatDate, formatLKR, formatTokens, formatWear } from "@/lib/format";
+import { Alert, Badge, Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
+import { formatDate, formatDateTime, formatLKR, formatTokens, formatWear } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { borrowerRentals } from "@/server/booking/queries";
-import { endRentalAction } from "./actions";
+import { EarlyReturnForm, EndRentalForm, ExtendForm, OfferButtons } from "./item-forms";
 
 export const metadata: Metadata = { title: "My rentals" };
 
@@ -52,33 +52,10 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <h2 className="font-medium">Booked {formatDate(rental.createdAt)}</h2>
                 <span className="flex flex-wrap items-center gap-2 text-subtle">
-                  {formatTokens(rental.locked)} locked · estimate{" "}
-                  {formatLKR(rental.estimate.toString())}
+                  rent paid at booking {formatLKR(rental.prepaidRent.toString())} · deposit{" "}
+                  {formatTokens(rental.locked)} locked
                 </span>
               </div>
-              {rental.topUpDueAt && rental.topUpAmount && !rental.recalledAt && (
-                <div className="mb-2">
-                  <Alert>
-                    Your locked tokens no longer cover this rental. Top up{" "}
-                    <strong>{formatTokens(rental.topUpAmount.toString())}</strong> by{" "}
-                    {formatDate(rental.topUpDueAt)} or the pairs will be collected.{" "}
-                    <Link
-                      href={`/wallet?amount=${rental.topUpAmount.toFixed(2)}&next=/rentals`}
-                      className="underline"
-                    >
-                      Top up now
-                    </Link>
-                  </Alert>
-                </div>
-              )}
-              {rental.recalledAt && (
-                <div className="mb-2">
-                  <Alert>
-                    These pairs were recalled on {formatDate(rental.recalledAt)} because the top-up
-                    didn&apos;t arrive in time. A driver will collect them.
-                  </Alert>
-                </div>
-              )}
               <ul className="flex flex-col gap-3">
                 {rental.items.map((item) => {
                   const status = ITEM_STATUS[item.status];
@@ -101,12 +78,23 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                             )}
                           </div>
                           <div className="mt-1 text-sm text-subtle">
-                            {item.startDate && <>Since {formatDate(item.startDate)}</>}
-                            {item.live && (
+                            {item.firstDay ? (
+                              <>
+                                Days {formatDate(item.firstDay)} –{" "}
+                                {formatDate(item.lastDay ?? item.termEndDay)}
+                              </>
+                            ) : (
+                              item.plannedDays && (
+                                <>{item.plannedDays}-day term from the day after delivery</>
+                              )
+                            )}
+                            {item.plannedWearEnd && item.status !== "CLOSED" && (
                               <>
                                 {" "}
-                                · {formatWear(item.live.wearSoFar)} wear-days so far ·{" "}
-                                {formatLKR(item.live.chargeSoFar)} so far
+                                · wear {formatWear(item.plannedWearStart!.toString())} →{" "}
+                                {formatWear(item.plannedWearEnd.toString())} of{" "}
+                                {item.shoe.lifespanDays} · rent paid{" "}
+                                {formatLKR(item.rentPaid.toString())}
                               </>
                             )}
                             {item.status === "CLOSED" && item.charge && (
@@ -118,6 +106,52 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                               </>
                             )}
                           </div>
+                          {item.offerCharge && (
+                            <div className="mt-2 flex flex-col gap-2">
+                              <Alert tone="info">
+                                The borrower before you is ending their rental early, so this pair
+                                will have less wear than we showed when you booked (
+                                {formatWear(item.offerWearStart!.toString())} wear-days used, not{" "}
+                                {formatWear(item.plannedWearStart!.toString())}). A pair with less
+                                wear costs more per day: your {item.plannedDays}-day rent is now{" "}
+                                <strong>{formatTokens(item.offerCharge.toString())}</strong> instead
+                                of {formatTokens(item.plannedCharge!.toString())}. Accept by{" "}
+                                {formatDateTime(item.offerDueAt)} to keep your reservation; a driver
+                                brings it to you as soon as it&apos;s handed back. If you reject it
+                                or don&apos;t answer, we refund your rent and unlock your deposit.
+                              </Alert>
+                              <OfferButtons itemId={item.id} />
+                            </div>
+                          )}
+                          {item.keepingForNext && (
+                            <p className="mt-2 text-sm text-subtle">
+                              Please keep the pair safe for now: it goes straight to the next
+                              borrower, and we&apos;ll book the driver as soon as they confirm. You
+                              aren&apos;t charged for these days.
+                            </p>
+                          )}
+                          {item.earlyReturnAt && item.status === "ACTIVE" && (
+                            <p className="mt-2 text-sm text-subtle">
+                              Early return booked: your last day is {formatDate(item.termEndDay)}. A
+                              driver collects the pair the day after.
+                            </p>
+                          )}
+                          {item.canExtend && (
+                            <div className="mt-2">
+                              <ExtendForm itemId={item.id} name={name} />
+                            </div>
+                          )}
+                          {item.earlyReturn && (
+                            <div className="mt-2">
+                              <EarlyReturnForm
+                                itemId={item.id}
+                                name={name}
+                                min={item.earlyReturn.min}
+                                max={item.earlyReturn.max}
+                                noticeDays={item.noticeDays}
+                              />
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {item.needsReceipt && (
@@ -136,17 +170,7 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                                 Report a problem
                               </LinkButton>
                             )}
-                          {item.status === "ACTIVE" && (
-                            <form action={endRentalAction.bind(null, item.id)}>
-                              <Button
-                                type="submit"
-                                variant="secondary"
-                                aria-label={`End rental of ${name}`}
-                              >
-                                End rental
-                              </Button>
-                            </form>
-                          )}
+                          {item.canEndNow && <EndRentalForm itemId={item.id} name={name} />}
                         </div>
                       </Card>
                     </li>

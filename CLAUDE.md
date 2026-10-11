@@ -20,7 +20,8 @@ Conventions:
 - **Server code** lives in `src/server/<module>/`, imports `server-only`, and uses `db` from `src/server/db.ts`. Pages call services; services hold the business logic and are integration-tested.
 - **Prisma 7:** `prisma migrate dev` does not regenerate the client, so use `npm run db:migrate` (migrate + generate).
 - **Settings:** a listed shoe is priced with the settings version it was listed under (`Shoe.settingsId`). Use `shoeCurve(shoe)` / `shoePricing(shoe)` from `src/server/catalogue/pricing.ts` (include `settings: true` in the query). `getActiveSettings()` is for operational values (token cover, bundle size, windows, fees), new listings and previews.
-- **Days:** wear-ledger days are Asia/Colombo calendar dates in `RentalItem.firstDay` / `lastDay`, both counted. The first day is the delivery day; the last day is the day the borrower presses End rental, so waiting for the driver is free. A handoff receiver starts on the delivery day, or the day after the giver's last day if that is later.
+- **Days:** wear-ledger days are Asia/Colombo calendar dates in `RentalItem.firstDay` / `lastDay`, both counted. Day 1 is the day after delivery (the delivery day is free); the last day is the day the borrower presses End rental, or the term's last day (`termEndDay`), so waiting for the driver is free. A handoff receiver starts the day after delivery, or the day after the giver's last day if that is later.
+- **Fixed terms (pricing-spec.md §6a):** a borrower books a term and pays its rent at booking; each pair's value is locked as its own deposit, at full value, until that pair is back (rent and delivery fees come from free tokens; only available tokens can be withdrawn). An early return needs `earlyReturnNoticeDays` (10) notice (`scheduleEarlyReturn`); only the free-return window or the term's last day ends at once. A pair can be booked for any term while `committedWear` < L, never after. Each pair's `committedWear` (what listings show, and what the next borrower is priced at) includes every open booking's planned wear. Anything that changes a plan (delivery, early-return notice, extension, a new overlapping booking, cancellation, lost pair, close) calls `replan` (`src/server/booking/plan.ts`), which settles the difference in tokens, or makes a price offer to a reserved-next borrower whose price goes up. The daily job (`runDailyRentals`, `/api/cron/rentals`) ends terms that ran out and expires offers. Notices go through `notify` (in-app, plus email via the mock mailer).
 
 ## Databases
 
@@ -41,7 +42,7 @@ Conventions:
 
 ## Build order
 
-Status: steps 0–8 are done (MVP complete), and step 9 aligned the app with the rent calculation spec. The step branches are on GitHub.
+Status: steps 0–8 are done (MVP complete), and step 9 aligned the app with the rent calculation spec. Steps 10–12 added merchant first, the release discount and the token wallet; step 13 made rentals fixed-term and prepaid. The step branches are on GitHub.
 
 pricing engine → schema and roles → catalogue → booking and wear ledger → payments → logistics → payouts and disputes → polish
 
@@ -51,20 +52,22 @@ Build the **MVP only** (§10 roadmap): pricing engine and tests, listings with c
 
 ## Launch defaults (all configurable; never hard-coded outside settings)
 
-| Setting                                 | Default                                        | Note                                                              |
-| --------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
-| μm / μp                                 | 0.10 / 0.10                                    | Open decision: the split may change                               |
-| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03                            | PricingSettings; reference lifespan 365                           |
-| Declared lifespan limits                | 6–24 months (183–730)                          | Admin can extend a merchant's maximum on request                  |
-| φ (catch-up)                            | 1, off                                         | Discounts funded from margin                                      |
-| Tokens locked at booking                | Pair values + rent estimate (no deposit)       | Overrun: cover rent + 3 days ahead; 3 days to top up, then recall |
-| Max pairs per bundle                    | 4                                              |                                                                   |
-| Dispute window / payout hold            | 3 days after close                             |                                                                   |
-| Payout cadence                          | Weekly                                         |                                                                   |
-| Release discount                        | +0.5%/day from 10 days before release, max 10% | Next borrower only; platform-funded (open decision)               |
-| Idle-cost test r / h                    | 0.12 / 0 LKR a day                             | Phase 2; r is an assumption                                       |
-| Currency / timezone                     | LKR / Asia/Colombo                             |                                                                   |
-| Delivery booking fee                    | TBD                                            | Open decision                                                     |
+| Setting                                 | Default                                        | Note                                                            |
+| --------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------- |
+| μm / μp                                 | 0.10 / 0.10                                    | Open decision: the split may change                             |
+| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03                            | PricingSettings; reference lifespan 365                         |
+| Declared lifespan limits                | 6–24 months (183–730)                          | Admin can extend a merchant's maximum on request                |
+| φ (catch-up)                            | 1, off                                         | Discounts funded from margin                                    |
+| At booking                              | Rent for the term paid; each pair's V locked   | Deposit stays at full V per pair until that pair is back        |
+| Early-return notice                     | 10 days before the new last day                | Wrong-size returns within 24 h end at once                      |
+| Max pairs per bundle                    | 4                                              |                                                                 |
+| Dispute window / payout hold            | 3 days after close                             |                                                                 |
+| Payout cadence                          | Weekly                                         |                                                                 |
+| Release discount                        | +0.5%/day from 10 days before release, max 10% | Next borrower only; platform-funded (open decision)             |
+| Offer response time                     | 24 hours                                       | Reserved-next borrower accepting a higher price (open decision) |
+| Idle-cost test r / h                    | 0.12 / 0 LKR a day                             | Phase 2; r is an assumption                                     |
+| Currency / timezone                     | LKR / Asia/Colombo                             |                                                                 |
+| Delivery booking fee                    | TBD                                            | Open decision                                                   |
 
 Open decisions are listed in §10. When code depends on one, read it from settings and leave a `// OPEN DECISION:` comment. Don't pick a value silently.
 

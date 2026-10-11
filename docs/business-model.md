@@ -28,7 +28,7 @@ Flows: merchants → platform: listings · platform → merchants: payouts · bo
 | Stakeholder | Gives | Gets | Main worry we must solve |
 |---|---|---|---|
 | Merchants (shoe stores, resellers, individual collectors) | Shoes, photos, declared value, expected lifespan | Income over the shoe's life (cost + margin), demand they could not reach, a dashboard of every pair | Damage, loss, shoes sitting idle |
-| Shoe borrowers | A minimum deposit of 5,000 LKR for one pair, 10,000 for two, rising 5,000 per pair; care of the shoe; condition photos; the delivery fee | Many pairs for the price of wearing one, fair prices that fall as shoes age, delivery to the door | Hygiene |
+| Shoe borrowers | A deposit of each pair's declared value, locked in tokens while the pair is out (pricing-spec.md §6); care of the shoe; condition photos; the delivery fee | Many pairs for the price of wearing one, fair prices that fall as shoes age, delivery to the door | Hygiene |
 | Ride-hailing apps | Drivers and couriers for pickup, delivery, return and handoff trips | Quick delivery for the shoe borrowers | Clear pickup points, sealed packages, no disputes about damage |
 | Us (the platform) | Pricing engine, listings, booking, payments, payouts, trust and dispute handling | A margin on every rental | Liquidity (enough shoes and renters in one city), fraud |
 
@@ -270,7 +270,7 @@ The MVP proves the core loop in one city; Phase 2 starts once the pilot is live 
 
 **Open decisions**
 - [ ] Split of the 20% margin: μm = μp = 0.10, or another split?
-- [ ] Deposit size: a fixed amount, or a share of R − F(w) with a cap?
+- [x] Deposit size: each pair's declared value V, locked per pair while it is out (decided 2026-10-11)
 - [ ] Delivery booking fee amount, and who pays for return trips
 - [ ] Is a direct handoff allowed without merchant cleaning, and for which categories?
 - [ ] Minimum and maximum lifespan a merchant may declare
@@ -278,3 +278,6 @@ The MVP proves the core loop in one city; Phase 2 starts once the pilot is live 
 - [ ] Which ride-hailing app to integrate first, and whether it offers a delivery API
 - [ ] Payment gateway, and whether it supports pre-authorisation
 - [ ] Platform name and brand
+- [ ] How long a reserved-next borrower has to accept a higher price after an early return (24 hours for now, `offerResponseHours`)
+- [ ] How long a pair may wait at a borrower's home after an early return before it is collected anyway (no limit for now: it waits until someone books it)
+- [ ] Email provider for notices (a mock mailer for now)

@@ -17,9 +17,9 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
 2. **Pricing acceptance table** (`docs/pricing-spec.md` §11): confirm every row, including the 90-day and 800-day scenarios, has a passing test in `src/lib/pricing/__tests__/acceptance.test.ts`. No `it.todo`, no skips, no loosened tolerances or changed expected values.
 3. **E2E journeys:**
    - 5.1 Merchant lists a shoe → curve preview shows 28.92 / 8.68 for the seeded 6,000 LKR / L = 365 shoe → publishes → Available.
-   - 5.2 Borrower builds a 4-pair bundle → sees bundle daily cost and the tokens to lock → checks out (tokens locked) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
-   - 5.3 Borrower ends one pair with a reservation pending → handoff trip → next borrower records condition.
-   - 5.4 Close → rent charged from tokens, the rest unlocked → payout eligible after 3 days → included in the weekly batch. A dispute holds it.
+   - 5.2 Borrower builds a 4-pair bundle for a term → sees the daily cost, the rent paid now and the deposit → checks out (rent paid, deposits locked, committed wear shown on the listings) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
+   - 5.3 A term ends (or the borrower ends on the term's last day) with a reservation pending → handoff trip → next borrower records condition.
+   - 5.4 Close → nothing left to settle, the pair's deposit unlocked → payout eligible after 3 days → included in the weekly batch. A dispute holds it and the deposit.
 4. **Review checklist** on the diff:
    - [ ] No price, charge, share or wear arithmetic outside `src/lib/pricing` / `src/lib/wear-ledger` (grep for `* K`, `Q(`, `/ n`, `.mul(`, `.times(` and similar in other dirs).
    - [ ] No JS `number`/`parseFloat`/`Float` for money or wear. Decimal everywhere.
@@ -27,8 +27,13 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
    - [ ] Discounts and φ apply to one rental item only. The next item starts from the curve.
    - [ ] Charged amounts come from `chargedAmounts`, merchant first: the platform gets nothing on a shoe until its merchant is paid (1 + μm) × V, and `Shoe.merchantCollected` stays in step (closes, lost pairs, refunds).
    - [ ] A listed shoe is priced with its own settings snapshot (`shoeCurve`), never `getActiveSettings()` + `curveParams` directly.
-   - [ ] Wear-ledger days are inclusive; a holding ends on the End-rental day (waiting for the driver is free); a shoe is never held by two items on one day.
-   - [ ] No hard-coded settings values (0.10, 5000, 3 days, 4 pairs, 183 / 730 lifespan limits) outside PricingSettings defaults and seed.
+   - [ ] Wear-ledger days are inclusive; day 1 is the day after delivery; a holding ends on the term's last day (waiting for the driver is free); a shoe is never held by two items on one day.
+   - [ ] Rentals are fixed-term and prepaid: wear is committed at payment (`committedWear`), and every plan change goes through `replan` and `settleRent` (no other code moves rent).
+   - [ ] An early return needs `earlyReturnNoticeDays` notice (`scheduleEarlyReturn`); only the free-return window or the term's last day can end at once. The daily job ends terms on `termEndDay + 1`.
+   - [ ] A reservation's price never rises without the borrower accepting an offer (24 h, in-app + email); a rejected or expired offer leaves the pair with its holder (`holdForNext`).
+   - [ ] Each pair's deposit stays locked at its full value while the pair is out; rent and delivery fees come from free tokens; damage or loss only touches that pair's deposit; only available tokens can be withdrawn.
+   - [ ] A pair can be booked while `committedWear` < L, for any term; never once it reaches L.
+   - [ ] No hard-coded settings values (0.10, 3 days, 4 pairs, 183 / 730 lifespan limits, 10 days' notice, 24-hour offers) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] The release discount comes from `releaseDiscount`, is fixed on the item at checkout, and never reaches the current holder.
    - [ ] Token ledger writes are idempotent and serialised per user; no money moves without a WalletEntry; balances are never computed with JS numbers.
