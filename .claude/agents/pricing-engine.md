@@ -26,6 +26,7 @@ You build and maintain the pricing engine for the Sneaker Rental Marketplace. Re
 Pure functions, decimal.js only (`D` from `src/lib/decimal.ts`, precision 40), no I/O, no database, no `Date.now()`, no JS `number` arithmetic on money or wear. Current API:
 
 - `validateListing(V, L, limits)`: V > 0 and minLife ≤ L ≤ maxLife, else RangeError. Called at listing time with the merchant's limits; `curveParams` only requires V > 0 and L > 0, so admin-extended shoes stay priceable
+- A listing's declared condition (brand new / second-hand / upgraded) is not a pricing input: second-hand pairs are priced only through w₀. Don't add a condition factor without a spec change.
 - `targetIncome(V, settings)` → R; `curveParams(V, L, settings)` → `{ V, L, R, m, beta, q, A, K }`
 - `Q(p, w)`, `IQ(p, w)` (closed form, stable softplus, w clamped to [0, L])
 - `priceAt(p, w)` → P(w) = K·Q(w); `shownPrice(p, w, d, φ)` → (1 − d)·φ·P(w); `curveIncome(p, w)` → F(w); `curvePoints(p, n)`

@@ -38,7 +38,9 @@ const input = shoeSchema(LIMITS).parse({
   pickupAddress: "12 Galle Road, Colombo",
   value: "6000",
   lifespanDays: "365",
+  condition: "NEW",
 });
+const secondHand = { ...input, condition: "SECOND_HAND" as const };
 
 describe("listing a shoe", () => {
   it("creates a draft with five photos, and publishes once the merchant is verified", async () => {
@@ -94,9 +96,28 @@ describe("listing a shoe", () => {
     expect(schema.safeParse({ ...input, lifespanDays: "730" }).success).toBe(true);
     expect(schema.safeParse({ ...input, value: "6,000" }).success).toBe(false);
     expect(schema.safeParse({ ...input, value: "0" }).success).toBe(false);
-    expect(schema.safeParse({ ...input, initialWear: "365" }).success).toBe(false);
-    expect(schema.safeParse({ ...input, initialWear: "abc" }).success).toBe(false);
+    expect(schema.safeParse({ ...secondHand, initialWear: "365" }).success).toBe(false);
+    expect(schema.safeParse({ ...secondHand, initialWear: "abc" }).success).toBe(false);
     expect(schema.parse({ ...input, initialWear: "" }).initialWear).toBe("0");
+  });
+
+  it("the declared condition must match the wear used, and upgrades must be described", () => {
+    const schema = shoeSchema(LIMITS);
+    const error = (data: object) =>
+      schema.safeParse(data).error?.flatten().fieldErrors as Record<string, string[]>;
+    expect(error({ ...input, condition: undefined }).condition).toEqual(["Choose the condition"]);
+    expect(error({ ...input, initialWear: "10" }).initialWear).toEqual([
+      "A brand-new pair has no wear used",
+    ]);
+    expect(error({ ...secondHand, initialWear: "" }).initialWear).toEqual([
+      "Enter how many days the pair has been worn",
+    ]);
+    const upgraded = { ...input, condition: "SECOND_HAND_UPGRADED", initialWear: "60" };
+    expect(error(upgraded).upgradeNotes).toEqual(["Say what was upgraded"]);
+    expect(schema.parse({ ...upgraded, upgradeNotes: "New insoles" }).upgradeNotes).toBe(
+      "New insoles",
+    );
+    expect(schema.safeParse({ ...secondHand, initialWear: "60" }).success).toBe(true);
   });
 
   it("rejects a lifespan the active settings no longer allow", async () => {
@@ -134,10 +155,42 @@ describe("listing a shoe", () => {
 
   it("lists a second-hand pair at its declared wear", async () => {
     const { merchant } = await makeUser("MERCHANT");
-    const shoe = await createShoe(merchant!.id, { ...input, initialWear: "120.5" }, allPhotos());
+    const shoe = await createShoe(
+      merchant!.id,
+      { ...secondHand, initialWear: "120.5", upgradeNotes: "ignored" },
+      allPhotos(),
+    );
     expect(shoe.wear.toString()).toBe("120.5");
     expect(shoe.initialWear.toString()).toBe("120.5");
     expect(shoe.collectedSoFar.toString()).toBe("0");
+    expect([shoe.condition, shoe.upgradeNotes]).toEqual(["SECOND_HAND", null]);
+  });
+
+  it("stores an upgraded pair's condition and upgrades; the price still comes from its wear", async () => {
+    const { merchant } = await makeUser("MERCHANT");
+    const plain = await createShoe(merchant!.id, { ...secondHand, initialWear: "60" }, allPhotos());
+    const upgraded = await createShoe(
+      merchant!.id,
+      {
+        ...input,
+        condition: "SECOND_HAND_UPGRADED",
+        initialWear: "60",
+        upgradeNotes: "New insoles and laces",
+      },
+      allPhotos(),
+    );
+    expect([upgraded.condition, upgraded.upgradeNotes]).toEqual([
+      "SECOND_HAND_UPGRADED",
+      "New insoles and laces",
+    ]);
+    const [a, b] = await Promise.all(
+      [plain, upgraded].map((s) =>
+        db.shoe.findUniqueOrThrow({ where: { id: s.id }, include: { settings: true } }),
+      ),
+    );
+    expect(shoePricing(b).priceToday).toBe(shoePricing(a).priceToday);
+    const brandNew = await createShoe(merchant!.id, input, allPhotos());
+    expect(brandNew.condition).toBe("NEW");
   });
 
   it("prices a shoe with the settings version active when it was published", async () => {

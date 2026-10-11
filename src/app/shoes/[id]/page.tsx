@@ -5,6 +5,7 @@ import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { Card } from "@/components/ui";
 import { D } from "@/lib/decimal";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { conditionLabel } from "@/lib/shoe-condition";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { getActiveSettings } from "@/server/settings";
 import { getCurrentUser } from "@/server/auth/session";
@@ -67,7 +68,8 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
             {shoe.brand} {shoe.model}
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-subtle">
-            {shoe.size} · {shoe.category} · {shoe.merchant.businessName}
+            {shoe.size} · {shoe.category} · {conditionLabel(shoe.condition)} ·{" "}
+            {shoe.merchant.businessName}
             <ShoeStatusBadge status={shoe.status} />
           </p>
         </div>
@@ -100,6 +102,11 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
             {shoe.latestGrade ?? "—"}
           </p>
         </div>
+        {shoe.upgradeNotes && (
+          <p className="text-sm">
+            <span className="font-medium">Upgrades:</span> {shoe.upgradeNotes}
+          </p>
+        )}
         {shoe.description && <p className="text-sm">{shoe.description}</p>}
         <RentPanel
           shoeId={shoe.id}

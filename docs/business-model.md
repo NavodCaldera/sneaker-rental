@@ -48,6 +48,8 @@ The merchant enters three things and the platform computes every price for the s
 | Declared value V | 6,000 LKR | Target income R |
 | Expected lifespan L (wear-days) | 365 | Length of the price curve |
 | Size, brand, model, category | UK 9, running | Search and filters |
+| Condition: brand new, second-hand, or second-hand upgraded (and what was upgraded) | Second-hand, upgraded: new insoles | Shown to borrowers on the listing and in Browse (decided 2026-10-11) |
+| Wear already used (second-hand only) | 60 wear-days | Where the pair starts on the price curve |
 
 **Target income.** Borrowers together pay R over the shoe's life: **R = (1 + μm + μp) × V**. μm is the merchant's margin and μp is the platform's margin. With both at 0.10, R = 1.20 × V, which is the 120% target used in the formula guide.
 
@@ -107,7 +109,7 @@ Four journeys carry the business; every step records who held the shoe and when,
 
 **5.1 Merchant lists a shoe**
 1. Signs up, verifies the business and adds a payout account.
-2. Adds a shoe: photos, value V, lifespan L, size, brand, model, pickup address.
+2. Adds a shoe: photos, value V, lifespan L, size, brand, model, pickup address, and its condition: brand new, or second-hand with or without upgrades. A second-hand pair also gives the wear-days it has been worn, and an upgraded one what was upgraded.
 3. Sees the computed price curve before publishing: starting price, end price and lifetime income.
 4. Publishes. The shoe is Available, priced at P(w) for its current wear.
 

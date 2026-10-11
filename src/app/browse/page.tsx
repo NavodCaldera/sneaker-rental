@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PhotoImg, WearBar } from "@/components/shoe-bits";
 import { Badge, Button, EmptyState, Input, PageHeader, Select } from "@/components/ui";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { conditionShort } from "@/lib/shoe-condition";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
@@ -94,6 +95,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                     />
                     <span className="absolute left-2 top-2 flex flex-col items-start gap-1">
                       {shoe.status === "WITH_BORROWER" && <Badge tone="info">Reserve next</Badge>}
+                      {shoe.condition !== "NEW" && <Badge>{conditionShort(shoe.condition)}</Badge>}
                       {discounted && (
                         <Badge tone="good">{formatPercent(release.discount)} off</Badge>
                       )}

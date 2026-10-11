@@ -55,6 +55,9 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | Declared value | V | 6,000 LKR |
 | Expected lifespan | L | 365 wear-days |
 | Wear already used, if listed second-hand (`initialWear`) | w₀ | 0 |
+| Condition the merchant declares (`condition`: `NEW`, `SECOND_HAND`, `SECOND_HAND_UPGRADED`, plus `upgradeNotes`) | — | `NEW` |
+
+The condition is information for borrowers and never enters the price: a brand-new pair must have w₀ = 0, a second-hand pair (upgraded or not) must have w₀ > 0, and an upgraded pair must say what was upgraded. Two pairs with the same V, L and w₀ cost the same whatever their condition.
 
 Shoe state: `wear` (w, starts at w₀; settled wear, updated when an item closes), `committedWear` (settled wear plus the planned wear of every open booking on the pair, §6a; what listings show and what the next borrower is priced at), `collectedSoFar` (charged on the platform, after discounts, unrounded), `lostToDiscounts`, `merchantCollected` (merchant shares charged so far, net of refunds, 2 dp), `settingsId`. What a shoe has collected over its **whole life** is `lifetimeCollected = F(w₀) + collectedSoFar`; catch-up and the catch-up remaining value use that.
 

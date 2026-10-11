@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { conditionLabel } from "@/lib/shoe-condition";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
@@ -62,6 +63,14 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
               )}
             </div>
           </div>
+          <Stat
+            label="Condition when listed"
+            value={
+              shoe.upgradeNotes
+                ? `${conditionLabel(shoe.condition)}: ${shoe.upgradeNotes}`
+                : conditionLabel(shoe.condition)
+            }
+          />
           <Stat label="Declared value" value={formatLKR(shoe.value.toString())} />
           <Stat label="Lifetime income target (R)" value={formatLKR(pricing.lifetimeIncome)} />
           <Stat label="You earn over its life" value={formatLKR(pricing.merchantTarget)} />

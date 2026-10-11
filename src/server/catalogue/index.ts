@@ -49,6 +49,12 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
         .int("Whole days only")
         .min(limits.minLifespanDays, `At least ${limits.minLifespanDays} wear-days`)
         .max(limits.maxLifespanDays, `At most ${limits.maxLifespanDays} wear-days`),
+      /** Brand new, or second-hand with or without upgrades */
+      condition: z.enum(["NEW", "SECOND_HAND", "SECOND_HAND_UPGRADED"], {
+        error: "Choose the condition",
+      }),
+      /** What was upgraded (upgraded pairs only) */
+      upgradeNotes: z.string().trim().max(300).optional().or(z.literal("")),
       /** Wear already used if listed second-hand (w₀) */
       initialWear: z
         .string()
@@ -60,6 +66,21 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
     .refine((s) => !WEAR_FORMAT.test(s.initialWear) || new D(s.initialWear).lt(s.lifespanDays), {
       message: "Wear used must be less than the lifespan",
       path: ["initialWear"],
+    })
+    // The declared condition must agree with the wear the price is based on (w₀).
+    .refine(
+      (s) =>
+        s.condition !== "NEW" || !WEAR_FORMAT.test(s.initialWear) || new D(s.initialWear).isZero(),
+      { message: "A brand-new pair has no wear used", path: ["initialWear"] },
+    )
+    .refine(
+      (s) =>
+        s.condition === "NEW" || !WEAR_FORMAT.test(s.initialWear) || new D(s.initialWear).gt(0),
+      { message: "Enter how many days the pair has been worn", path: ["initialWear"] },
+    )
+    .refine((s) => s.condition !== "SECOND_HAND_UPGRADED" || !!s.upgradeNotes, {
+      message: "Say what was upgraded",
+      path: ["upgradeNotes"],
     });
 
 export type ShoeInput = z.infer<ReturnType<typeof shoeSchema>>;
@@ -110,8 +131,9 @@ function checkListing(value: string, lifespanDays: number, limits: LifespanLimit
 }
 
 /**
- * Creates a Draft listing with its five listing photos (§5.1 step 2). A second-hand pair
- * starts at its declared wear w₀.
+ * Creates a Draft listing with its five listing photos (§5.1 step 2), with the condition the
+ * merchant declared (brand new, second-hand, or second-hand upgraded). A second-hand pair
+ * starts at its declared wear w₀; the condition itself doesn't change the price.
  */
 export async function createShoe(
   merchantId: string,
@@ -130,6 +152,7 @@ export async function createShoe(
     data: {
       ...input,
       description: input.description || null,
+      upgradeNotes: input.condition === "SECOND_HAND_UPGRADED" ? input.upgradeNotes || null : null,
       wear: input.initialWear,
       committedWear: input.initialWear,
       merchantId,

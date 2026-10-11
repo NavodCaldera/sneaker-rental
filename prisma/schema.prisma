@@ -96,8 +96,18 @@ enum Grade {
   D
 }
 
+/// The condition a merchant declares when listing a pair
+enum ShoeCondition {
+  /// Brand new, never worn
+  NEW
+  /// Second-hand, as it is
+  SECOND_HAND
+  /// Second-hand with upgrades (e.g. new insoles, laces, sole work)
+  SECOND_HAND_UPGRADED
+}
+
 model Shoe {
-  id                String     @id @default(cuid())
+  id                String        @id @default(cuid())
   merchantId        String
   brand             String
   model             String
@@ -106,34 +116,39 @@ model Shoe {
   description       String?
   pickupAddress     String
   /// Declared value V (LKR)
-  value             Decimal    @db.Decimal(14, 2)
+  value             Decimal       @db.Decimal(14, 2)
   /// Expected lifespan L (wear-days)
   lifespanDays      Int
   /// Settled wear w (wear-days): updated when an item closes
-  wear              Decimal    @default(0) @db.Decimal(28, 12)
+  wear              Decimal       @default(0) @db.Decimal(28, 12)
   /// Settled wear plus the planned wear of every open booking (pricing-spec.md §6a): what
   /// listings show, and the wear the next borrower is priced at
-  committedWear     Decimal    @default(0) @db.Decimal(28, 12)
+  committedWear     Decimal       @default(0) @db.Decimal(28, 12)
+  /// Condition the merchant declared when listing: brand new (w₀ = 0) or second-hand, with
+  /// or without upgrades. Shown to borrowers; the price comes only from w₀.
+  condition         ShoeCondition @default(NEW)
+  /// What was upgraded (SECOND_HAND_UPGRADED only), e.g. "new insoles and laces"
+  upgradeNotes      String?
   /// Wear already used when listed second-hand (w₀)
-  initialWear       Decimal    @default(0) @db.Decimal(28, 12)
+  initialWear       Decimal       @default(0) @db.Decimal(28, 12)
   /// Charged on the platform so far, after discounts (excludes F(w₀))
-  collectedSoFar    Decimal    @default(0) @db.Decimal(28, 12)
-  lostToDiscounts   Decimal    @default(0) @db.Decimal(28, 12)
+  collectedSoFar    Decimal       @default(0) @db.Decimal(28, 12)
+  lostToDiscounts   Decimal       @default(0) @db.Decimal(28, 12)
   /// Merchant shares charged so far, net of refunds. Rent goes to the merchant until this
   /// reaches their target (merchant first), then to the platform.
-  merchantCollected Decimal    @default(0) @db.Decimal(14, 2)
+  merchantCollected Decimal       @default(0) @db.Decimal(14, 2)
   /// The current or last holder's term end (or the day they ended early): the release
   /// discount counts from it
-  releaseDay        DateTime?  @db.Date
+  releaseDay        DateTime?     @db.Date
   /// Settings version the shoe is priced with: snapshotted when listed, so its curve
   /// never changes under a running rental
   settingsId        String
-  status            ShoeStatus @default(DRAFT)
+  status            ShoeStatus    @default(DRAFT)
   latestGrade       Grade?
   publishedAt       DateTime?
   retiredAt         DateTime?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   merchant         Merchant          @relation(fields: [merchantId], references: [id])
   settings         PricingSettings   @relation(fields: [settingsId], references: [id])

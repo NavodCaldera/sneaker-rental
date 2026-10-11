@@ -16,7 +16,7 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
 1. `npx tsc --noEmit`, lint, `npx vitest run`, `npx playwright test`. Report exact failures with output.
 2. **Pricing acceptance table** (`docs/pricing-spec.md` §11): confirm every row, including the 90-day and 800-day scenarios, has a passing test in `src/lib/pricing/__tests__/acceptance.test.ts`. No `it.todo`, no skips, no loosened tolerances or changed expected values.
 3. **E2E journeys:**
-   - 5.1 Merchant lists a shoe → curve preview shows 28.92 / 8.68 for the seeded 6,000 LKR / L = 365 shoe → publishes → Available.
+   - 5.1 Merchant lists a shoe → curve preview shows 28.92 / 8.68 for the seeded 6,000 LKR / L = 365 shoe → publishes → Available. A second-hand upgraded pair (wear used + what was upgraded) shows its condition in Browse and on its page.
    - 5.2 Borrower builds a 4-pair bundle for a term → sees the daily cost, the rent estimate locked now and the deposit → checks out (deposits and rent estimate locked, nothing charged, committed wear shown on the listings) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
    - 5.3 A term ends (or the borrower ends on the term's last day) with a reservation pending → handoff trip → next borrower records condition.
    - 5.4 Close → rent charged, rent lock and the pair's deposit unlocked → payout eligible after 3 days → included in the weekly batch. A dispute holds it and the deposit.
@@ -26,6 +26,7 @@ You are the quality gate. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/bus
    - [ ] Rounding (`toFixed`, `roundMoney`, `toDecimalPlaces`) only at display or charge boundaries.
    - [ ] Discounts and φ apply to one rental item only. The next item starts from the curve.
    - [ ] Charged amounts come from `chargedAmounts`, merchant first: the platform gets nothing on a shoe until its merchant is paid (1 + μm) × V, and `Shoe.merchantCollected` stays in step (closes, lost pairs, refunds).
+   - [ ] A listing's condition agrees with its wear used (brand new ⇒ 0, second-hand ⇒ > 0, upgraded ⇒ upgrades described) and never changes its price.
    - [ ] A listed shoe is priced with its own settings snapshot (`shoeCurve`), never `getActiveSettings()` + `curveParams` directly.
    - [ ] Wear-ledger days are inclusive; day 1 is the day after delivery; a holding ends on the term's last day (waiting for the driver is free); a shoe is never held by two items on one day.
    - [ ] Rentals are fixed-term with post-paid rent: nothing is charged at booking; deposits (`DEPOSIT`) and rent estimates (`RENT`) are locked; wear is committed at booking (`committedWear`); every plan change goes through `replan` → `lockRent`; rent is charged only by `collectRent` in `closeItem`'s transaction (no other code moves rent), so no CLOSED item lacks its rent charge.

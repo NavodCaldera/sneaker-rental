@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { CurveChart } from "@/components/curve-chart";
 import { Alert, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
 import { formatLKR } from "@/lib/format";
+import { SHOE_CONDITIONS } from "@/lib/shoe-condition";
 import type { CurvePreview } from "@/server/catalogue/pricing";
 import { type ActionState, createShoeAction } from "../../actions";
 
@@ -28,6 +29,7 @@ export function NewShoeForm({
   const errors = state.fieldErrors ?? {};
   const [value, setValue] = useState("");
   const [lifespan, setLifespan] = useState("365");
+  const [condition, setCondition] = useState("NEW");
   const preview = useCurvePreview(value, lifespan);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
@@ -137,13 +139,43 @@ export function NewShoeForm({
             />
           </Field>
           <Field
-            label="Wear already used (wear-days)"
-            name="initialWear"
-            error={errors.initialWear}
-            hint="Leave empty for a new pair. For a pre-worn pair, the days it has been worn: rentals start further down the curve."
+            label="Condition"
+            name="condition"
+            error={errors.condition}
+            hint="Shown to borrowers on the listing."
           >
-            <Input name="initialWear" inputMode="decimal" placeholder="0" />
+            <Select
+              name="condition"
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
+            >
+              {SHOE_CONDITIONS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
           </Field>
+          {condition !== "NEW" && (
+            <Field
+              label="Wear already used (wear-days)"
+              name="initialWear"
+              error={errors.initialWear}
+              hint="The days it has been worn. Rentals start further down the curve, so the daily price is lower."
+            >
+              <Input name="initialWear" inputMode="decimal" placeholder="e.g. 60" required />
+            </Field>
+          )}
+          {condition === "SECOND_HAND_UPGRADED" && (
+            <Field
+              label="What was upgraded"
+              name="upgradeNotes"
+              error={errors.upgradeNotes}
+              hint="E.g. new insoles and laces, sole regrip, professional clean."
+            >
+              <Textarea name="upgradeNotes" maxLength={300} required />
+            </Field>
+          )}
         </Card>
 
         <Card>
