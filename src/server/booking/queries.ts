@@ -1,5 +1,5 @@
 import "server-only";
-import { colomboDay, dateToDay, dayToDate } from "@/lib/wear-ledger";
+import { colomboDay, dateToDay, dayToDate, plannedLastDay } from "@/lib/wear-ledger";
 import { db } from "../db";
 import { getActiveSettings } from "../settings";
 import { rentalLocked } from "../wallet";
@@ -7,9 +7,10 @@ import { rentalLocked } from "../wallet";
 const isoDay = (day: number) => dayToDate(day).toISOString().slice(0, 10);
 
 /**
- * A borrower's rentals. Each pair shows its term, the rent paid and its planned wear
- * (committed when the term was paid for), plus what the borrower can do next: confirm
- * condition, extend, end early, or answer a price offer.
+ * A borrower's rentals. Each pair shows its term (expected dates for a reservation), the
+ * rent estimate locked for it and its planned wear (committed at booking), or the rent
+ * charged once it has closed, plus what the borrower can do next: confirm condition, extend,
+ * end early, or answer an offer of new dates.
  */
 export async function borrowerRentals(borrowerId: string, now = new Date()) {
   const settings = await getActiveSettings(now);
@@ -39,7 +40,7 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
 
   return rentals.map((rental, i) => ({
     ...rental,
-    /** Tokens still locked for this rental (the pairs' deposit) */
+    /** Tokens still locked for this rental (the pairs' deposits and rent estimates) */
     locked: locked[i].toFixed(2),
     items: rental.items.map((item) => {
       const needsReceipt =
@@ -71,8 +72,17 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
         earliest < termEnd
           ? { min: isoDay(earliest), max: isoDay(termEnd - 1) }
           : null;
+      // A reservation's expected term, from the plan (day 1 is after the handoff).
+      const expected =
+        !item.firstDay && item.plannedFirstDay && item.plannedDays
+          ? {
+              first: item.plannedFirstDay,
+              last: dayToDate(plannedLastDay(dateToDay(item.plannedFirstDay), item.plannedDays)),
+            }
+          : null;
       return {
         ...item,
+        expected,
         needsReceipt,
         canExtend,
         keepingForNext,

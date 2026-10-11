@@ -1,19 +1,19 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import type { WalletEntryKind } from "@/generated/prisma/client";
+import type { LockPurpose, WalletEntryKind } from "@/generated/prisma/client";
 import { D, toD } from "@/lib/decimal";
 import { type Tx, db } from "../db";
 import { gateway } from "../payments/gateway";
 
 /**
  * Borrower tokens (1 token = 1 LKR), kept as an append-only ledger (pricing-spec.md §6).
- * Borrowers top up through the payment gateway. Booking locks each pair's merchant value as
- * its own deposit and charges the rent for the booked term; changes to the plan are charged
- * or credited as they happen (pricing-spec.md §6a). A pair's deposit stays locked at its full
- * value while the pair is out: rent comes from the free balance (trip fees never go through
- * us: the receiver pays the driver), and only damage to or loss of that pair is charged
- * against it. Only available (unlocked) tokens can be withdrawn to the card that paid for
- * them.
+ * Borrowers top up through the payment gateway. Booking locks, per pair, its merchant value
+ * as a deposit and the rent estimate for its term; nothing is charged until the pair's item
+ * closes, when the rent lock is released and the final rent charged (pricing-spec.md §6a).
+ * Plan changes move the rent lock up or down. A pair's deposit stays locked at its full value
+ * while the pair is out: only damage to or loss of that pair is charged against it (trip fees
+ * never go through us: the receiver pays the driver). Only available (unlocked) tokens can be
+ * withdrawn to the card that paid for them.
  *
  * Amounts here are already-rounded 2-dp values (charges come from the pricing engine via
  * booking). Every write carries an idempotency key, so a repeated call is a no-op.
@@ -52,7 +52,7 @@ export async function walletBalance(userId: string, tx: Tx = db): Promise<Balanc
   return { balance, locked, available: balance.minus(locked) };
 }
 
-/** Tokens still locked for one rental (the deposits of its pairs not yet settled). */
+/** Tokens still locked for one rental (deposits and rent estimates of its open pairs). */
 export async function rentalLocked(rentalId: string, tx: Tx = db): Promise<D> {
   const rows = await tx.walletEntry.groupBy({
     by: ["kind"],
@@ -63,15 +63,24 @@ export async function rentalLocked(rentalId: string, tx: Tx = db): Promise<D> {
   return sum("LOCK").minus(sum("UNLOCK"));
 }
 
-/** Tokens still locked as one pair's deposit. */
-export async function pairLocked(rentalItemId: string, tx: Tx = db): Promise<D> {
+async function lockedFor(rentalItemId: string, purpose: LockPurpose, tx: Tx): Promise<D> {
   const rows = await tx.walletEntry.groupBy({
     by: ["kind"],
-    where: { rentalItemId, kind: { in: ["LOCK", "UNLOCK"] } },
+    where: { rentalItemId, purpose, kind: { in: ["LOCK", "UNLOCK"] } },
     _sum: { amount: true },
   });
   const sum = totals(rows);
   return sum("LOCK").minus(sum("UNLOCK"));
+}
+
+/** Tokens still locked as one pair's deposit. */
+export async function pairLocked(rentalItemId: string, tx: Tx = db): Promise<D> {
+  return lockedFor(rentalItemId, "DEPOSIT", tx);
+}
+
+/** Tokens still locked for one pair's rent estimate. */
+export async function rentLockedFor(rentalItemId: string, tx: Tx = db): Promise<D> {
+  return lockedFor(rentalItemId, "RENT", tx);
 }
 
 type EntryInput = {
@@ -81,6 +90,7 @@ type EntryInput = {
   key: string;
   rentalId?: string;
   rentalItemId?: string;
+  purpose?: LockPurpose;
   paymentId?: string;
   note?: string;
 };
@@ -123,14 +133,47 @@ export async function lockDeposit(
     key: `lock:${input.rentalItemId}`,
     rentalId: input.rentalId,
     rentalItemId: input.rentalItemId,
+    purpose: "DEPOSIT",
     note: "Deposit: pair value",
   });
 }
 
 /**
- * Charge from the free balance, leaving locked tokens alone (rent for a booked term, or a
- * change to it). The balance may go negative; callers that must not allow that check
- * `walletBalance` afterwards and roll back.
+ * Move one pair's rent lock to `target` (a 2-dp rent estimate from the plan): lock or
+ * unlock the difference. Nothing is charged; the rent is charged when the item closes.
+ * Doesn't check the available balance: callers that must not let it go below zero check
+ * `walletBalance` afterwards and roll back. Returns the change (+ locked, − unlocked).
+ */
+export async function setRentLock(
+  tx: Tx,
+  input: {
+    userId: string;
+    rentalId: string;
+    rentalItemId: string;
+    target: D;
+    note: { lock: string; unlock: string };
+  },
+): Promise<D> {
+  await lockWallet(tx, input.userId);
+  const delta = input.target.minus(await rentLockedFor(input.rentalItemId, tx));
+  if (delta.isZero()) return delta;
+  await entry(tx, {
+    userId: input.userId,
+    kind: delta.gt(0) ? "LOCK" : "UNLOCK",
+    amount: delta.abs(),
+    key: `rentlock:${input.rentalItemId}:${randomUUID()}`,
+    rentalId: input.rentalId,
+    rentalItemId: input.rentalItemId,
+    purpose: "RENT",
+    note: delta.gt(0) ? input.note.lock : input.note.unlock,
+  });
+  return delta;
+}
+
+/**
+ * Charge from the free balance, leaving locked tokens alone (the final rent of a closed
+ * item, once its rent lock is released). The balance may go negative, a debt the borrower
+ * must top up before booking again.
  */
 export async function chargeFree(
   tx: Tx,
@@ -173,6 +216,7 @@ export async function chargeFromDeposit(
     kind: "UNLOCK",
     amount: fromLocked,
     key: `${input.key}:unlock`,
+    purpose: "DEPOSIT",
     note: input.note,
   });
   await entry(tx, {
@@ -194,21 +238,51 @@ export async function unlockDeposit(
   return entry(tx, {
     ...input,
     kind: "UNLOCK",
+    purpose: "DEPOSIT",
     amount: await pairLocked(input.rentalItemId, tx),
   });
 }
 
-/** Release everything still locked for a rental, once all its pairs are settled. */
+/**
+ * Release everything still locked for a rental, once all its pairs are settled: one UNLOCK
+ * per pair and purpose, so each pair's locks stay balanced.
+ */
 export async function unlockRental(
   tx: Tx,
   input: { userId: string; rentalId: string; key: string; note: string },
 ) {
   await lockWallet(tx, input.userId);
-  return entry(tx, {
-    ...input,
-    kind: "UNLOCK",
-    amount: await rentalLocked(input.rentalId, tx),
+  const rows = await tx.walletEntry.groupBy({
+    by: ["rentalItemId", "purpose", "kind"],
+    where: { rentalId: input.rentalId, kind: { in: ["LOCK", "UNLOCK"] } },
+    _sum: { amount: true },
   });
+  const left = new Map<
+    string,
+    { rentalItemId: string | null; purpose: LockPurpose | null; amount: D }
+  >();
+  for (const r of rows) {
+    const k = `${r.rentalItemId ?? "-"}:${r.purpose ?? "-"}`;
+    const amount = toD(r._sum.amount ?? 0);
+    const prev = left.get(k)?.amount ?? new D(0);
+    left.set(k, {
+      rentalItemId: r.rentalItemId,
+      purpose: r.purpose,
+      amount: r.kind === "LOCK" ? prev.plus(amount) : prev.minus(amount),
+    });
+  }
+  for (const [k, l] of left) {
+    await entry(tx, {
+      userId: input.userId,
+      rentalId: input.rentalId,
+      kind: "UNLOCK",
+      amount: l.amount,
+      key: `${input.key}:${k}`,
+      note: input.note,
+      ...(l.rentalItemId && { rentalItemId: l.rentalItemId }),
+      ...(l.purpose && { purpose: l.purpose }),
+    });
+  }
 }
 
 /** Give tokens back (e.g. an upheld overcharge). */

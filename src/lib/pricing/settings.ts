@@ -25,7 +25,7 @@ export interface PricingSettings {
   maxLife: number;
   /** Highest discount a borrower can get (release discount cap): 0.10 */
   maxDiscount: Decimal.Value;
-  /** Days before a holder's planned last day that the pair is shown, discounted, to the next borrower: 10 */
+  /** Days before a holder's planned last day that the release discount starts for the next borrower: 10 */
   releaseLeadDays: number;
   /** Release discount added per day from the start of that window: 0.005 */
   releaseDiscountStep: Decimal.Value;

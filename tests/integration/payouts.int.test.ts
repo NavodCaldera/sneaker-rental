@@ -89,7 +89,7 @@ describe("weekly payouts (§4 rule 5)", () => {
     expect(waiting.waiting.find((w) => w.id === disputed.item.id)?.state).toBe("disputed");
   });
 
-  it("merchant + platform shares equal the rent paid to the cent", async () => {
+  it("merchant + platform shares equal the rent charged at close, to the cent", async () => {
     const ctx = await merchantCtx();
     for (const d of [10, 11, 12]) await closedRental(ctx, d, 7 + d);
     const items = await db.rentalItem.findMany({ where: { status: "CLOSED" } });
@@ -105,7 +105,10 @@ describe("weekly payouts (§4 rule 5)", () => {
         item.charge!.minus(item.charge!),
       );
       expect(paid.toFixed(2)).toBe(item.charge!.toFixed(2));
+      // Post-paid: one charge, taken when the item closed, and no rent left locked.
+      expect(rent.map((e) => e.kind)).toEqual(["CHARGE"]);
       expect(item.rentPaid.toFixed(2)).toBe(item.charge!.toFixed(2));
+      expect(item.rentLocked.toFixed(2)).toBe("0.00");
     }
   });
 

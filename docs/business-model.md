@@ -94,7 +94,7 @@ Every rental payment is split in a fixed ratio: with μm = μp = 0.10, the merch
 
 **Rules for money**
 
-1. **Prepaid term.** The borrower pays the rent for the booked term upfront in tokens; unused days are refunded after an early return with notice, and changes are settled to actual wear (pricing-spec.md §6, §6a).
+1. **Post-paid rent: locked at booking, charged at return.** At booking the borrower's tokens cover each pair's value (the deposit) plus the rent estimate for the term, and both are locked. When a pair is back, its rent lock is released and the rent for the wear it actually got is charged; the merchant's share is credited only then (pricing-spec.md §6, §6a, §7).
 2. **Deposit.** Each pair's value is locked in tokens while the pair is out and unlocked once its condition check passes.
 3. **Lost shoe.** The borrower pays what the shoe had left to earn, R − F(w), split merchant/platform as normal. The merchant is made whole for the shoe's remaining life.
 4. **Discounts.** Promotional discounts the platform runs are taken from both shares in proportion. Idle discounts the merchant switches on come out of the merchant's share only.
@@ -184,7 +184,7 @@ Build one web app with four role views (merchant, borrower, admin, and a courier
 | Wear ledger | Records every holding period; computes wear added per item at close, splitting each day 1 ÷ n across pairs held | Booking |
 | Logistics | Delivery quotes and bookings with ride-hailing apps; trip status by webhook; handoff trips | Booking |
 | Condition | Photos and grades at every handover; damage flags | Booking, Logistics |
-| Payments | Pre-authorisation, final charge, deposit hold and release, refunds | Pricing engine, Wear ledger |
+| Payments | Token locks (deposit and rent estimate), rent charged at return, deposit release, refunds | Pricing engine, Wear ledger |
 | Payouts | Merchant share after the dispute window, weekly batches | Payments |
 | Disputes and admin | Review queue, decisions, settings (μm, μp, floor, curve, caps) | All |
 
@@ -278,5 +278,6 @@ The MVP proves the core loop in one city; Phase 2 starts once the pilot is live 
 - [ ] Payment gateway, and whether it supports pre-authorisation
 - [ ] Platform name and brand
 - [ ] How long a reserved-next borrower has to accept a higher price after an early return (24 hours for now, `offerResponseHours`)
-- [ ] How long a pair may wait at a borrower's home after an early return before it is collected anyway (no limit for now: it waits until someone books it)
+- [x] A pair whose reserved-next borrower turns down an early handover (or doesn't answer) goes back to the merchant; the reservation is cancelled and unlocked (decided 2026-10-11)
+- [x] Reservations open from the holder's day 1, not only in the last 10 days (decided 2026-10-11)
 - [ ] Email provider for notices (a mock mailer for now)

@@ -45,8 +45,8 @@ async function rentOne(borrowerId: string, shoeId: string, plannedDays = 30) {
   return { rental, item };
 }
 
-describe("tokens: top up, pay the rent and lock the value at booking, unlock at return", () => {
-  it("books only with value + rent available, pays the rent upfront and unlocks the value", async () => {
+describe("tokens: top up, lock the value and rent estimate at booking, charge the rent at return", () => {
+  it("books only with value + rent estimate available, locks both, charges the rent at return", async () => {
     const { merchant, merchantId } = await setup();
     const borrower = await makeUser("BORROWER", { tokens: "0" });
     const shoe = await makeShoe(merchantId);
@@ -74,10 +74,10 @@ describe("tokens: top up, pay the rent and lock the value at booking, unlock at 
 
     const { rental, item } = await rentOne(borrower.id, shoe.id, 100);
     expect(rental.status).toBe("ACTIVE");
-    // Rent 2,866.11 paid; the pair's 6,000 locked as a deposit.
+    // Nothing charged yet: the pair's 6,000 deposit and the 2,866.11 rent estimate are locked.
     expect(await balances(borrower.id)).toEqual({
-      balance: "6000.00",
-      locked: "6000.00",
+      balance: "8866.11",
+      locked: "8866.11",
       available: "0.00",
     });
 
@@ -86,7 +86,7 @@ describe("tokens: top up, pay the rent and lock the value at booking, unlock at 
     await arrive(await deliveryFor(item.id, "COLLECT"), day(100));
     await recordCondition(merchant.id, { itemId: item.id, grade: "A", photos: photos() }, day(100));
 
-    // The term was kept: nothing more to pay, and the pair's 6,000 is unlocked.
+    // At return the 2,866.11 is charged and everything else unlocked.
     expect(await balances(borrower.id)).toEqual({
       balance: "6000.00",
       locked: "0.00",
@@ -161,9 +161,10 @@ describe("deposits: each pair's full value stays locked while it is out (pricing
     const rental = await checkout(borrower.id, [a.id, b.id], { ...address, plannedDays: 30 });
     const items = await db.rentalItem.findMany({ where: { rentalId: rental.id } });
     for (const i of items) expect((await pairLocked(i.id)).toFixed(2)).toBe("6000.00");
+    // Deposits 12,000 + the rent estimate locked; nothing charged.
     expect(await balances(borrower.id)).toEqual({
-      balance: "13000.00",
-      locked: "12000.00",
+      balance: new D(quote.required).plus(1000).toFixed(2),
+      locked: quote.required,
       available: "1000.00",
     });
 
@@ -179,7 +180,10 @@ describe("deposits: each pair's full value stays locked while it is out (pricing
     await arrive(await deliveryFor(items[1].id, "DELIVER"), day(0));
     await markLost(items[0].id, day(5));
     expect((await pairLocked(items[1].id)).toFixed(2)).toBe("6000.00");
-    expect((await rentalLocked(rental.id)).toFixed(2)).toBe("6000.00");
+    const other = await db.rentalItem.findUniqueOrThrow({ where: { id: items[1].id } });
+    expect((await rentalLocked(rental.id)).toFixed(2)).toBe(
+      new D(6000).plus(other.rentLocked.toString()).toFixed(2),
+    );
   });
 });
 
@@ -199,7 +203,8 @@ describe("lost pair (§4 rule 3)", () => {
     expect(lost.merchantShare!.toFixed(2)).toBe("6600.00");
     expect(lost.platformShare!.toFixed(2)).toBe("600.00");
 
-    // The prepaid rent is refunded; 7,200 is more than was locked: the rest is a debt.
+    // No rent is charged and its lock is released; 7,200 is more than the deposit: the rest
+    // comes from the free balance, then is a debt.
     const b = await balances(borrower.id);
     expect(b.locked).toBe("0.00");
     expect(b.balance).toBe(new D(quote.required).minus(7200).toFixed(2));
@@ -237,7 +242,7 @@ describe("lost pair (§4 rule 3)", () => {
 });
 
 describe("short balances", () => {
-  it("an extension is paid upfront, and refused with nothing changed if tokens are short", async () => {
+  it("an extension's rent estimate is locked upfront, and refused with nothing changed if tokens are short", async () => {
     const { merchantId } = await setup();
     const borrower = await makeUser("BORROWER", { tokens: "0" });
     const shoe = await makeShoe(merchantId);
@@ -248,15 +253,16 @@ describe("short balances", () => {
     await expect(extendRental(borrower.id, item.id, 5, day(5))).rejects.toThrow(/Top up/);
     const same = await db.rentalItem.findUniqueOrThrow({ where: { id: item.id } });
     expect(same.plannedDays).toBe(10);
-    expect(same.rentPaid.toFixed(2)).toBe(quote.estimate);
+    expect(same.rentLocked.toFixed(2)).toBe(quote.estimate);
 
     await fund(borrower.id, "500");
     await extendRental(borrower.id, item.id, 5, day(5));
     const extended = await db.rentalItem.findUniqueOrThrow({ where: { id: item.id } });
     expect(extended.plannedDays).toBe(15);
-    expect(new D(extended.rentPaid.toString()).gt(quote.estimate)).toBe(true);
+    expect(new D(extended.rentLocked.toString()).gt(quote.estimate)).toBe(true);
+    expect(extended.rentPaid.toFixed(2)).toBe("0.00");
     expect((await balances(borrower.id)).available).toBe(
-      new D(500).minus(extended.rentPaid.minus(quote.estimate).toString()).toFixed(2),
+      new D(500).minus(extended.rentLocked.minus(quote.estimate).toString()).toFixed(2),
     );
   });
 

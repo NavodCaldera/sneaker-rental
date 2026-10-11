@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { D } from "@/lib/decimal";
 import {
   DEFAULT_PRICING_SETTINGS,
   chargedAmounts,
@@ -18,9 +19,9 @@ import {
 import { acceptOffer, rejectOffer } from "@/server/booking/reservations";
 import { db } from "@/server/db";
 import { MockMailer, setMailerForTests } from "@/server/notify/mailer";
-import { rentalLocked, walletBalance } from "@/server/wallet";
+import { runPayoutBatch } from "@/server/payouts";
+import { rentLockedFor, rentalLocked, walletBalance } from "@/server/wallet";
 import {
-  TEST_SETTINGS,
   arrive,
   day,
   deliveryFor,
@@ -50,10 +51,53 @@ async function item(rentalId: string) {
 }
 const reload = (id: string) => db.rentalItem.findUniqueOrThrow({ where: { id } });
 const shoeNow = (id: string) => db.shoe.findUniqueOrThrow({ where: { id } });
+const tokens = async (userId: string) => {
+  const b = await walletBalance(userId);
+  return { balance: b.balance.toFixed(2), locked: b.locked.toFixed(2) };
+};
+
+describe("post-paid rent (pricing-spec.md §6)", () => {
+  it("locks the deposit and rent estimate at booking, charges the actual rent at return", async () => {
+    const { merchant, merchantId, borrower } = await setup();
+    const shoe = await makeShoe(merchantId);
+    const start = await tokens(borrower.id);
+    const rental = await checkout(
+      borrower.id,
+      [shoe.id],
+      { deliveryAddress: "Home 123", plannedDays: 30 },
+      day(-1),
+    );
+    const it1 = await item(rental.id);
+    // Nothing charged: V + the estimate are locked, and the wear is committed.
+    expect(rental.estimatedRent.toFixed(2)).toBe(rent(0, 30).toFixed(2));
+    expect(await tokens(borrower.id)).toEqual({
+      balance: start.balance,
+      locked: rent(0, 30).plus(6000).toFixed(2),
+    });
+    expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("30");
+
+    await arrive(await deliveryFor(it1.id, "DELIVER"), day(0));
+    await runDailyRentals(day(31));
+    await arrive(await deliveryFor(it1.id, "COLLECT"), day(31));
+    await recordCondition(merchant.id, { itemId: it1.id, grade: "A", photos: photos() }, day(31));
+
+    const closed = await reload(it1.id);
+    expect(closed.charge!.toFixed(2)).toBe(rent(0, 30).toFixed(2));
+    expect(closed.rentPaid.toFixed(2)).toBe(closed.charge!.toFixed(2));
+    expect(await tokens(borrower.id)).toEqual({
+      balance: rent(0, 30).neg().plus(start.balance).toFixed(2),
+      locked: "0.00",
+    });
+    // Merchant first: the whole charge is the merchant's, payable after the dispute window.
+    expect(closed.merchantShare!.toFixed(2)).toBe(closed.charge!.toFixed(2));
+    const { results } = await runPayoutBatch(day(35));
+    expect(results[0].amount).toBe(closed.merchantShare!.toFixed(2));
+  });
+});
 
 describe("early return (pricing-spec.md §6a)", () => {
-  it("needs 10 days' notice; the term then ends on the chosen day, unused days refunded at once", async () => {
-    const { merchantId, borrower } = await setup();
+  it("needs 10 days' notice; the term then ends on the chosen day and the unused days' estimate is unlocked at once", async () => {
+    const { merchant, merchantId, borrower } = await setup();
     const shoe = await makeShoe(merchantId);
     const rental = await checkout(
       borrower.id,
@@ -61,7 +105,7 @@ describe("early return (pricing-spec.md §6a)", () => {
       { deliveryAddress: "Home 123", plannedDays: 90 },
       day(-1),
     );
-    expect(rental.prepaidRent.toFixed(2)).toBe(rent(0, 90).toFixed(2));
+    expect(rental.estimatedRent.toFixed(2)).toBe(rent(0, 90).toFixed(2));
     expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("90");
     const it1 = await item(rental.id);
     await arrive(await deliveryFor(it1.id, "DELIVER"), day(0));
@@ -75,7 +119,7 @@ describe("early return (pricing-spec.md §6a)", () => {
       /Pick a last day from/,
     );
 
-    const before = (await walletBalance(borrower.id)).balance;
+    const before = await tokens(borrower.id);
     await scheduleEarlyReturn(borrower.id, it1.id, isoDay(30), day(20));
     const ended = await reload(it1.id);
     expect(ended.status).toBe("ACTIVE"); // still with the borrower until day 30
@@ -83,21 +127,29 @@ describe("early return (pricing-spec.md §6a)", () => {
     expect(dateToDay(ended.termEndDay!)).toBe(colomboDay(day(30)));
     expect(ended.plannedDays).toBe(30);
     expect(ended.plannedWearEnd!.toString()).toBe("30");
-    expect(ended.rentPaid.toFixed(2)).toBe(rent(0, 30).toFixed(2));
+    expect(ended.rentLocked.toFixed(2)).toBe(rent(0, 30).toFixed(2));
     expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("30");
-    // The refund is a credit of exactly the unused days' rent.
-    const after = (await walletBalance(borrower.id)).balance;
-    expect(after.minus(before).toFixed(2)).toBe(rent(0, 90).minus(rent(0, 30)).toFixed(2));
-    const credit = await db.walletEntry.findFirstOrThrow({
-      where: { rentalItemId: it1.id, kind: "CREDIT" },
+    // Nothing charged or refunded: the estimate for the unused days is unlocked.
+    const after = await tokens(borrower.id);
+    expect(after.balance).toBe(before.balance);
+    expect(new D(before.locked).minus(after.locked).toFixed(2)).toBe(
+      rent(0, 90).minus(rent(0, 30)).toFixed(2),
+    );
+    const unlock = await db.walletEntry.findFirstOrThrow({
+      where: { rentalItemId: it1.id, kind: "UNLOCK", purpose: "RENT" },
     });
-    expect(credit.note).toMatch(/Rent refund/);
+    expect(unlock.note).toMatch(/Rent estimate down/);
+
     // The daily job ends the shortened term on day 31 and books the driver.
     await runDailyRentals(day(30));
     expect((await reload(it1.id)).status).toBe("ACTIVE");
     await runDailyRentals(day(31));
     expect(dateToDay((await reload(it1.id)).lastDay!)).toBe(colomboDay(day(30)));
-    expect(await db.delivery.count({ where: { rentalItemId: it1.id, type: "COLLECT" } })).toBe(1);
+    await arrive(await deliveryFor(it1.id, "COLLECT"), day(31));
+    await recordCondition(merchant.id, { itemId: it1.id, grade: "A", photos: photos() }, day(31));
+    // Charged for the 30 days held.
+    expect((await reload(it1.id)).rentPaid.toFixed(2)).toBe(rent(0, 30).toFixed(2));
+    expect((await tokens(borrower.id)).locked).toBe("0.00");
   });
 
   it("bundle split: two pairs for 90 days gain 45 each; ending A on day 30 → A 15, B 75", async () => {
@@ -119,11 +171,12 @@ describe("early return (pricing-spec.md §6a)", () => {
     const [A, B] = await Promise.all([reload(itemA.id), reload(itemB.id)]);
     expect(A.plannedWearEnd!.toString()).toBe("15");
     expect(B.plannedWearEnd!.toString()).toBe("75");
-    expect(A.rentPaid.toFixed(2)).toBe(rent(0, 15).toFixed(2));
-    expect(B.rentPaid.toFixed(2)).toBe(rent(0, 75).toFixed(2));
+    expect(A.rentLocked.toFixed(2)).toBe(rent(0, 15).toFixed(2));
+    expect(B.rentLocked.toFixed(2)).toBe(rent(0, 75).toFixed(2));
+    expect((await rentLockedFor(itemB.id)).toFixed(2)).toBe(rent(0, 75).toFixed(2));
     expect((await shoeNow(b.id)).committedWear.toString()).toBe("75");
 
-    // Closing both settles nothing more: the plan already matched the days held.
+    // Each pair is charged at its own close for the wear it actually got.
     await runDailyRentals(day(31));
     await arrive(await deliveryFor(itemA.id, "COLLECT"), day(31));
     await recordCondition(merchant.id, { itemId: itemA.id, grade: "A", photos: photos() }, day(31));
@@ -132,24 +185,20 @@ describe("early return (pricing-spec.md §6a)", () => {
     await recordCondition(merchant.id, { itemId: itemB.id, grade: "A", photos: photos() }, day(91));
     const [cA, cB] = await Promise.all([reload(itemA.id), reload(itemB.id)]);
     expect([cA.wearEnd!.toString(), cB.wearEnd!.toString()]).toEqual(["15", "75"]);
-    expect(cA.charge!.toFixed(2)).toBe(cA.rentPaid.toFixed(2));
-    expect(cB.charge!.toFixed(2)).toBe(cB.rentPaid.toFixed(2));
+    expect(cA.rentPaid.toFixed(2)).toBe(rent(0, 15).toFixed(2));
+    expect(cB.rentPaid.toFixed(2)).toBe(rent(0, 75).toFixed(2));
     expect((await rentalLocked(rental.id)).toFixed(2)).toBe("0.00");
   });
 });
 
-describe("reserved next, holder returns early (pricing-spec.md §6a)", () => {
+describe("reserve from day 1; the holder returns early (pricing-spec.md §6a)", () => {
   /**
-   * U1 holds a new pair for days 1–90; U2 reserves it on day 72 for 30 days at 1% off. With
-   * the default settings (10 days' notice, a 10-day release window) a reservation can't meet
-   * an early return, so these tests open the window 20 days ahead.
+   * U1 holds a new pair for days 1–90 (delivered day 0). U2 reserves it on U1's day 1 for 30
+   * days, priced at the wear it will have after U1's term (90), from day 92, at no discount.
    */
   async function reserved() {
-    await db.pricingSettings.create({
-      data: { ...TEST_SETTINGS, releaseLeadDays: 20, effectiveFrom: new Date("2020-01-02") },
-    });
     const ctx = await setup();
-    const [u1, u2, u3] = [ctx.borrower, await makeUser("BORROWER"), await makeUser("BORROWER")];
+    const [u1, u2] = [ctx.borrower, await makeUser("BORROWER")];
     const shoe = await makeShoe(ctx.merchantId);
     const r1 = await checkout(
       u1.id,
@@ -159,122 +208,174 @@ describe("reserved next, holder returns early (pricing-spec.md §6a)", () => {
     );
     const item1 = await item(r1.id);
     await arrive(await deliveryFor(item1.id, "DELIVER"), day(0));
+    const start2 = await tokens(u2.id);
     const r2 = await checkout(
       u2.id,
       [shoe.id],
       { deliveryAddress: "U2 street", plannedDays: 30 },
-      day(72),
+      day(1),
     );
     const item2 = await item(r2.id);
-    expect(item2.discount.toString()).toBe("0.01");
+    expect(item2.status).toBe("WAITING_HANDOFF");
+    expect(item2.discount.toString()).toBe("0");
+    expect(dateToDay(item2.plannedFirstDay!)).toBe(colomboDay(day(92)));
     expect(item2.plannedWearStart!.toString()).toBe("90");
-    expect(item2.rentPaid.toFixed(2)).toBe(rent(90, 120, "0.01").toFixed(2));
+    expect(item2.rentLocked.toFixed(2)).toBe(rent(90, 120).toFixed(2));
+    // Locked, not charged: U2's balance is untouched.
+    expect(await tokens(u2.id)).toEqual({
+      balance: start2.balance,
+      locked: rent(90, 120).plus(6000).toFixed(2),
+    });
     expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("120");
-    return { ...ctx, u1, u2, u3, shoe, r2, item1, item2 };
+    return { ...ctx, u1, u2, shoe, r1, r2, item1, item2, start2 };
   }
 
-  it("U2 is told the pair has less wear and costs more; accepting pays the difference and gets it after U1's last day", async () => {
-    const { u1, u2, shoe, item1, item2 } = await reserved();
-    // Notice on day 73 for a last day of 85, 5 days early: wear 85, not 90.
-    await scheduleEarlyReturn(u1.id, item1.id, isoDay(85), day(73));
+  it("U2 is offered the earlier dates at the new price; accepting moves the plan and the lock, and the pair is handed over after U1's last day", async () => {
+    const { merchantId, u1, u2, shoe, item1, item2, start2 } = await reserved();
+    // Notice on day 20 for a last day of 30: the pair can reach U2 for day 32, at wear 30.
+    await scheduleEarlyReturn(u1.id, item1.id, isoDay(30), day(20));
 
     const offered = await reload(item2.id);
-    expect(offered.offerWearStart!.toString()).toBe("85");
-    expect(offered.offerCharge!.toFixed(2)).toBe(rent(85, 115, "0.01").toFixed(2));
-    expect(offered.offerCharge!.gt(offered.plannedCharge!)).toBe(true);
-    expect(offered.rentPaid.toFixed(2)).toBe(rent(90, 120, "0.01").toFixed(2)); // not charged yet
-    expect(offered.offerDueAt!.getTime()).toBe(day(73).getTime() + 24 * 3_600_000);
-    // No driver yet: the pair waits with U1 until U2 decides.
-    expect(await db.delivery.count({ where: { fromRentalItemId: item1.id } })).toBe(0);
-    expect(await db.delivery.count({ where: { rentalItemId: item1.id } })).toBe(1); // the delivery in
-    // Told in the app and by email.
+    expect(dateToDay(offered.offerFirstDay!)).toBe(colomboDay(day(32)));
+    expect(offered.offerWearStart!.toString()).toBe("30");
+    expect(offered.offerCharge!.toFixed(2)).toBe(rent(30, 60).toFixed(2));
+    expect(offered.offerDueAt!.getTime()).toBe(day(20).getTime() + 24 * 3_600_000);
+    // Nothing changes until U2 answers.
+    expect(dateToDay(offered.plannedFirstDay!)).toBe(colomboDay(day(92)));
+    expect(offered.rentLocked.toFixed(2)).toBe(rent(90, 120).toFixed(2));
+    // Told in the app and by email: the new dates and the new price.
     const notice = await db.notification.findFirstOrThrow({
       where: { userId: u2.id, kind: "PRICE_OFFER" },
     });
-    expect(notice.body).toMatch(/ending their rental of the Nike Pegasus 41 early/);
-    expect(notice.body).toMatch(/85 wear-days used, not 90/);
+    expect(notice.body).toMatch(/returning the Nike Pegasus 41 early/);
+    expect(notice.body).toMatch(/day 1 on/);
+    expect(notice.body).toMatch(/30 wear-days used, not 90/);
+    expect(notice.body).toMatch(/original dates/);
     expect(notice.emailedAt).not.toBeNull();
     expect(mail.sent.map((m) => m.to)).toContain(
       (await db.user.findUniqueOrThrow({ where: { id: u2.id } })).email,
     );
-    // U1 was refunded the 5 unused days, and the pair's committed wear follows the real days.
-    expect((await reload(item1.id)).rentPaid.toFixed(2)).toBe(rent(0, 85).toFixed(2));
-    expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("115");
+    // U1's estimate drops to the 30 days they keep it.
+    expect((await reload(item1.id)).rentLocked.toFixed(2)).toBe(rent(0, 30).toFixed(2));
 
-    const before = (await walletBalance(u2.id)).balance;
-    await acceptOffer(u2.id, item2.id, day(74));
+    await acceptOffer(u2.id, item2.id, day(21));
     const accepted = await reload(item2.id);
     expect(accepted.offerCharge).toBeNull();
-    expect(accepted.plannedCharge!.toFixed(2)).toBe(rent(85, 115, "0.01").toFixed(2));
-    expect(accepted.rentPaid.toFixed(2)).toBe(rent(85, 115, "0.01").toFixed(2));
-    expect(before.minus((await walletBalance(u2.id)).balance).toFixed(2)).toBe(
-      rent(85, 115, "0.01")
-        .minus(rent(90, 120, "0.01"))
-        .toFixed(2),
-    );
-    // U1 keeps the pair through day 85; the daily job then books the handoff.
+    expect(dateToDay(accepted.plannedFirstDay!)).toBe(colomboDay(day(32)));
+    expect(accepted.plannedCharge!.toFixed(2)).toBe(rent(30, 60).toFixed(2));
+    expect(accepted.rentLocked.toFixed(2)).toBe(rent(30, 60).toFixed(2));
+    expect(await tokens(u2.id)).toEqual({
+      balance: start2.balance,
+      locked: rent(30, 60).plus(6000).toFixed(2),
+    });
+
+    // U1 keeps the pair through day 30; the daily job then books the handoff.
     expect(await db.delivery.count({ where: { fromRentalItemId: item1.id } })).toBe(0);
-    await runDailyRentals(day(86));
+    await runDailyRentals(day(31));
     const handoff = await deliveryFor(item2.id, "HANDOFF");
     expect(handoff.fromRentalItemId).toBe(item1.id);
-    await arrive(handoff, day(87));
+    await arrive(handoff, day(31));
     const started = await reload(item2.id);
-    expect(dateToDay(started.firstDay!)).toBe(colomboDay(day(88)));
-    expect(dateToDay(started.termEndDay!)).toBe(colomboDay(day(117)));
+    expect(dateToDay(started.firstDay!)).toBe(colomboDay(day(32)));
+    expect(dateToDay(started.termEndDay!)).toBe(colomboDay(day(61)));
+
+    // U2's receipt closes U1's item: U1 is charged for 30 days and the merchant credited.
+    const u1Before = await tokens(u1.id);
+    await recordCondition(u2.id, { itemId: item2.id, grade: "A", photos: photos() }, day(31));
+    const closed1 = await reload(item1.id);
+    expect(closed1.status).toBe("CLOSED");
+    expect(closed1.rentPaid.toFixed(2)).toBe(rent(0, 30).toFixed(2));
+    expect(await tokens(u1.id)).toEqual({
+      balance: rent(0, 30).neg().plus(u1Before.balance).toFixed(2),
+      locked: "0.00",
+    });
+    const { results } = await runPayoutBatch(day(35));
+    const merchant = results.find((r) => r.merchantId === merchantId)!;
+    expect(merchant.amount).toBe(closed1.merchantShare!.toFixed(2));
+    expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("60");
   });
 
-  it("rejecting cancels and refunds U2; after U1's last day the pair waits with U1 until another borrower books it", async () => {
-    const { u1, u2, u3, shoe, r2, item1, item2 } = await reserved();
-    await scheduleEarlyReturn(u1.id, item1.id, isoDay(85), day(73));
-    const balanceBefore = (await walletBalance(u2.id)).balance;
+  it("rejecting (or keeping the original dates) cancels U2's reservation, unlocks everything, emails U2, and the pair goes back to the merchant", async () => {
+    const { u1, u2, shoe, r2, item1, item2, start2 } = await reserved();
+    await scheduleEarlyReturn(u1.id, item1.id, isoDay(30), day(20));
+    mail.sent.length = 0;
 
-    await rejectOffer(u2.id, item2.id, day(74));
+    await rejectOffer(u2.id, item2.id, day(21));
     const cancelled = await reload(item2.id);
     expect(cancelled.status).toBe("CANCELLED");
+    expect(cancelled.rentLocked.toFixed(2)).toBe("0.00");
     expect(cancelled.rentPaid.toFixed(2)).toBe("0.00");
-    expect((await walletBalance(u2.id)).balance.minus(balanceBefore).toFixed(2)).toBe(
-      rent(90, 120, "0.01").toFixed(2),
-    );
+    // Never charged; the deposit and the estimate are unlocked.
+    expect(await tokens(u2.id)).toEqual({ balance: start2.balance, locked: "0.00" });
     expect((await rentalLocked(r2.id)).toFixed(2)).toBe("0.00");
     expect((await db.rental.findUniqueOrThrow({ where: { id: r2.id } })).status).toBe("CANCELLED");
-    expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("85");
-    // U1's term ends on day 85, but the pair isn't collected: it waits for the next booking.
-    await runDailyRentals(day(86));
-    expect((await reload(item1.id)).status).toBe("RETURNING");
-    expect(await db.delivery.count({ where: { rentalItemId: item1.id, type: "COLLECT" } })).toBe(0);
-
-    // U3 books it: priced from the real wear (85), handed over from U1 straight away.
-    const r3 = await checkout(
-      u3.id,
-      [shoe.id],
-      { deliveryAddress: "U3 street", plannedDays: 10 },
-      day(88),
+    expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("30");
+    const notice = await db.notification.findFirstOrThrow({
+      where: { userId: u2.id, kind: "RESERVATION_CANCELLED" },
+    });
+    expect(notice.body).toMatch(/coming back early/);
+    expect(notice.body).toMatch(/released/);
+    expect(notice.emailedAt).not.toBeNull();
+    expect(mail.sent.map((m) => m.to)).toContain(
+      (await db.user.findUniqueOrThrow({ where: { id: u2.id } })).email,
     );
-    const item3 = await item(r3.id);
-    expect(item3.plannedWearStart!.toString()).toBe("85");
-    const handoff = await deliveryFor(item3.id, "HANDOFF");
-    expect(handoff.fromRentalItemId).toBe(item1.id);
-    expect(handoff.fromAddress).toBe("U1 street");
+
+    // U1's term ends on day 30; a driver takes the pair back to the merchant.
+    await runDailyRentals(day(31));
+    expect((await reload(item1.id)).status).toBe("RETURNING");
+    const collect = await deliveryFor(item1.id, "COLLECT");
+    expect(collect.toAddress).toBe(shoe.pickupAddress);
+    expect(await db.delivery.count({ where: { fromRentalItemId: item1.id } })).toBe(0);
   });
 
-  it("an offer nobody answers expires: the reservation is cancelled and the borrower told", async () => {
-    const { u1, u2, item1, item2 } = await reserved();
-    await scheduleEarlyReturn(u1.id, item1.id, isoDay(85), day(73));
-    expect(mail.sent.some((m) => /new price/.test(m.subject))).toBe(true); // emailed at once
-    await runDailyRentals(new Date(day(73).getTime() + 23 * 3_600_000)); // within 24 hours
+  it("a holder who ends at once (wrong size) waits for U2's answer; an offer nobody answers expires, is cancelled, and a driver collects at once", async () => {
+    const { merchantId } = await setup();
+    const [u1, u2] = [await makeUser("BORROWER"), await makeUser("BORROWER")];
+    const shoe = await makeShoe(merchantId);
+    const r1 = await checkout(
+      u1.id,
+      [shoe.id],
+      { deliveryAddress: "U1 street", plannedDays: 30 },
+      day(-1),
+    );
+    const item1 = await item(r1.id);
+    await arrive(await deliveryFor(item1.id, "DELIVER"), day(0));
+    const hour = 3_600_000;
+    const r2 = await checkout(
+      u2.id,
+      [shoe.id],
+      { deliveryAddress: "U2 street", plannedDays: 10 },
+      new Date(day(0).getTime() + 2 * hour),
+    );
+    const item2 = await item(r2.id);
+
+    // Wrong size: U1 ends within the free-return window. U2 is offered day 2 instead of 32.
+    await endRental(u1.id, item1.id, new Date(day(0).getTime() + 3 * hour));
+    const offered = await reload(item2.id);
+    expect(dateToDay(offered.offerFirstDay!)).toBe(colomboDay(day(2)));
+    expect(offered.offerWearStart!.toString()).toBe("0");
+    // The pair waits with U1: no handoff, no collection yet.
+    expect(await db.delivery.count({ where: { fromRentalItemId: item1.id } })).toBe(0);
+    expect(await db.delivery.count({ where: { rentalItemId: item1.id, type: "COLLECT" } })).toBe(0);
+
+    await runDailyRentals(new Date(day(0).getTime() + 26 * hour)); // within 24 hours of the offer
     expect((await reload(item2.id)).status).toBe("WAITING_HANDOFF");
-    await runDailyRentals(day(75));
+    await runDailyRentals(day(2));
     expect((await reload(item2.id)).status).toBe("CANCELLED");
     const notice = await db.notification.findFirstOrThrow({
       where: { userId: u2.id, kind: "RESERVATION_CANCELLED" },
     });
-    expect(notice.body).toMatch(/wasn't accepted in time/);
-    await expect(acceptOffer(u2.id, item2.id, day(75))).rejects.toThrow(/no new price/);
+    expect(notice.body).toMatch(/weren't accepted in time/);
+    expect((await tokens(u2.id)).locked).toBe("0.00");
+    await expect(acceptOffer(u2.id, item2.id, day(2))).rejects.toThrow(/no new price/);
+    // The pair was waiting with U1, so a driver collects it now.
+    const collect = await deliveryFor(item1.id, "COLLECT");
+    expect(collect.toAddress).toBe(shoe.pickupAddress);
   });
 
-  it("accepting needs the extra tokens available", async () => {
+  it("accepting needs the higher estimate available; otherwise nothing changes", async () => {
     const { u1, item1, item2, u2 } = await reserved();
-    // U2 spends everything but the original price on something else.
+    // U2 spends everything that isn't locked.
     const { available } = await walletBalance(u2.id);
     await db.walletEntry.create({
       data: {
@@ -284,12 +385,22 @@ describe("reserved next, holder returns early (pricing-spec.md §6a)", () => {
         idempotencyKey: `test-spend:${u2.id}`,
       },
     });
-    await scheduleEarlyReturn(u1.id, item1.id, isoDay(85), day(73));
-    await expect(acceptOffer(u2.id, item2.id, day(73))).rejects.toThrow(/Top up/);
+    await scheduleEarlyReturn(u1.id, item1.id, isoDay(30), day(20));
+    await expect(acceptOffer(u2.id, item2.id, day(20))).rejects.toThrow(/Top up/);
     const same = await reload(item2.id);
     expect(same.offerCharge).not.toBeNull(); // nothing changed
-    expect(same.rentPaid.toFixed(2)).toBe(rent(90, 120, "0.01").toFixed(2));
+    expect(dateToDay(same.plannedFirstDay!)).toBe(colomboDay(day(92)));
+    expect(same.rentLocked.toFixed(2)).toBe(rent(90, 120).toFixed(2));
     expect(await db.delivery.count({ where: { fromRentalItemId: item1.id } })).toBe(0);
+  });
+
+  it("a holder ending on their term's last day hands over as planned, with no offer", async () => {
+    const { u1, item1, item2 } = await reserved();
+    await endRental(u1.id, item1.id, day(90));
+    expect((await reload(item2.id)).offerCharge).toBeNull();
+    const handoff = await deliveryFor(item2.id, "HANDOFF");
+    expect(handoff.fromRentalItemId).toBe(item1.id);
+    expect(await db.notification.count({ where: { kind: "PRICE_OFFER" } })).toBe(0);
   });
 });
 
@@ -311,12 +422,13 @@ describe("extension", () => {
     const extended = await reload(it1.id);
     expect(extended.plannedDays).toBe(40);
     expect(dateToDay(extended.termEndDay!)).toBe(colomboDay(day(40)));
-    expect(extended.rentPaid.toFixed(2)).toBe(rent(0, 40).toFixed(2));
+    expect(extended.rentLocked.toFixed(2)).toBe(rent(0, 40).toFixed(2));
+    expect(extended.rentPaid.toFixed(2)).toBe("0.00");
     expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("40");
     expect(dateToDay((await shoeNow(shoe.id)).releaseDay!)).toBe(colomboDay(day(40)));
 
-    await checkout(next.id, [shoe.id], { deliveryAddress: "Next", plannedDays: 5 }, day(35));
-    await expect(extendRental(borrower.id, it1.id, 5, day(36))).rejects.toThrow(/reserved/);
+    await checkout(next.id, [shoe.id], { deliveryAddress: "Next", plannedDays: 5 }, day(16));
+    await expect(extendRental(borrower.id, it1.id, 5, day(17))).rejects.toThrow(/reserved/);
     // The term ran out: the daily job hands the pair to the next borrower.
     await runDailyRentals(day(41));
     const ended = await reload(it1.id);
@@ -345,7 +457,7 @@ describe("lifespan (pricing-spec.md §6)", () => {
     // 1 wear-day on the curve, then 19 days at the end-of-life price P(L), past R.
     expect(it1.plannedWearEnd!.toString()).toBe("384");
     const expected = incomeBetween(p, 364, 365).income.plus(priceAt(p, 365).times(19));
-    expect(it1.rentPaid.toFixed(2)).toBe(
+    expect(it1.rentLocked.toFixed(2)).toBe(
       chargedAmounts(expected, { merchantOutstanding: 0 }).charge.toFixed(2),
     );
     expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("384");

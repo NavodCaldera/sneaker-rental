@@ -66,7 +66,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
                   </div>
                   <div className="text-sm text-subtle">
                     {line.size} · worn {formatWear(line.wear)} → {formatWear(line.wearEnd)} /{" "}
-                    {line.lifespanDays} · {formatLKR(line.priceToday)} / wear-day · rent{" "}
+                    {line.lifespanDays} · {formatLKR(line.priceToday)} / wear-day · rent about{" "}
                     {formatLKR(line.estimate)}
                   </div>
                   <div className="text-xs text-subtle">
@@ -106,7 +106,9 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
               Update
             </Button>
           </form>
-          <Row label={`Rent for ${plannedDays} days, paid now`}>{formatLKR(quote.estimate)}</Row>
+          <Row label={`Rent estimate for ${plannedDays} days, locked now`}>
+            {formatLKR(quote.estimate)}
+          </Row>
           <Row label="Deposit: pair values, locked while you rent">
             {formatLKR(quote.shoeValue)}
           </Row>
@@ -119,12 +121,16 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
             </Link>
           </Row>
           <p className="text-xs text-subtle">
-            You pay the rent for the whole term now, and each pair&apos;s value stays locked as a
-            deposit until it&apos;s back. Day 1 is the day after delivery. To return early, give 10
-            days&apos; notice and the unused days are refunded to your tokens; extend before the
-            term ends to keep them longer. On the day after the term ends a driver collects them,
-            and you aren&apos;t charged for waiting. Delivery isn&apos;t paid through us: you pay
-            the driver directly in the ride-hailing app when a pair is brought to you.
+            Nothing is charged now. We lock the rent estimate for the term and each pair&apos;s
+            value as a deposit; when a pair is back we unlock both and charge the rent for the wear
+            it actually got. Day 1 is the day after delivery. To return early, give 10 days&apos;
+            notice and the estimate drops to the days you keep it; extend before the term ends to
+            keep it longer. On the day after the term ends a driver collects it, and you aren&apos;t
+            charged for waiting. A pair someone else is wearing comes to you right after their term;
+            if they return it early we offer you the earlier dates at the new price, and if you say
+            no your reservation is cancelled and your tokens unlocked. Delivery isn&apos;t paid
+            through us: you pay the driver directly in the ride-hailing app when a pair is brought
+            to you.
           </p>
         </Card>
         {new D(quote.shortfall).gt(0) && (

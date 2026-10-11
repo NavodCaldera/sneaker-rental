@@ -158,8 +158,9 @@ type ReleaseSettings = Pick<
 >;
 
 /**
- * First day a held pair is shown to the next borrower: `releaseLeadDays` before the current
- * holder's planned last day (day 81 of a 90-day plan, both days inclusive).
+ * First day of the release discount for the next borrower: `releaseLeadDays` before the
+ * current holder's planned last day (day 81 of a 90-day plan, both days inclusive). A held
+ * pair can be reserved before then, without a discount.
  */
 export function releaseWindowStart(releaseDay: number, settings: ReleaseSettings): number {
   return releaseDay - settings.releaseLeadDays + 1;

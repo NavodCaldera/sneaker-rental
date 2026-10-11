@@ -85,11 +85,8 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           )}
           {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
             <p className="mt-1 text-sm text-subtle">
-              Booked until {formatDate(dayToDate(release.releaseDay))}; free from{" "}
-              {formatDate(dayToDate(release.releaseDay + 1))}.
-              {!release.open &&
-                release.opensOn !== null &&
-                ` Reservations open ${formatDate(dayToDate(release.opensOn))}.`}
+              Booked until {formatDate(dayToDate(release.releaseDay))}. Reserve it now and it comes
+              to you right after, priced at the wear it will have then.
             </p>
           )}
         </div>
@@ -107,7 +104,6 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           shoeId={shoe.id}
           status={shoe.status}
           handoffTaken={shoe.rentalItems.length > 0}
-          releaseOpen={release.open}
           signedInAs={user?.role ?? null}
           inBundle={bundle.includes(shoe.id)}
         />

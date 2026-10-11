@@ -20,7 +20,7 @@ import { merchantFundedDiscounts, merchantOwed, shoeCurve } from "../catalogue/p
 import { type Tx, db } from "../db";
 import { requestDelivery } from "../logistics/requests";
 import { flushEmails, notify } from "../notify";
-import { finishRentalIfDone, settleItems } from "../payments";
+import { collectRent, finishRentalIfDone, settleItems } from "../payments";
 import { type SettingsRow, getActiveSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
 import { walletBalance } from "../wallet";
@@ -36,11 +36,11 @@ import { cancelReservation } from "./reservations";
  * (`termEnded`). A borrower can also end it themselves on the term's last day, or at once
  * within `freeReturnHours` of delivery (wrong size); ending any earlier needs notice
  * (`scheduleEarlyReturn`). The last day is today, or the term's last day if that came
- * first; waiting for the driver is free. The plan is redone, so unused days are refunded
- * (pricing-spec.md §6a). If another borrower has reserved the pair it goes to them by
- * direct handoff, unless an early return raised their price and they haven't accepted yet:
- * then it waits here. With no reservation it goes back to the merchant, unless a
- * reservation on it was turned down over price: then it waits here until someone books it.
+ * first; waiting for the driver is free. The plan is redone, so the rent lock drops to the
+ * days held (pricing-spec.md §6a). If another borrower has reserved the pair it goes to them
+ * by direct handoff, unless ending early gave them an offer of new dates they haven't
+ * answered yet: then it waits here (if they turn it down, a driver collects it). With no
+ * reservation it goes back to the merchant.
  */
 export async function endRental(
   borrowerId: string,
@@ -136,10 +136,6 @@ export async function endRental(
       });
       return { delivery, cancelled };
     }
-    if (item.holdForNext) {
-      // A reservation was turned down over price: keep it here for the next booking.
-      return { delivery: null, cancelled };
-    }
     const delivery = await requestDelivery(tx, {
       type: "COLLECT",
       rentalItemId: item.id,
@@ -160,9 +156,10 @@ export const earlyReturnSchema = z.object({
 /**
  * The borrower gives notice of an early return (pricing-spec.md §6a): they pick a new last
  * day at least `earlyReturnNoticeDays` away and before the term's last day. The term is
- * shortened to it, so the unused days are refunded now, the pair's committed wear drops,
- * its release window moves forward, and a reserved-next borrower whose price goes up gets an
- * offer. The borrower keeps the pair until then; the daily job ends the term the day after.
+ * shortened to it, so the rent lock for the unused days is released now, the pair's
+ * committed wear drops, its release day moves forward, and a reserved-next borrower gets an
+ * offer to take it earlier at the new price. The borrower keeps the pair until then; the
+ * daily job ends the term the day after.
  */
 export async function scheduleEarlyReturn(
   borrowerId: string,
@@ -215,9 +212,9 @@ export const extendSchema = z.object({
 });
 
 /**
- * Add days to a pair's term before it ends, paid upfront (pricing-spec.md §6a). Not
- * possible once someone has reserved the pair next. Refused, with nothing changed, if the
- * borrower's available tokens can't cover the extra rent.
+ * Add days to a pair's term before it ends; the extra rent estimate is locked now
+ * (pricing-spec.md §6a). Not possible once someone has reserved the pair next. Refused, with
+ * nothing changed, if the borrower's available tokens can't cover it.
  */
 export async function extendRental(
   borrowerId: string,
@@ -471,7 +468,7 @@ export async function recordCondition(
     return { reportId, closedItemIds: closed };
   });
 
-  // Settle the closed items and release deposits that are no longer needed.
+  // Release the closed pairs' deposits that are no longer needed.
   await settleItems(result.closedItemIds);
   await flushEmails(now);
   return result;
@@ -491,9 +488,10 @@ async function openDamageDispute(tx: Tx, itemId: string, userId: string, notes?:
 
 /**
  * Closes a rental item: wear from the ledger, charge and split from the pricing engine with
- * the shoe's own settings version, stored on the item and rolled into the shoe.
- * Idempotent: a closed item is left alone. `settingsRow` (the active version) sets the
- * dispute window.
+ * the shoe's own settings version, stored on the item and rolled into the shoe. The rent is
+ * collected in the same transaction (its lock released, the final rent charged), so the
+ * merchant's share only becomes payable once the borrower has paid. Idempotent: a closed
+ * item is left alone. `settingsRow` (the active version) sets the dispute window.
  */
 export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: SettingsRow) {
   const item = await tx.rentalItem.findUniqueOrThrow({
@@ -554,6 +552,8 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
       merchantCollected: toD(item.shoe.merchantCollected).plus(merchantShare).toFixed(2),
     },
   });
+  // Post-paid rent: release the estimate and charge the actual rent now.
+  await collectRent(tx, item.id);
 
   const open = await tx.rentalItem.count({
     where: { rentalId: item.rentalId, status: { notIn: ["CLOSED", "CANCELLED", "LOST"] } },
@@ -566,7 +566,7 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
   }
   // The pair's settled wear moved: its committed wear and any queue follow.
   await replan(tx, { shoeIds: [item.shoeId] }, now, { settings: settingsRow });
-  return closed;
+  return tx.rentalItem.findUniqueOrThrow({ where: { id: closed.id } });
 }
 
 // ─── Merchant: back in stock ───────────────────────────────────────────────

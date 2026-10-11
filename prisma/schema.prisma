@@ -234,8 +234,8 @@ model Rental {
   borrowerId      String
   status          RentalStatus @default(PENDING_PAYMENT)
   deliveryAddress String
-  /// Rent paid at booking for the booked terms (later changes are on each item's rentPaid)
-  prepaidRent     Decimal      @db.Decimal(14, 2)
+  /// Rent estimate for the booked terms, locked at booking (charged per item when it closes)
+  estimatedRent   Decimal      @db.Decimal(14, 2)
   /// Merchant value of the pairs (Σ V), locked in tokens while they are out
   shoeValue       Decimal      @db.Decimal(14, 2)
   createdAt       DateTime     @default(now())
@@ -282,23 +282,25 @@ model RentalItem {
   firstDay          DateTime?        @db.Date
   lastDay           DateTime?        @db.Date
   returnRequestedAt DateTime?
-  /// The term booked and paid for, in days (plus extensions)
+  /// The term booked, in days (plus extensions)
   plannedDays       Int?
   /// The term's last day = firstDay + plannedDays − 1 (set on delivery; an early return
   /// moves it forward)
   termEndDay        DateTime?        @db.Date
   /// When the borrower gave notice of an early return (the new last day is termEndDay)
   earlyReturnAt     DateTime?
-  /// A reservation on this pair was cancelled over a price offer: after this holding ends the
-  /// pair waits here until another borrower books it, rather than going back to the merchant
-  holdForNext       Boolean          @default(false)
-  /// The plan (pricing-spec.md §6a): wear before and after the planned term, and its rent
+  /// The plan (pricing-spec.md §6a): first day, wear before and after the planned term, and
+  /// its rent. For a reservation these are what the borrower agreed to.
+  plannedFirstDay   DateTime?        @db.Date
   plannedWearStart  Decimal?         @db.Decimal(28, 12)
   plannedWearEnd    Decimal?         @db.Decimal(28, 12)
   plannedCharge     Decimal?         @db.Decimal(14, 2)
-  /// Rent tokens taken for this item so far, net of refunds
+  /// Tokens locked for the rent estimate (plannedCharge less anything already charged)
+  rentLocked        Decimal          @default(0) @db.Decimal(14, 2)
+  /// Rent tokens charged for this item, net of refunds: 0 until it closes, then the charge
   rentPaid          Decimal          @default(0) @db.Decimal(14, 2)
-  /// A higher price a reserved-next borrower must accept (the pair came back early)
+  /// New dates and price a reserved-next borrower must accept (the holder returns early)
+  offerFirstDay     DateTime?        @db.Date
   offerCharge       Decimal?         @db.Decimal(14, 2)
   offerWearStart    Decimal?         @db.Decimal(28, 12)
   offerDueAt        DateTime?
@@ -491,15 +493,21 @@ enum WalletEntryKind {
   TOP_UP
   /// Refunded to the card (−balance)
   WITHDRAWAL
-  /// Reserved for a rental: pair values + rent (+locked)
+  /// Reserved for a rental: a pair's value (deposit) or its rent estimate (+locked)
   LOCK
   /// Released from a rental (−locked)
   UNLOCK
-  /// Rent, damage or a lost pair (−balance; trip fees never go through tokens). A charge taken from a rental's
-  /// locked tokens is written with a matching UNLOCK.
+  /// Rent when an item closes, damage or a lost pair (−balance; trip fees never go through tokens). A charge taken from a pair's
+  /// deposit is written with a matching UNLOCK.
   CHARGE
-  /// Given back, e.g. unused days or an upheld overcharge (+balance)
+  /// Given back, e.g. an upheld overcharge (+balance)
   CREDIT
+}
+
+/// Why tokens are locked: a pair's deposit (its value V) or the rent estimate for its term
+enum LockPurpose {
+  DEPOSIT
+  RENT
 }
 
 model WalletEntry {
@@ -510,6 +518,8 @@ model WalletEntry {
   amount         Decimal         @db.Decimal(14, 2)
   rentalId       String?
   rentalItemId   String?
+  /// LOCK / UNLOCK only: what the tokens are held for
+  purpose        LockPurpose?
   paymentId      String?
   note           String?
   idempotencyKey String          @unique

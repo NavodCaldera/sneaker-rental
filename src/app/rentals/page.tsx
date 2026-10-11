@@ -52,8 +52,8 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <h2 className="font-medium">Booked {formatDate(rental.createdAt)}</h2>
                 <span className="flex flex-wrap items-center gap-2 text-subtle">
-                  rent paid at booking {formatLKR(rental.prepaidRent.toString())} · deposit{" "}
-                  {formatTokens(rental.locked)} locked
+                  rent estimate {formatLKR(rental.estimatedRent.toString())} ·{" "}
+                  {formatTokens(rental.locked)} locked (deposit and rent estimate)
                 </span>
               </div>
               <ul className="flex flex-col gap-3">
@@ -83,6 +83,11 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                                 Days {formatDate(item.firstDay)} –{" "}
                                 {formatDate(item.lastDay ?? item.termEndDay)}
                               </>
+                            ) : item.expected ? (
+                              <>
+                                Expected days {formatDate(item.expected.first)} –{" "}
+                                {formatDate(item.expected.last)}
+                              </>
                             ) : (
                               item.plannedDays && (
                                 <>{item.plannedDays}-day term from the day after delivery</>
@@ -93,8 +98,9 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                                 {" "}
                                 · wear {formatWear(item.plannedWearStart!.toString())} →{" "}
                                 {formatWear(item.plannedWearEnd.toString())} of{" "}
-                                {item.shoe.lifespanDays} · rent paid{" "}
-                                {formatLKR(item.rentPaid.toString())}
+                                {item.shoe.lifespanDays} · rent estimate{" "}
+                                {formatLKR(item.plannedCharge?.toString() ?? "0")}, locked until
+                                it&apos;s back
                               </>
                             )}
                             {item.status === "CLOSED" && item.charge && (
@@ -109,25 +115,33 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                           {item.offerCharge && (
                             <div className="mt-2 flex flex-col gap-2">
                               <Alert tone="info">
-                                The borrower before you is ending their rental early, so this pair
-                                will have less wear than we showed when you booked (
-                                {formatWear(item.offerWearStart!.toString())} wear-days used, not{" "}
-                                {formatWear(item.plannedWearStart!.toString())}). A pair with less
-                                wear costs more per day: your {item.plannedDays}-day rent is now{" "}
+                                The borrower before you is returning this pair early
+                                {item.offerFirstDay && item.plannedFirstDay && (
+                                  <>
+                                    , so it can come to you with day 1 on{" "}
+                                    <strong>{formatDate(item.offerFirstDay)}</strong> instead of{" "}
+                                    {formatDate(item.plannedFirstDay)}
+                                  </>
+                                )}
+                                . It will have {formatWear(item.offerWearStart!.toString())}{" "}
+                                wear-days used, not {formatWear(item.plannedWearStart!.toString())},
+                                and a pair with less wear costs more per day: your{" "}
+                                {item.plannedDays}-day rent estimate is now{" "}
                                 <strong>{formatTokens(item.offerCharge.toString())}</strong> instead
                                 of {formatTokens(item.plannedCharge!.toString())}. Accept by{" "}
-                                {formatDateTime(item.offerDueAt)} to keep your reservation; a driver
-                                brings it to you as soon as it&apos;s handed back. If you reject it
-                                or don&apos;t answer, we refund your rent and unlock your deposit.
+                                {formatDateTime(item.offerDueAt)} to take it on these terms. If
+                                you&apos;d rather keep your original dates, say no or don&apos;t
+                                answer: we cancel your reservation and unlock all its tokens.
                               </Alert>
                               <OfferButtons itemId={item.id} />
                             </div>
                           )}
                           {item.keepingForNext && (
                             <p className="mt-2 text-sm text-subtle">
-                              Please keep the pair safe for now: it goes straight to the next
-                              borrower, and we&apos;ll book the driver as soon as they confirm. You
-                              aren&apos;t charged for these days.
+                              Please keep the pair safe for now: the next borrower is deciding
+                              whether to take it early. We&apos;ll book a driver to them, or back to
+                              the owner, as soon as they answer. You aren&apos;t charged for these
+                              days.
                             </p>
                           )}
                           {item.earlyReturnAt && item.status === "ACTIVE" && (

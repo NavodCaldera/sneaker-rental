@@ -37,7 +37,7 @@ export function EarlyReturnForm({
         label={`Return ${name} early: last day`}
         name={id}
         error={state.fieldErrors?.lastDay}
-        hint={`At least ${noticeDays} days' notice. Unused days are refunded now.`}
+        hint={`At least ${noticeDays} days' notice. The rent estimate for unused days is unlocked now.`}
       >
         <Input id={id} name="lastDay" type="date" min={min} max={max} defaultValue={min} required />
       </Field>
@@ -90,7 +90,7 @@ export function ExtendForm({ itemId, name }: { itemId: string; name: string }) {
         />
       </Field>
       <Button type="submit" variant="secondary" disabled={pending}>
-        {pending ? "Extending…" : "Pay and extend"}
+        {pending ? "Extending…" : "Extend"}
       </Button>
     </form>
   );
@@ -112,12 +112,12 @@ export function OfferButtons({ itemId }: { itemId: string }) {
       <div className="flex flex-wrap gap-2">
         <form action={accept}>
           <Button type="submit" disabled={accepting || rejecting}>
-            Accept new price
+            Accept new dates and price
           </Button>
         </form>
         <form action={reject}>
           <Button type="submit" variant="secondary" disabled={accepting || rejecting}>
-            Reject and get a refund
+            No, cancel my reservation
           </Button>
         </form>
       </div>

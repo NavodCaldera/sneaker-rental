@@ -22,7 +22,7 @@ Conventions:
 - **Settings:** a listed shoe is priced with the settings version it was listed under (`Shoe.settingsId`). Use `shoeCurve(shoe)` / `shoePricing(shoe)` from `src/server/catalogue/pricing.ts` (include `settings: true` in the query). `getActiveSettings()` is for operational values (token cover, bundle size, windows, fees), new listings and previews.
 - **Trips:** delivery fees are not handled by us. Whoever receives the pair pays the driver directly in the ride-hailing app: the borrower for deliveries, the next borrower for handoffs, the merchant for returns (`Delivery.paidBy`, set by `receiverPays`). Never charge, collect or refund a trip fee in tokens, and there is no booking fee.
 - **Days:** wear-ledger days are Asia/Colombo calendar dates in `RentalItem.firstDay` / `lastDay`, both counted. Day 1 is the day after delivery (the delivery day is free); the last day is the day the borrower presses End rental, or the term's last day (`termEndDay`), so waiting for the driver is free. A handoff receiver starts the day after delivery, or the day after the giver's last day if that is later.
-- **Fixed terms (pricing-spec.md §6a):** a borrower books a term and pays its rent at booking; each pair's value is locked as its own deposit, at full value, until that pair is back (rent comes from free tokens; only available tokens can be withdrawn). An early return needs `earlyReturnNoticeDays` (10) notice (`scheduleEarlyReturn`); only the free-return window or the term's last day ends at once. A pair can be booked for any term while `committedWear` < L, never after; past L each wear-day is charged at the end-of-life price P(L) until it is returned (`chargePastLife`). Each pair's `committedWear` (what listings show, and what the next borrower is priced at) includes every open booking's planned wear. Anything that changes a plan (delivery, early-return notice, extension, a new overlapping booking, cancellation, lost pair, close) calls `replan` (`src/server/booking/plan.ts`), which settles the difference in tokens, or makes a price offer to a reserved-next borrower whose price goes up. The daily job (`runDailyRentals`, `/api/cron/rentals`) ends terms that ran out and expires offers. Notices go through `notify` (in-app, plus email via the mock mailer).
+- **Fixed terms, post-paid rent (pricing-spec.md §6, §6a, §7):** a borrower books a term; nothing is charged at booking. Each pair's value is locked as its own deposit (purpose `DEPOSIT`) and its rent estimate beside it (`RENT`, `rentLocked`), both until that pair's item closes; `closeItem` then calls `collectRent` (release the rent lock, charge the actual rent) in the same transaction, so a merchant share is payable only once the rent is collected. Only available tokens can be withdrawn. An early return needs `earlyReturnNoticeDays` (10) notice (`scheduleEarlyReturn`); only the free-return window or the term's last day ends at once. A pair can be booked for any term while `committedWear` < L, never after; past L each wear-day is charged at the end-of-life price P(L) until it is returned (`chargePastLife`). Each pair's `committedWear` (what listings show, and what the next borrower is priced at) includes every open booking's planned wear. Anything that changes a plan (delivery, early-return notice, extension, a new overlapping booking, cancellation, lost pair, close) calls `replan` (`src/server/booking/plan.ts`), which moves each rent lock to the new estimate, or makes an offer (new first day and price) to a reserved-next borrower whose start moves earlier or whose estimate goes up. A held pair can be reserved from its holder's day 1; a declined or expired offer cancels the reservation, unlocks everything, emails the borrower and sends the pair back to the merchant (`collectIfWaiting`). The daily job (`runDailyRentals`, `/api/cron/rentals`) ends terms that ran out and expires offers. Notices go through `notify` (in-app, plus email via the mock mailer).
 
 ## Databases
 
@@ -43,7 +43,7 @@ Conventions:
 
 ## Build order
 
-Status: steps 0–8 are done (MVP complete), and step 9 aligned the app with the rent calculation spec. Steps 10–12 added merchant first, the release discount and the token wallet; step 13 made rentals fixed-term and prepaid. The step branches are on GitHub.
+Status: steps 0–8 are done (MVP complete), and step 9 aligned the app with the rent calculation spec. Steps 10–12 added merchant first, the release discount and the token wallet; step 13 made rentals fixed-term; step 14 made rent post-paid (locked at booking, charged at return) and opened reservations from the holder's day 1. The step branches are on GitHub.
 
 pricing engine → schema and roles → catalogue → booking and wear ledger → payments → logistics → payouts and disputes → polish
 
@@ -53,23 +53,23 @@ Build the **MVP only** (§10 roadmap): pricing engine and tests, listings with c
 
 ## Launch defaults (all configurable; never hard-coded outside settings)
 
-| Setting                                 | Default                                        | Note                                                                      |
-| --------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
-| μm / μp                                 | 0.10 / 0.10                                    | Open decision: the split may change                                       |
-| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03                            | PricingSettings; reference lifespan 365                                   |
-| Declared lifespan limits                | 6–24 months (183–730)                          | Admin can extend a merchant's maximum on request                          |
-| φ (catch-up)                            | 1, off                                         | Discounts funded from margin                                              |
-| Past the lifespan                       | Charged at P(L) per wear-day until returned    | `chargePastLife`; lifetime may exceed R (the platform gets the excess)    |
-| At booking                              | Rent for the term paid; each pair's V locked   | Deposit stays at full V per pair until that pair is back                  |
-| Early-return notice                     | 10 days before the new last day                | Wrong-size returns within 24 h end at once                                |
-| Max pairs per bundle                    | 4                                              |                                                                           |
-| Dispute window / payout hold            | 3 days after close                             |                                                                           |
-| Payout cadence                          | Weekly                                         |                                                                           |
-| Release discount                        | +0.5%/day from 10 days before release, max 10% | Next borrower only; platform-funded (open decision)                       |
-| Offer response time                     | 24 hours                                       | Reserved-next borrower accepting a higher price (open decision)           |
-| Idle-cost test r / h                    | 0.12 / 0 LKR a day                             | Phase 2; r is an assumption                                               |
-| Currency / timezone                     | LKR / Asia/Colombo                             |                                                                           |
-| Trip fees                               | Not handled by us                              | Receiver pays the driver: borrower (delivery, handoff), merchant (return) |
+| Setting                                 | Default                                               | Note                                                                      |
+| --------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------- |
+| μm / μp                                 | 0.10 / 0.10                                           | Open decision: the split may change                                       |
+| Floor q, midpoint ratio, base steepness | 0.30, 200/365, 0.03                                   | PricingSettings; reference lifespan 365                                   |
+| Declared lifespan limits                | 6–24 months (183–730)                                 | Admin can extend a merchant's maximum on request                          |
+| φ (catch-up)                            | 1, off                                                | Discounts funded from margin                                              |
+| Past the lifespan                       | Charged at P(L) per wear-day until returned           | `chargePastLife`; lifetime may exceed R (the platform gets the excess)    |
+| At booking                              | Each pair's V + rent estimate locked; nothing charged | Rent charged at return; deposit stays at full V until that pair is back   |
+| Early-return notice                     | 10 days before the new last day                       | Wrong-size returns within 24 h end at once                                |
+| Max pairs per bundle                    | 4                                                     |                                                                           |
+| Dispute window / payout hold            | 3 days after close                                    |                                                                           |
+| Payout cadence                          | Weekly                                                |                                                                           |
+| Release discount                        | +0.5%/day from 10 days before release, max 10%        | Next borrower only; platform-funded (open decision)                       |
+| Offer response time                     | 24 hours                                              | Reserved-next borrower accepting a higher price (open decision)           |
+| Idle-cost test r / h                    | 0.12 / 0 LKR a day                                    | Phase 2; r is an assumption                                               |
+| Currency / timezone                     | LKR / Asia/Colombo                                    |                                                                           |
+| Trip fees                               | Not handled by us                                     | Receiver pays the driver: borrower (delivery, handoff), merchant (return) |
 
 Open decisions are listed in §10. When code depends on one, read it from settings and leave a `// OPEN DECISION:` comment. Don't pick a value silently.
 

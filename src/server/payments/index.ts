@@ -9,20 +9,122 @@ import { getActiveSettings } from "../settings";
 import { replan } from "../booking/plan";
 import { cancelReservation } from "../booking/reservations";
 import { flushEmails } from "../notify";
-import { chargeFree, chargeFromDeposit, credit, unlockDeposit, unlockRental } from "../wallet";
+import {
+  chargeFree,
+  chargeFromDeposit,
+  credit,
+  setRentLock,
+  unlockDeposit,
+  unlockRental,
+} from "../wallet";
 
 export class PaymentError extends Error {}
 
 /**
- * Rental money in tokens (pricing-spec.md §6–7). Booking locks the pairs' merchant value as
- * a deposit and charges the rent for the term; `settleRent` moves an item's rent to a new
- * amount whenever its plan changes, and to its final charge at close. Card payments happen
- * only when a borrower tops up or withdraws (src/server/wallet).
+ * Rental money in tokens (pricing-spec.md §6–7). Rent is post-paid: booking locks each
+ * pair's merchant value as a deposit and the rent estimate for its term (`lockRent`, kept in
+ * step with the plan), and nothing is charged until the item closes. Then `collectRent`
+ * releases the rent lock and charges the final rent, in the close-out transaction, so the
+ * merchant's share only becomes payable once the rent has been collected. Card payments
+ * happen only when a borrower tops up or withdraws (src/server/wallet).
  */
 
 /**
- * Move an item's rent paid to `target` (a 2-dp amount from the pricing engine): charge the
- * difference from the free balance, or credit it back. Returns the change (+ charged,
+ * Move an item's rent lock to the plan's estimate: `charge` (2 dp, from the pricing engine)
+ * less anything already charged for it. Returns the change (+ locked, − unlocked). Runs in
+ * the caller's transaction with the `rentLocked` update.
+ */
+export async function lockRent(
+  tx: Tx,
+  input: {
+    userId: string;
+    rentalId: string;
+    itemId: string;
+    charge: D;
+    rentPaid: D;
+    note: { lock: string; unlock: string };
+  },
+): Promise<D> {
+  const target = D.max(0, input.charge.minus(input.rentPaid));
+  const delta = await setRentLock(tx, {
+    userId: input.userId,
+    rentalId: input.rentalId,
+    rentalItemId: input.itemId,
+    target,
+    note: input.note,
+  });
+  if (!delta.isZero()) {
+    await tx.rentalItem.update({
+      where: { id: input.itemId },
+      data: { rentLocked: target.toFixed(2) },
+    });
+  }
+  return delta;
+}
+
+/**
+ * The item closed (§4 rule 1): release its rent lock and charge its final rent from the
+ * balance (net of anything already charged). Idempotent. Returns the item's rent charged.
+ */
+export async function collectRent(tx: Tx, itemId: string): Promise<D> {
+  const item = await tx.rentalItem.findUniqueOrThrow({
+    where: { id: itemId },
+    include: { rental: true, shoe: { select: { brand: true, model: true } } },
+  });
+  if (item.status !== "CLOSED" || !item.charge) {
+    throw new PaymentError("Rent is charged only when an item closes");
+  }
+  const name = `${item.shoe.brand} ${item.shoe.model}`;
+  await releaseRentLock(tx, item, `Rent estimate released: ${name}`);
+  await settleRent(tx, {
+    userId: item.rental.borrowerId,
+    rentalId: item.rentalId,
+    itemId: item.id,
+    rentPaid: toD(item.rentPaid),
+    target: toD(item.charge),
+    note: { charge: `Rent: ${name}`, refund: `Rent refund: ${name}` },
+  });
+  return toD(item.charge);
+}
+
+/**
+ * An item ends without rent (a cancelled reservation, a lost pair): release its rent lock
+ * and refund anything already charged for it.
+ */
+export async function releaseRent(tx: Tx, itemId: string, note: string) {
+  const item = await tx.rentalItem.findUniqueOrThrow({
+    where: { id: itemId },
+    include: { rental: true },
+  });
+  await releaseRentLock(tx, item, note);
+  await settleRent(tx, {
+    userId: item.rental.borrowerId,
+    rentalId: item.rentalId,
+    itemId: item.id,
+    rentPaid: toD(item.rentPaid),
+    target: new D(0),
+    note: { charge: "Rent", refund: note },
+  });
+}
+
+async function releaseRentLock(
+  tx: Tx,
+  item: { id: string; rentalId: string; rental: { borrowerId: string } },
+  note: string,
+) {
+  await setRentLock(tx, {
+    userId: item.rental.borrowerId,
+    rentalId: item.rentalId,
+    rentalItemId: item.id,
+    target: new D(0),
+    note: { lock: note, unlock: note },
+  });
+  await tx.rentalItem.update({ where: { id: item.id }, data: { rentLocked: "0" } });
+}
+
+/**
+ * Move an item's rent charged to `target` (a 2-dp amount from the pricing engine): charge
+ * the difference from the free balance, or credit it back. Returns the change (+ charged,
  * − refunded). Runs in the caller's transaction with the `rentPaid` update, so a retry
  * can't charge twice.
  */
@@ -86,26 +188,17 @@ async function releaseItem(tx: Tx, itemId: string) {
 }
 
 /**
- * §4 rule 1: settle each closed item to its final charge. Rent was paid at booking and
- * kept in step with the plan, so the difference is normally zero.
+ * After items close (their rent was collected in the close-out): make sure the rent is
+ * charged, unlock each pair's deposit unless a dispute holds it, and finish rentals that are
+ * done.
  */
 export async function settleItems(itemIds: string[]) {
   const rentalIds = new Set<string>();
   for (const itemId of itemIds) {
     await db.$transaction(async (tx) => {
-      const item = await tx.rentalItem.findUniqueOrThrow({
-        where: { id: itemId },
-        include: { rental: true },
-      });
+      const item = await tx.rentalItem.findUniqueOrThrow({ where: { id: itemId } });
       if (item.status !== "CLOSED" || !item.charge) return;
-      await settleRent(tx, {
-        userId: item.rental.borrowerId,
-        rentalId: item.rentalId,
-        itemId: item.id,
-        rentPaid: toD(item.rentPaid),
-        target: toD(item.charge),
-        note: { charge: "Rent: final", refund: "Rent: final, refund" },
-      });
+      await collectRent(tx, item.id);
       await releaseItem(tx, item.id);
       rentalIds.add(item.rentalId);
     });
@@ -172,8 +265,8 @@ export async function releaseAfterDispute(itemId: string) {
 /**
  * §4 rule 3 / §6: a lost or unreturned pair. The borrower pays what the shoe had left to
  * earn (K · (A − IQ(w)), or R − collected with catch-up), split merchant first, charged
- * from that pair's deposit and then the free balance (which may go negative). The
- * rent prepaid for the term is refunded, since the remaining value replaces it. The
+ * from that pair's deposit and then the free balance (which may go negative). No rent is
+ * charged and its rent lock is released, since the remaining value replaces it. The
  * merchant is made whole, the shoe is retired, any reservation cancelled and the account
  * locked.
  */
@@ -232,14 +325,7 @@ export async function markLost(itemId: string, now = new Date()) {
       },
       data: { status: "CANCELLED" },
     });
-    await settleRent(tx, {
-      userId: item.rental.borrowerId,
-      rentalId: item.rentalId,
-      itemId: item.id,
-      rentPaid: toD(item.rentPaid),
-      target: new D(0),
-      note: { charge: "Rent", refund: "Lost pair: rent refunded" },
-    });
+    await releaseRent(tx, item.id, "Lost pair: rent estimate released");
     const queued = await tx.rentalItem.findMany({
       where: { shoeId: item.shoeId, status: "WAITING_HANDOFF" },
       select: { id: true, rentalId: true },

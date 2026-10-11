@@ -44,8 +44,8 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
       { name: "maxDiscount", label: "Maximum discount", hint: "0.10 = 10%" },
       {
         name: "releaseLeadDays",
-        label: "Show this many days before release",
-        hint: "10: day 81 of a 90-day rental",
+        label: "Discount starts this many days before release",
+        hint: "10: from day 81 of a 90-day rental (pairs can be reserved any time)",
       },
       { name: "releaseDiscountStep", label: "Discount added per day", hint: "0.005 = 0.5%" },
     ],

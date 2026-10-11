@@ -8,15 +8,12 @@ export function RentPanel({
   shoeId,
   status,
   handoffTaken,
-  releaseOpen,
   signedInAs,
   inBundle,
 }: {
   shoeId: string;
   status: ShoeStatus;
   handoffTaken: boolean;
-  /** A held pair can be reserved once its holder's release window opens */
-  releaseOpen: boolean;
   signedInAs: Role | null;
   inBundle: boolean;
 }) {
@@ -50,12 +47,14 @@ export function RentPanel({
       </form>
     );
   }
-  if (status === "WITH_BORROWER" && !handoffTaken && releaseOpen) {
+  if (status === "WITH_BORROWER" && !handoffTaken) {
     return (
       <Card className="flex flex-col gap-3 text-sm">
         <p>
-          Someone is wearing this pair now. Reserve it and it comes straight to you when
-          they&apos;re done, in a sealed bag with a cleaning kit.
+          Someone is wearing this pair now. Reserve it and it comes straight to you when their term
+          ends, in a sealed bag with a cleaning kit. If they return it early, we offer you the
+          earlier dates at the new price; say no and your reservation is cancelled and your tokens
+          unlocked.
         </p>
         <form action={addToBundleAction.bind(null, shoeId)}>
           <Button type="submit" variant="secondary" className="w-full">

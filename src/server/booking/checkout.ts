@@ -2,7 +2,6 @@ import "server-only";
 import { z } from "zod";
 import type { RentalItemStatus } from "@/generated/prisma/client";
 import { D, toD } from "@/lib/decimal";
-import { formatDate } from "@/lib/format";
 import { bundleDailyCost, catchUpPhi, shownPrice } from "@/lib/pricing";
 import { atEndOfLife, dayToDate } from "@/lib/wear-ledger";
 import { releaseInfo, shoeCurve } from "../catalogue/pricing";
@@ -41,13 +40,13 @@ export type QuoteLine = {
   discount: string;
   /** Wear the term starts from: the pair's committed wear */
   wear: string;
-  /** Wear once the term is used (shown as "used" as soon as it's paid) */
+  /** Wear once the term is used (shown as "used" as soon as it's booked) */
   wearEnd: string;
   lifespanDays: number;
   /** Expected day 1 and last day of the term */
   firstDay: Date;
   lastDay: Date;
-  /** Rent for the term, paid at booking */
+  /** Rent estimate for the term: locked at booking, the actual rent is charged at return */
   estimate: string;
   problem?: string;
 };
@@ -61,13 +60,13 @@ export type BundleQuote = {
   dailyCost: string;
   /** Merchant value of the pairs (Σ V), locked as a deposit while they are out */
   shoeValue: string;
-  /** Tokens needed: shoeValue + rent */
+  /** Tokens needed available: shoeValue + rent estimate, all locked at booking */
   required: string;
   /** The borrower's available tokens (null when signed out) */
   available: string | null;
   /** Tokens to top up before booking (0 if enough) */
   shortfall: string;
-  /** Rent for the term, paid at booking */
+  /** Rent estimate for the term, locked at booking */
   estimate: string;
   problems: string[];
 };
@@ -75,10 +74,11 @@ export type BundleQuote = {
 /**
  * Prices a bundle for a term (pricing-spec.md §6): each pair's price at the wear its term
  * starts from, the bundle's daily cost (each pair accrues 1/n per day across all pairs held)
- * and the rent for the term. The rent comes from the same plan booking stores (`planItems`):
- * the borrower's other bookings over their own terms, each pair starting from its committed
- * wear. A pair whose last holder's release window has opened carries the release discount
- * for the day of booking.
+ * and the rent estimate for the term. The estimate comes from the same plan booking stores
+ * (`planItems`): the borrower's other bookings over their own terms, each pair starting from
+ * its committed wear, so a pair someone holds is priced at its projected wear at the end of
+ * their term. A pair whose release day is near carries the release discount for the day of
+ * booking.
  */
 export async function quoteBundle(
   borrowerId: string | null,
@@ -150,7 +150,7 @@ export async function quoteBundle(
     const { params, settings, collected } = shoeCurve(shoe);
     const info = release.get(shoe.id)!;
     const phi = settings.catchUp ? catchUpPhi(params, collected, p.wearStart) : new D(1);
-    const problem = lineProblem(shoe, borrowerId, info);
+    const problem = lineProblem(shoe, borrowerId);
     if (problem) problems.push(`${shoe.brand} ${shoe.model}: ${problem}`);
     return {
       shoeId: shoe.id,
@@ -173,7 +173,7 @@ export async function quoteBundle(
   });
 
   const estimate = lines.reduce((sum, l) => sum.plus(l.estimate), new D(0));
-  // Needed at booking: the pairs' merchant value (locked) plus the rent (paid).
+  // Needed at booking: the pairs' merchant value plus the rent estimate, both locked.
   const shoeValue = listed.reduce((sum, s) => sum.plus(toD(s.value)), new D(0));
   const required = shoeValue.plus(estimate);
   const available = borrowerId ? (await walletBalance(borrowerId)).available : null;
@@ -181,7 +181,7 @@ export async function quoteBundle(
   if (shortfall.gt(0)) {
     problems.push(
       `Top up ${shortfall.toFixed(2)} tokens: you need ${required.toFixed(2)} available ` +
-        `(pair values ${shoeValue.toFixed(2)} + rent ${estimate.toFixed(2)})`,
+        `(pair values ${shoeValue.toFixed(2)} + rent estimate ${estimate.toFixed(2)})`,
     );
   }
   return {
@@ -212,11 +212,7 @@ type ShoeForLine = {
   }[];
 };
 
-function lineProblem(
-  shoe: ShoeForLine,
-  borrowerId: string | null,
-  release: { open: boolean; opensOn: number | null },
-): string | undefined {
+function lineProblem(shoe: ShoeForLine, borrowerId: string | null): string | undefined {
   if (!shoe.merchant.verified) return "not available";
   if (atEndOfLife(shoe.committedWear.toString(), shoe.lifespanDays)) return "at end of life";
   if (shoe.status === "AVAILABLE") return undefined;
@@ -225,12 +221,7 @@ function lineProblem(
   if (shoe.rentalItems.some((i) => i.status === "RETURNING" && i.deliveries.length > 0)) {
     return "on its way back to the merchant";
   }
-  // A held pair opens for the next borrower in its holder's release window (§8).
-  if (!release.open) {
-    return release.opensOn === null
-      ? "not open for reservations"
-      : `opens for reservations on ${formatDate(dayToDate(release.opensOn))}`;
-  }
+  // A held pair can be reserved next from its holder's day 1 (§6a).
   if (borrowerId && shoe.rentalItems.some((i) => i.rental.borrowerId === borrowerId)) {
     return "you're holding this pair";
   }
@@ -244,10 +235,11 @@ export const checkoutSchema = z.object({
 
 /**
  * Books a bundle for a term (§5.2 step 3, pricing-spec.md §6). Available pairs are reserved
- * and a delivery is requested; pairs held by another borrower join the handoff queue (and go
- * now if their holder has already ended and is waiting). In one transaction: each pair's
- * merchant value is locked as its own deposit, the term's rent is charged and the plan
- * stored, so each pair's wear is committed at once. A short balance books nothing.
+ * and a delivery is requested; pairs held by another borrower are reserved next, to be
+ * handed over after their holder's term (or now if the holder has already ended and is
+ * waiting). In one transaction: each pair's merchant value is locked as its own deposit, its
+ * rent estimate is locked and the plan stored, so each pair's wear is committed at once.
+ * Nothing is charged until each pair's item closes. A short balance books nothing.
  */
 export async function checkout(
   borrowerId: string,
@@ -273,7 +265,7 @@ export async function checkout(
         borrowerId,
         status: "ACTIVE",
         deliveryAddress: input.deliveryAddress,
-        prepaidRent: quote.estimate,
+        estimatedRent: quote.estimate,
         shoeValue: quote.shoeValue,
       },
     });
@@ -329,8 +321,8 @@ export async function checkout(
       }
     }
 
-    // Charge the term's rent and commit the wear; the borrower's other bookings are settled
-    // to the new overlap.
+    // Lock the terms' rent estimates and commit the wear; the borrower's other bookings
+    // follow the new overlap.
     await replan(tx, { borrowerIds: [borrowerId] }, now, {
       actorId: borrowerId,
       settings: settingsRow,
@@ -339,16 +331,16 @@ export async function checkout(
     if (available.lt(0)) {
       throw new BookingError(`Top up ${available.neg().toFixed(2)} tokens to book this bundle`);
     }
-    const paid = await tx.rentalItem.aggregate({
+    const locked = await tx.rentalItem.aggregate({
       where: { rentalId: rental.id },
-      _sum: { rentPaid: true },
+      _sum: { rentLocked: true },
     });
     for (const line of quote.lines) {
       if (line.mode === "handoff") await handOffIfWaiting(tx, line.shoeId);
     }
     return tx.rental.update({
       where: { id: rental.id },
-      data: { prepaidRent: toD(paid._sum.rentPaid ?? 0).toFixed(2) },
+      data: { estimatedRent: toD(locked._sum.rentLocked ?? 0).toFixed(2) },
     });
   });
   await flushEmails(now);

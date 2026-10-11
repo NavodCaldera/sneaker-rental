@@ -177,7 +177,7 @@ describe("browsing and prices", () => {
           status: "WITH_BORROWER",
           size: "UK 10",
           brand: "Adidas",
-          // Holder's plan ends in 5 days: inside the 10-day release window, so shown.
+          // Held, ending in 5 days: reservable next.
           releaseDay: dayToDate(colomboDay(new Date()) + 5),
         },
         {
@@ -185,7 +185,7 @@ describe("browsing and prices", () => {
           merchantId: verified.merchant!.id,
           status: "WITH_BORROWER",
           brand: "Puma",
-          // Plan ends in 30 days: not open for reservations yet, so hidden.
+          // Held for 30 more days: reservable next too, from the holder's day 1.
           releaseDay: dayToDate(colomboDay(new Date()) + 30),
         },
         { ...base, merchantId: verified.merchant!.id, status: "DRAFT" },
@@ -193,10 +193,10 @@ describe("browsing and prices", () => {
         { ...base, merchantId: unverified.merchant!.id, status: "AVAILABLE" },
       ],
     });
-    expect(await browseShoes({})).toHaveLength(2);
+    expect(await browseShoes({})).toHaveLength(3);
     expect(await browseShoes({ size: "UK 10" })).toHaveLength(1);
     expect(await browseShoes({ q: "adi" })).toHaveLength(1);
-    expect(await browseShoes({ brand: "Puma" })).toHaveLength(0);
+    expect(await browseShoes({ brand: "Puma" })).toHaveLength(1);
   });
 
   it("prices the 6,000 LKR / 365-day shoe at 28.9248 new and 8.6774 at end of life", async () => {

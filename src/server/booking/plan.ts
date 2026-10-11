@@ -1,7 +1,7 @@
 import "server-only";
 import type { RentalItemStatus } from "@/generated/prisma/client";
 import { D, toD } from "@/lib/decimal";
-import { formatDateTime, formatTokens, formatWear } from "@/lib/format";
+import { formatDate, formatDateTime, formatTokens, formatWear } from "@/lib/format";
 import { catchUpPhi, chargedAmounts, incomeBetween } from "@/lib/pricing";
 import {
   type Day,
@@ -9,21 +9,22 @@ import {
   chainWear,
   colomboDay,
   dateToDay,
+  dayToDate,
   plannedLastDay,
   wearAdded,
 } from "@/lib/wear-ledger";
 import { type PricedShoe, shoeCurve } from "../catalogue/pricing";
 import type { Tx } from "../db";
 import { notify } from "../notify";
-import { settleRent } from "../payments";
+import { lockRent } from "../payments";
 import { type SettingsRow, getActiveSettings } from "../settings";
 
 /**
- * Planning (pricing-spec.md §6a). Rent for a booked term is paid upfront and the pair's wear
- * is committed at once. Every open item has a planned holding; the wear ledger splits each
- * borrower's days 1/n across their pairs, each pair's open items are chained from its settled
- * wear, and the pricing engine prices each item. `replan` stores the result and settles any
- * change in tokens.
+ * Planning (pricing-spec.md §6a). A booked term's rent estimate is locked at booking and the
+ * pair's wear is committed at once; the rent itself is charged when the item closes. Every
+ * open item has a planned holding; the wear ledger splits each borrower's days 1/n across
+ * their pairs, each pair's open items are chained from its settled wear, and the pricing
+ * engine prices each item. `replan` stores the result and moves each rent lock to match.
  */
 
 /** Items still to be settled: booked, reserved next, held, or on their way back. */
@@ -169,9 +170,11 @@ const itemFields = {
   plannedDays: true,
   discount: true,
   phi: true,
+  plannedFirstDay: true,
   plannedCharge: true,
   plannedWearStart: true,
   rentPaid: true,
+  offerFirstDay: true,
   offerCharge: true,
   offerDueAt: true,
   rental: { select: { borrowerId: true } },
@@ -242,10 +245,11 @@ export async function loadPlanItems(tx: Tx, seed: { borrowerIds?: string[]; shoe
 
 /**
  * Plan the open items of these borrowers and pairs again and store the result: each item's
- * planned wear and rent, each pair's committed wear. Rent changes are settled in tokens at
- * once (refund, or charge from the free balance), except a higher price for a reservation
- * that hasn't started: that becomes an offer the borrower must accept (§6a). Borrowers other
- * than `actorId` are told about refunds. Returns the items with an offer pending.
+ * planned first day, wear and rent, each pair's committed wear. Each item's rent lock follows
+ * its rent estimate at once (lock more, or unlock), except for a reservation that would now
+ * start earlier (its holder returns early) or cost more: that becomes an offer of the new
+ * dates and price, which the borrower must accept (§6a). Borrowers other than `actorId` are
+ * told about unlocked tokens. Returns the items with an offer pending.
  */
 export async function replan(
   tx: Tx,
@@ -278,46 +282,40 @@ export async function replan(
     const borrowerId = row.rental.borrowerId;
     const name = `${row.shoe.brand} ${row.shoe.model}`;
     const agreed = row.plannedCharge === null ? null : toD(row.plannedCharge);
+    const agreedFirst = row.plannedFirstDay === null ? null : dateToDay(row.plannedFirstDay);
 
-    if (row.status === "WAITING_HANDOFF" && agreed !== null && p.charge.gt(agreed)) {
+    // A reservation that would start earlier (its holder is returning early) or cost more
+    // needs the borrower's yes: it becomes an offer, and nothing else changes until then.
+    const earlier = agreedFirst !== null && p.firstDay < agreedFirst;
+    const dearer = agreed !== null && p.charge.gt(agreed);
+    if (row.status === "WAITING_HANDOFF" && agreed !== null && (earlier || dearer)) {
       offers.push(row.id);
-      if (row.offerCharge !== null && toD(row.offerCharge).eq(p.charge)) continue;
+      const same =
+        row.offerCharge !== null &&
+        toD(row.offerCharge).eq(p.charge) &&
+        row.offerFirstDay !== null &&
+        dateToDay(row.offerFirstDay) === p.firstDay;
+      if (same) continue;
       const settings = options.settings ?? (await getActiveSettings(now));
       const dueAt =
         row.offerDueAt ?? new Date(now.getTime() + settings.offerResponseHours * 3_600_000);
       await tx.rentalItem.update({
         where: { id: row.id },
         data: {
+          offerFirstDay: dayToDate(p.firstDay),
           offerCharge: p.charge.toFixed(2),
           offerWearStart: p.wearStart.toString(),
           offerDueAt: dueAt,
         },
       });
-      const shownBefore = row.plannedWearStart === null ? null : toD(row.plannedWearStart);
-      await notify(tx, {
-        userId: borrowerId,
-        kind: "PRICE_OFFER",
-        rentalItemId: row.id,
-        link: "/rentals",
-        title: `${name}: coming to you early, at a new price`,
-        body:
-          `The borrower before you is ending their rental of the ${name} early, so it will ` +
-          `have less wear than we showed when you booked` +
-          (shownBefore
-            ? ` (${formatWear(p.wearStart)} wear-days used, not ${formatWear(shownBefore)})`
-            : "") +
-          `. A pair with less wear costs more per day, so your ${row.plannedDays}-day rent is ` +
-          `now ${formatTokens(p.charge)} instead of ${formatTokens(agreed)}. Accept by ` +
-          `${formatDateTime(dueAt)} to keep your reservation, and a driver brings it to you ` +
-          `as soon as they hand it back. Reject, or don't answer in time, and we refund your ` +
-          `rent and unlock your deposit.`,
-      });
+      await notify(tx, offerNotice(row, p, { name, agreed, agreedFirst, dueAt }));
       continue;
     }
 
     const changed =
       agreed === null ||
       !agreed.eq(p.charge) ||
+      agreedFirst !== p.firstDay ||
       row.plannedWearStart === null ||
       !toD(row.plannedWearStart).eq(p.wearStart) ||
       row.offerCharge !== null;
@@ -325,24 +323,30 @@ export async function replan(
       await tx.rentalItem.update({
         where: { id: row.id },
         data: {
+          plannedFirstDay: dayToDate(p.firstDay),
           plannedWearStart: p.wearStart.toString(),
           plannedWearEnd: p.wearEnd.toString(),
           plannedCharge: p.charge.toFixed(2),
+          offerFirstDay: null,
           offerCharge: null,
           offerWearStart: null,
           offerDueAt: null,
         },
       });
     }
-    const delta = await settleRent(tx, {
+    // Rent is post-paid: lock the estimate now, charge the actual rent when the item closes.
+    const delta = await lockRent(tx, {
       userId: borrowerId,
       rentalId: row.rentalId,
       itemId: row.id,
+      charge: p.charge,
       rentPaid: toD(row.rentPaid),
-      target: p.charge,
       note: {
-        charge: agreed === null ? `Rent: ${name}, ${row.plannedDays} days` : `Rent change: ${name}`,
-        refund: `Rent refund: ${name}`,
+        lock:
+          agreed === null
+            ? `Rent estimate: ${name}, ${row.plannedDays} days`
+            : `Rent estimate up: ${name}`,
+        unlock: `Rent estimate down: ${name}`,
       },
     });
     if (delta.lt(0) && borrowerId !== options.actorId) {
@@ -351,12 +355,49 @@ export async function replan(
         kind: "REFUND",
         rentalItemId: row.id,
         link: "/wallet",
-        title: `${name}: ${formatTokens(delta.neg())} refunded`,
+        title: `${name}: ${formatTokens(delta.neg())} unlocked`,
         body:
-          `The rent for your ${name} went down to ${formatTokens(p.charge)}, so we've added ` +
-          `${formatTokens(delta.neg())} back to your tokens.`,
+          `The rent estimate for your ${name} went down to ${formatTokens(p.charge)}, so ` +
+          `we've unlocked ${formatTokens(delta.neg())} of your tokens.`,
       });
     }
   }
   return { offers };
+}
+
+/** The in-app and email notice for an offer of new dates and price (pricing-spec.md §6a). */
+function offerNotice(
+  row: Row,
+  p: ItemPlan,
+  ctx: { name: string; agreed: D; agreedFirst: Day | null; dueAt: Date },
+) {
+  const { name, agreed, agreedFirst, dueAt } = ctx;
+  const earlier = agreedFirst !== null && p.firstDay < agreedFirst;
+  const shownBefore = row.plannedWearStart === null ? null : toD(row.plannedWearStart);
+  const wear =
+    shownBefore && !shownBefore.eq(p.wearStart)
+      ? ` It will have ${formatWear(p.wearStart)} wear-days used, not ${formatWear(shownBefore)}, ` +
+        `and a pair with less wear costs more per day.`
+      : "";
+  const price = p.charge.gt(agreed)
+    ? `your ${row.plannedDays}-day rent estimate is now ${formatTokens(p.charge)} instead of ` +
+      `${formatTokens(agreed)}`
+    : `your ${row.plannedDays}-day rent estimate stays ${formatTokens(p.charge)}`;
+  return {
+    userId: row.rental.borrowerId,
+    kind: "PRICE_OFFER" as const,
+    rentalItemId: row.id,
+    link: "/rentals",
+    title: earlier ? `${name}: coming to you early, at a new price` : `${name}: a new price`,
+    body:
+      (earlier
+        ? `The borrower before you is returning the ${name} early, so it can come to you ` +
+          `with day 1 on ${formatDate(dayToDate(p.firstDay))} instead of ` +
+          `${formatDate(dayToDate(agreedFirst!))}.`
+        : `The ${name} will have less wear than we showed when you booked.`) +
+      `${wear} ${earlier ? "With the new dates" : "So"}, ${price} (we lock the estimate and charge the actual wear ` +
+      `when you return it). Accept by ${formatDateTime(dueAt)} to keep your reservation on ` +
+      `these terms. If you'd rather keep your original dates, reject it or don't answer, and ` +
+      `we cancel your reservation and unlock all its tokens; the pair goes back to its owner.`,
+  };
 }

@@ -58,12 +58,10 @@ describe("manual provider: quote → book → courier pickup → drop-off", () =
       "WITH_BORROWER",
     );
 
-    // Not handled by us: no tokens move for the trip, the borrower pays the driver.
+    // Not handled by us: no tokens move for the trip, the borrower pays the driver (and the
+    // rent is only charged when the pair is back).
     expect(delivery.paidBy).toBe("BORROWER");
-    const charges = await db.walletEntry.findMany({
-      where: { rentalId: rental.id, kind: "CHARGE" },
-    });
-    expect(charges.every((c) => c.note?.startsWith("Rent"))).toBe(true);
+    expect(await db.walletEntry.count({ where: { rentalId: rental.id, kind: "CHARGE" } })).toBe(0);
 
     const done = await db.delivery.findUniqueOrThrow({
       where: { id: delivery.id },
@@ -120,16 +118,20 @@ describe("handoff trips", () => {
     const { borrower, merchantId } = await setup();
     const next = await makeUser("BORROWER");
     const shoe = await makeShoe(merchantId);
-    const r1 = await checkout(borrower.id, [shoe.id], {
-      deliveryAddress: "First home",
-      plannedDays: 10,
-    });
+    const r1 = await checkout(
+      borrower.id,
+      [shoe.id],
+      { deliveryAddress: "First home", plannedDays: 10 },
+      day(-1),
+    );
     const item1 = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r1.id } });
     await arrive(await deliveryFor(item1.id, "DELIVER"), day(0));
-    const r2 = await checkout(next.id, [shoe.id], {
-      deliveryAddress: "Second home",
-      plannedDays: 10,
-    });
+    const r2 = await checkout(
+      next.id,
+      [shoe.id],
+      { deliveryAddress: "Second home", plannedDays: 10 },
+      day(1),
+    );
     const item2 = await db.rentalItem.findFirstOrThrow({ where: { rentalId: r2.id } });
 
     await endRental(borrower.id, item1.id, day(10));

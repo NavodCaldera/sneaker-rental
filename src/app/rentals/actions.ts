@@ -58,7 +58,7 @@ export async function endRentalAction(itemId: string, _prev: ActionState): Promi
     throw e;
   }
   revalidatePath("/rentals");
-  return { ok: "Rental ended. Unused days are refunded to your tokens." };
+  return { ok: "Rental ended. Your rent is charged for the days you kept it once it's back." };
 }
 
 export async function earlyReturnAction(
@@ -76,7 +76,7 @@ export async function earlyReturnAction(
     throw e;
   }
   revalidatePath("/rentals");
-  return { ok: "Early return booked. The unused days are refunded to your tokens." };
+  return { ok: "Early return booked. The rent estimate for the unused days is unlocked." };
 }
 
 export async function extendRentalAction(
@@ -115,7 +115,7 @@ export async function answerOfferAction(
     ok:
       answer === "accept"
         ? "Accepted. A driver brings the pair to you as soon as it's handed back."
-        : "Reservation cancelled. Your rent is refunded and your deposit unlocked.",
+        : "Reservation cancelled. Your deposit and rent estimate are unlocked.",
   };
 }
 

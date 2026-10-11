@@ -12,7 +12,6 @@ import {
   merchantTarget,
   priceAt,
   releaseDiscount,
-  releaseWindowStart,
   remainingValue,
   shownPrice,
   splitCharge,
@@ -90,22 +89,17 @@ export async function merchantFundedDiscounts(tx: Tx, shoeId: string): Promise<D
 /**
  * Release discount for the next borrower of a pair (pricing-spec.md §8), from the active
  * settings: it grows from `releaseLeadDays` before the current or last holder's planned
- * last day, up to `maxDiscount`. `opensOn` is the first day a held pair is shown.
+ * last day, up to `maxDiscount`. A held pair can be reserved at any time; booking before the
+ * window just gets no discount.
  */
 export function releaseInfo(
   shoe: { releaseDay: Date | null },
   active: SettingsRow,
   today: Day,
-): { discount: D; releaseDay: Day | null; opensOn: Day | null; open: boolean } {
+): { discount: D; releaseDay: Day | null } {
   const settings = toPricingSettings(active);
   const releaseDay = shoe.releaseDay ? dateToDay(shoe.releaseDay) : null;
-  const opensOn = releaseDay === null ? null : releaseWindowStart(releaseDay, settings);
-  return {
-    discount: releaseDiscount(today, releaseDay, settings),
-    releaseDay,
-    opensOn,
-    open: opensOn !== null && today >= opensOn,
-  };
+  return { discount: releaseDiscount(today, releaseDay, settings), releaseDay };
 }
 
 /**
