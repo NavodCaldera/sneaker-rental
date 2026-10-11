@@ -14,11 +14,11 @@ export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWE
     <form action={action} className="flex flex-col gap-4">
       {state.error && <Alert>{state.error}</Alert>}
       <fieldset className="grid grid-cols-2 gap-2">
-        <legend className="mb-1.5 text-sm font-medium">I want to</legend>
+        <legend className="sr-only">Account type</legend>
         {(
           [
-            ["BORROWER", "Rent sneakers"],
-            ["MERCHANT", "List my shoes"],
+            ["BORROWER", "Customer"],
+            ["MERCHANT", "Merchant"],
           ] as const
         ).map(([value, label]) => (
           <label

@@ -15,7 +15,7 @@ You build the user interface. Read `CLAUDE.md` and `docs/business-model.md` §1,
 
 0. **Password fields** (sign-in, sign-up, and any later one) use `PasswordInput` (`src/components/password-input.tsx`): an eye button at the right of the field shows or hides what was typed ("Show password" / "Hide password", `aria-pressed`). Never a bare `type="password"` input. (Product owner, 2026-10-11.)
 1. **Merchant**
-   - Sign-up, business verification and payout account.
+   - Sign-up, business verification and payout account. The sign-up form offers exactly two account types, shown as **Customer** (a borrower) and **Merchant**, with no "I want to" prompt (product owner, 2026-10-11). Use "Customer", not "buyer", in UI text for this choice.
    - Add shoe: 5 required photos (front, side, sole, inside, box), V, L (6–24 months, or the merchant's admin-granted maximum; say how to ask for longer), a **Condition** select (Brand new / Second-hand, no upgrades / Second-hand, upgraded; labels from `src/lib/shoe-condition.ts`), the wear already used shown and required only for second-hand pairs, and "What was upgraded" shown and required only for upgraded pairs, size, brand, model, category, pickup address. The pair's page shows "Condition when listed" (with the upgrades).
    - **Curve preview before publish** (§5.1): chart of P(w) over 0..L, plus start price, end price and lifetime income R and merchant share, all from the API. Note that a longer L lowers the daily price but risks uncollected income.
    - Dashboard: every pair with status, committed wear / L ("used, counting current bookings"), collected so far, idle days and upcoming payouts.
