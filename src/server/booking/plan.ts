@@ -398,6 +398,6 @@ function offerNotice(
       `${wear} ${earlier ? "With the new dates" : "So"}, ${price} (we lock the estimate and charge the actual wear ` +
       `when you return it). Accept by ${formatDateTime(dueAt)} to keep your reservation on ` +
       `these terms. If you'd rather keep your original dates, reject it or don't answer, and ` +
-      `we cancel your reservation and unlock all its tokens; the pair goes back to its owner.`,
+      `we cancel your reservation and unlock all its tokens.`,
   };
 }

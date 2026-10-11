@@ -138,10 +138,9 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                           )}
                           {item.keepingForNext && (
                             <p className="mt-2 text-sm text-subtle">
-                              Please keep the pair safe for now: the next borrower is deciding
-                              whether to take it early. We&apos;ll book a driver to them, or back to
-                              the owner, as soon as they answer. You aren&apos;t charged for these
-                              days.
+                              {item.holdForNext
+                                ? "Please keep the pair safe for now: as soon as the next borrower books it, a driver takes it straight to them. You aren't charged for these days."
+                                : "Please keep the pair safe for now: the next borrower is deciding whether to take it early, and we'll book the driver as soon as they answer. You aren't charged for these days."}
                             </p>
                           )}
                           {item.earlyReturnAt && item.status === "ACTIVE" && (

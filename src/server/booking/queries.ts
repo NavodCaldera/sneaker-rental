@@ -49,7 +49,8 @@ export async function borrowerRentals(borrowerId: string, now = new Date()) {
         (item.status === "ACTIVE" || item.status === "AWAITING_DELIVERY") &&
         !item.lastDay &&
         item.shoe.rentalItems.length === 0;
-      // Ended, but no driver yet: the next borrower is deciding, or nobody has booked it.
+      // Ended, but no driver yet: the next borrower is deciding on an offer, or the pair is
+      // kept here until someone books it (`holdForNext`).
       const keepingForNext =
         item.status === "RETURNING" &&
         !item.outgoing.some((d) => d.status !== "CANCELLED") &&

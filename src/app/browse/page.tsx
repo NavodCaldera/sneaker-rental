@@ -118,7 +118,9 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                   </div>
                   {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
                     <div className="text-xs text-subtle">
-                      Free from {formatDate(dayToDate(release.releaseDay))}
+                      {release.releaseDay < today
+                        ? "Free now"
+                        : `Free from ${formatDate(dayToDate(release.releaseDay))}`}
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-xs text-subtle">

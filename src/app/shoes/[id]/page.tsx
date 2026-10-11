@@ -85,8 +85,9 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           )}
           {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
             <p className="mt-1 text-sm text-subtle">
-              Booked until {formatDate(dayToDate(release.releaseDay))}. Reserve it now and it comes
-              to you right after, priced at the wear it will have then.
+              {release.releaseDay < colomboDay(new Date())
+                ? "Free now: the last borrower is keeping it for you. Book it and a driver brings it straight from them."
+                : `Booked until ${formatDate(dayToDate(release.releaseDay))}. Reserve it now and it comes to you right after, priced at the wear it will have then.`}
             </p>
           )}
         </div>

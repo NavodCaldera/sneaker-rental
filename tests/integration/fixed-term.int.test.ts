@@ -10,6 +10,7 @@ import {
 import { colomboDay, dateToDay } from "@/lib/wear-ledger";
 import { checkout } from "@/server/booking/checkout";
 import { runDailyRentals } from "@/server/booking/daily";
+import { browseShoes } from "@/server/catalogue";
 import {
   endRental,
   extendRental,
@@ -295,8 +296,9 @@ describe("reserve from day 1; the holder returns early (pricing-spec.md §6a)", 
     expect((await shoeNow(shoe.id)).committedWear.toString()).toBe("60");
   });
 
-  it("rejecting (or keeping the original dates) cancels U2's reservation, unlocks everything, emails U2, and the pair goes back to the merchant", async () => {
+  it("rejecting (or keeping the original dates) cancels U2's reservation, unlocks everything and emails U2; the pair stays with U1, free, until a new borrower books it", async () => {
     const { u1, u2, shoe, r2, item1, item2, start2 } = await reserved();
+    const u3 = await makeUser("BORROWER");
     await scheduleEarlyReturn(u1.id, item1.id, isoDay(30), day(20));
     mail.sent.length = 0;
 
@@ -320,15 +322,40 @@ describe("reserve from day 1; the holder returns early (pricing-spec.md §6a)", 
       (await db.user.findUniqueOrThrow({ where: { id: u2.id } })).email,
     );
 
-    // U1's term ends on day 30; a driver takes the pair back to the merchant.
+    // U1's term ends on day 30, but nobody collects it: U1 keeps it, free, for the next booking.
     await runDailyRentals(day(31));
-    expect((await reload(item1.id)).status).toBe("RETURNING");
-    const collect = await deliveryFor(item1.id, "COLLECT");
-    expect(collect.toAddress).toBe(shoe.pickupAddress);
-    expect(await db.delivery.count({ where: { fromRentalItemId: item1.id } })).toBe(0);
+    const waiting = await reload(item1.id);
+    expect([waiting.status, waiting.holdForNext]).toEqual(["RETURNING", true]);
+    expect(dateToDay(waiting.lastDay!)).toBe(colomboDay(day(30)));
+    expect(await db.delivery.count({ where: { rentalItemId: item1.id, type: "COLLECT" } })).toBe(0);
+    const told = await db.notification.findFirstOrThrow({
+      where: { userId: u1.id, kind: "TERM_ENDED" },
+    });
+    expect(told.body).toMatch(/keep the pair safe/);
+    expect(told.body).toMatch(/aren't charged/);
+    expect((await browseShoes({})).map((s) => s.id)).toContain(shoe.id);
+
+    // U3 books it on day 40: priced from the real wear (30), handed over from U1 straight away.
+    const r3 = await checkout(
+      u3.id,
+      [shoe.id],
+      { deliveryAddress: "U3 street", plannedDays: 10 },
+      day(40),
+    );
+    const item3 = await item(r3.id);
+    expect(item3.plannedWearStart!.toString()).toBe("30");
+    const handoff = await deliveryFor(item3.id, "HANDOFF");
+    expect([handoff.fromRentalItemId, handoff.fromAddress]).toEqual([item1.id, "U1 street"]);
+    await arrive(handoff, day(41));
+    await recordCondition(u3.id, { itemId: item3.id, grade: "A", photos: photos() }, day(41));
+    // U1 pays for days 1–30 only: the days spent keeping it for U3 are free.
+    const closed1 = await reload(item1.id);
+    expect([closed1.status, closed1.wearEnd!.toString()]).toEqual(["CLOSED", "30"]);
+    expect(closed1.rentPaid.toFixed(2)).toBe(rent(0, 30).toFixed(2));
+    expect(dateToDay((await reload(item3.id)).firstDay!)).toBe(colomboDay(day(42)));
   });
 
-  it("a holder who ends at once (wrong size) waits for U2's answer; an offer nobody answers expires, is cancelled, and a driver collects at once", async () => {
+  it("a holder who ends at once (wrong size) waits for U2's answer; an offer nobody answers expires and is cancelled; the pair keeps waiting with U1 for the next booking", async () => {
     const { merchantId } = await setup();
     const [u1, u2] = [await makeUser("BORROWER"), await makeUser("BORROWER")];
     const shoe = await makeShoe(merchantId);
@@ -368,9 +395,14 @@ describe("reserve from day 1; the holder returns early (pricing-spec.md §6a)", 
     expect(notice.body).toMatch(/weren't accepted in time/);
     expect((await tokens(u2.id)).locked).toBe("0.00");
     await expect(acceptOffer(u2.id, item2.id, day(2))).rejects.toThrow(/no new price/);
-    // The pair was waiting with U1, so a driver collects it now.
-    const collect = await deliveryFor(item1.id, "COLLECT");
-    expect(collect.toAddress).toBe(shoe.pickupAddress);
+    // Still no driver: U1 keeps it for the next booking, and is told so.
+    expect(await db.delivery.count({ where: { rentalItemId: item1.id, type: "COLLECT" } })).toBe(0);
+    expect((await reload(item1.id)).holdForNext).toBe(true);
+    const told = await db.notification.findFirstOrThrow({
+      where: { userId: u1.id, kind: "TERM_ENDED" },
+    });
+    expect(told.body).toMatch(/keep it safe/);
+    expect((await shoeNow(shoe.id)).status).toBe("WITH_BORROWER");
   });
 
   it("accepting needs the higher estimate available; otherwise nothing changes", async () => {

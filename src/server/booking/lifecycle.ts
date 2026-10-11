@@ -39,8 +39,9 @@ import { cancelReservation } from "./reservations";
  * first; waiting for the driver is free. The plan is redone, so the rent lock drops to the
  * days held (pricing-spec.md §6a). If another borrower has reserved the pair it goes to them
  * by direct handoff, unless ending early gave them an offer of new dates they haven't
- * answered yet: then it waits here (if they turn it down, a driver collects it). With no
- * reservation it goes back to the merchant.
+ * answered yet: then it waits here. With no reservation it goes back to the merchant, unless
+ * a reservation on it was declined after an early return (`holdForNext`): then it waits
+ * here, free, until a new borrower books it.
  */
 export async function endRental(
   borrowerId: string,
@@ -98,9 +99,12 @@ export async function endRental(
         rentalItemId: item.id,
         link: "/rentals",
         title: `${item.shoe.brand} ${item.shoe.model}: your rental has ended`,
-        body:
-          `Your term ended on ${formatDate(dayToDate(lastDay))}. A driver will collect the pair; ` +
-          `you aren't charged for the days until they come.`,
+        body: item.holdForNext
+          ? `Your term ended on ${formatDate(dayToDate(lastDay))}. Please keep the pair safe ` +
+            `for now: as soon as the next borrower books it, a driver takes it straight to ` +
+            `them. You aren't charged for these days.`
+          : `Your term ended on ${formatDate(dayToDate(lastDay))}. A driver will collect the ` +
+            `pair; you aren't charged for the days until they come.`,
       });
     }
 
@@ -135,6 +139,10 @@ export async function endRental(
         toAddress: next.rental.deliveryAddress,
       });
       return { delivery, cancelled };
+    }
+    if (item.holdForNext && !endOfLife) {
+      // A reservation was declined after an early return: keep it here for the next booking.
+      return { delivery: null, cancelled };
     }
     const delivery = await requestDelivery(tx, {
       type: "COLLECT",

@@ -289,6 +289,10 @@ model RentalItem {
   termEndDay        DateTime?        @db.Date
   /// When the borrower gave notice of an early return (the new last day is termEndDay)
   earlyReturnAt     DateTime?
+  /// A reservation on this pair was declined (or not answered) after an early return: when
+  /// this holding ends the pair stays with the borrower, free, until a new borrower books it,
+  /// then goes to them by direct handoff (never back to the merchant meanwhile)
+  holdForNext       Boolean          @default(false)
   /// The plan (pricing-spec.md §6a): first day, wear before and after the planned term, and
   /// its rent. For a reservation these are what the borrower agreed to.
   plannedFirstDay   DateTime?        @db.Date

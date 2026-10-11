@@ -17,21 +17,24 @@ import { replan } from "./plan";
  * would start earlier (and usually cost more, as the pair has less wear), so the borrower
  * gets an offer of the new dates and price (in the app and by email, `offerResponseHours`
  * to answer): accept and it is handed over after the holder's new last day; reject, or let
- * it expire, and the reservation is cancelled, all its tokens unlocked, and the pair goes
- * back to the merchant.
+ * it expire, and the reservation is cancelled and all its tokens unlocked. The pair then
+ * stays with its holder, free, once their term ends (`holdForNext`), until a new borrower
+ * books it; that booking hands it over straight away.
  */
 
 /**
  * Cancel a reservation that hasn't started: unlock its deposit and rent estimate (refunding
- * anything already charged), tell the borrower why, and plan their other pairs again. Call
- * `finishRentalIfDone(rentalId)` after the transaction.
+ * anything already charged), tell the borrower why, and plan their other pairs again. With
+ * `holdPair` (a declined or expired offer) the holder's pair is kept for the next booking
+ * instead of going back to the merchant. Call `finishRentalIfDone(rentalId)` after the
+ * transaction.
  */
 export async function cancelReservation(
   tx: Tx,
   itemId: string,
   reason: string,
   now: Date,
-  options: { tell?: boolean } = {},
+  options: { tell?: boolean; holdPair?: boolean } = {},
 ) {
   const item = await tx.rentalItem.findUniqueOrThrow({
     where: { id: itemId },
@@ -54,6 +57,7 @@ export async function cancelReservation(
     .plus(toD(item.rentPaid));
   await releaseRent(tx, item.id, `Reservation cancelled: ${name}`);
   await unlockPairValue(tx, item.id, `Reservation cancelled: ${name}`);
+  if (options.holdPair) await holdForNextBooking(tx, item.shoeId, name);
 
   const left = await tx.rentalItem.findMany({
     where: { rentalId: item.rentalId, id: { not: item.id } },
@@ -83,6 +87,34 @@ export async function cancelReservation(
     });
   }
   return item;
+}
+
+/**
+ * Keep a pair with its holder for the next booking (pricing-spec.md §6a): when their holding
+ * ends it isn't collected; it waits with them, free, until a new borrower books it. A holder
+ * who has already ended and is waiting is told now; one still in their term is told when it
+ * ends.
+ */
+async function holdForNextBooking(tx: Tx, shoeId: string, name: string) {
+  const holders = await tx.rentalItem.findMany({
+    where: { shoeId, status: { in: ["ACTIVE", "RETURNING"] } },
+    include: { rental: true },
+  });
+  for (const h of holders) {
+    await tx.rentalItem.update({ where: { id: h.id }, data: { holdForNext: true } });
+    if (h.status !== "RETURNING") continue;
+    await notify(tx, {
+      userId: h.rental.borrowerId,
+      kind: "TERM_ENDED",
+      rentalItemId: h.id,
+      link: "/rentals",
+      title: `${name}: please keep it for the next borrower`,
+      body:
+        `The borrower who reserved your ${name} isn't taking it early, so please keep it safe ` +
+        `for now. As soon as someone else books it, a driver takes it straight to them. You ` +
+        `aren't charged for these days.`,
+    });
+  }
 }
 
 /** The holder's pair, if they have ended and it is waiting with them (no driver booked). */
@@ -117,23 +149,6 @@ export async function handOffIfWaiting(tx: Tx, shoeId: string) {
     fromRentalItemId: giver.id,
     fromAddress: giver.rental.deliveryAddress,
     toAddress: next.rental.deliveryAddress,
-  });
-}
-
-/**
- * If a pair's holder has ended and is waiting with it and nobody has reserved it any more
- * (an offer was turned down or ran out), send a driver to take it back to the merchant.
- */
-export async function collectIfWaiting(tx: Tx, shoeId: string) {
-  const holder = await waitingHolder(tx, shoeId);
-  if (!holder) return null;
-  const queued = await tx.rentalItem.count({ where: { shoeId, status: "WAITING_HANDOFF" } });
-  if (queued > 0) return null;
-  return requestDelivery(tx, {
-    type: "COLLECT",
-    rentalItemId: holder.id,
-    fromAddress: holder.rental.deliveryAddress,
-    toAddress: holder.shoe.pickupAddress,
   });
 }
 
@@ -182,20 +197,17 @@ export async function acceptOffer(borrowerId: string, itemId: string, now = new 
   await flushEmails(now);
 }
 
-/** Cancel a reservation whose offer wasn't taken, and send the pair home if it's waiting. */
+/** Cancel a reservation whose offer wasn't taken; the pair waits with its holder. */
 async function dropOffer(itemId: string, rentalId: string, reason: string, now: Date) {
-  await db.$transaction(async (tx) => {
-    const item = await cancelReservation(tx, itemId, reason, now);
-    if (item) await collectIfWaiting(tx, item.shoeId);
-  });
+  await db.$transaction((tx) => cancelReservation(tx, itemId, reason, now, { holdPair: true }));
   await finishRentalIfDone(rentalId);
   await flushEmails(now);
 }
 
 /**
  * The borrower turns the new dates and price down (or wants to keep their original dates,
- * which we can't hold): the reservation is cancelled, all its tokens unlocked, and the pair
- * goes back to the merchant when its holder's term ends.
+ * which we can't hold): the reservation is cancelled and all its tokens unlocked. The pair
+ * stays with its holder until a new borrower books it.
  */
 export async function rejectOffer(borrowerId: string, itemId: string, now = new Date()) {
   const item = await db.$transaction((tx) => findOffer(tx, borrowerId, itemId, now));

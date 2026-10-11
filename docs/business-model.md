@@ -278,6 +278,7 @@ The MVP proves the core loop in one city; Phase 2 starts once the pilot is live 
 - [ ] Payment gateway, and whether it supports pre-authorisation
 - [ ] Platform name and brand
 - [ ] How long a reserved-next borrower has to accept a higher price after an early return (24 hours for now, `offerResponseHours`)
-- [x] A pair whose reserved-next borrower turns down an early handover (or doesn't answer) goes back to the merchant; the reservation is cancelled and unlocked (decided 2026-10-11)
+- [x] A pair whose reserved-next borrower turns down an early handover (or doesn't answer) stays with its holder, free, until a new borrower books it; the reservation is cancelled and unlocked (decided 2026-10-11)
+- [ ] How long such a pair may wait at a borrower's home before it is collected anyway (no limit for now: it waits until someone books it)
 - [x] Reservations open from the holder's day 1, not only in the last 10 days (decided 2026-10-11)
 - [ ] Email provider for notices (a mock mailer for now)
