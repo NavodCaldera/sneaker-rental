@@ -3,18 +3,47 @@ import { D } from "../decimal";
 import type { PricingSettings } from "./settings";
 
 /**
- * Wear-based price curve for one shoe (docs/pricing-spec.md "Curve").
- * All values are unrounded Decimals.
+ * How a shoe's price falls with wear; the merchant picks one per listing (pricing-spec.md §2).
+ * - `LOGISTIC` (S-curve): the price stays high while the pair is fresh, falls fastest around
+ *   the midpoint m, then levels off at the floor.
+ * - `EXPONENTIAL`: Q(w) = q^(w/L) = e^(−λw), falling fastest when new and reaching the floor q
+ *   at L. Same floor and lifetime target R, so it earns the same in total, spread differently:
+ *   a brand-new pair costs more, a part-worn pair less, and a well-worn pair more.
  */
-export interface CurveParams {
-  V: D;
-  L: D;
-  /** Target lifetime income R = (1 + μm + μp) · V */
-  R: D;
+export type PricingMethod = "LOGISTIC" | "EXPONENTIAL";
+
+export const PRICING_METHODS: readonly PricingMethod[] = ["LOGISTIC", "EXPONENTIAL"];
+
+/** Logistic shape: midpoint, steepness and precomputed normalisation terms. */
+export interface LogisticShape {
+  method: "LOGISTIC";
   /** Midpoint m = midpointRatio · L */
   m: D;
   /** Steepness β = baseSteepness · refLife / L */
   beta: D;
+  readonly S0: D;
+  readonly SL: D;
+  readonly IS0: D;
+}
+
+/** Exponential shape: decay rate λ = ln(1 / q) / L, so Q(L) = e^(−λL) = q. */
+export interface ExponentialShape {
+  method: "EXPONENTIAL";
+  lambda: D;
+}
+
+export type CurveShape = LogisticShape | ExponentialShape;
+
+/**
+ * Wear-based price curve for one shoe (docs/pricing-spec.md "Curve").
+ * All values are unrounded Decimals.
+ */
+export interface CurveParams {
+  method: PricingMethod;
+  V: D;
+  L: D;
+  /** Target lifetime income R = (1 + μm + μp) · V */
+  R: D;
   /** Floor q */
   q: D;
   /** Curve area A = IQ(L) */
@@ -23,10 +52,7 @@ export interface CurveParams {
   K: D;
   /** Wear past L is charged at P(L) (settings.chargePastLife); otherwise it earns nothing */
   pastLife: boolean;
-  // Precomputed normalisation terms
-  readonly S0: D;
-  readonly SL: D;
-  readonly IS0: D;
+  shape: CurveShape;
 }
 
 const ONE = new D(1);
@@ -69,30 +95,50 @@ export function validateListing(
   }
 }
 
+/** Shape of the curve for a lifespan L and floor q, by pricing method. */
+function curveShape(method: PricingMethod, l: D, q: D, settings: PricingSettings): CurveShape {
+  if (method === "EXPONENTIAL") {
+    // q^(w/L) needs 0 < q < 1: a floor of 0 never arrives and a floor of 1 never falls.
+    if (!q.gt(0) || !q.lt(1))
+      throw new RangeError("Exponential decay needs a floor between 0 and 1");
+    return { method, lambda: ONE.div(q).ln().div(l) };
+  }
+  const m = new D(settings.midpointRatio).times(l);
+  const beta = new D(settings.baseSteepness).times(settings.refLife).div(l);
+  return {
+    method,
+    m,
+    beta,
+    S0: logistic(new D(0), m, beta),
+    SL: logistic(l, m, beta),
+    IS0: logisticIntegral(new D(0), m, beta),
+  };
+}
+
+/**
+ * The curve for a shoe of value V and lifespan L, priced with its settings snapshot and the
+ * pricing method its merchant picked (S-curve unless they chose otherwise).
+ */
 export function curveParams(
   V: Decimal.Value,
   L: Decimal.Value,
   settings: PricingSettings,
+  method: PricingMethod = "LOGISTIC",
 ): CurveParams {
   const v = new D(V);
   const l = new D(L);
   if (!v.gt(0)) throw new RangeError("Declared value must be greater than 0");
   if (!l.gt(0)) throw new RangeError("Lifespan must be greater than 0");
+  if (!PRICING_METHODS.includes(method)) throw new RangeError(`Unknown pricing method ${method}`);
 
   const q = new D(settings.floor);
-  const m = new D(settings.midpointRatio).times(l);
-  const beta = new D(settings.baseSteepness).times(settings.refLife).div(l);
-  const S0 = logistic(new D(0), m, beta);
-  const SL = logistic(l, m, beta);
-  const IS0 = logisticIntegral(new D(0), m, beta);
+  const shape = curveShape(method, l, q, settings);
   const R = targetIncome(v, settings);
-
-  const partial = { V: v, L: l, R, m, beta, q, S0, SL, IS0 };
-  const A = integralAt(partial, l);
-  return { ...partial, A, K: R.div(A), pastLife: settings.chargePastLife };
+  const A = integralAt({ L: l, q, shape }, l);
+  return { method, V: v, L: l, R, q, A, K: R.div(A), pastLife: settings.chargePastLife, shape };
 }
 
-type CurveShape = Pick<CurveParams, "L" | "m" | "beta" | "q" | "S0" | "SL" | "IS0">;
+type CurveCore = Pick<CurveParams, "L" | "q" | "shape">;
 
 function clampWear(p: Pick<CurveParams, "L">, w: Decimal.Value): D {
   const x = new D(w);
@@ -100,24 +146,43 @@ function clampWear(p: Pick<CurveParams, "L">, w: Decimal.Value): D {
   return D.min(x, p.L);
 }
 
-function integralAt(p: CurveShape, w: Decimal.Value): D {
+/** e^(−λx), exactly q at L so P(L) = K · q to the last digit (as on the S-curve). */
+function decay(p: CurveCore, lambda: D, x: D): D {
+  return x.eq(p.L) ? p.q : lambda.times(x).neg().exp();
+}
+
+/** Q at x in [0, L]. */
+function qualityAt(p: CurveCore, x: D): D {
+  const s = p.shape;
+  if (s.method === "EXPONENTIAL") return decay(p, s.lambda, x);
+  const g = logistic(x, s.m, s.beta);
+  return p.q.plus(ONE.minus(p.q).times(g.minus(s.SL)).div(s.S0.minus(s.SL)));
+}
+
+function integralAt(p: CurveCore, w: Decimal.Value): D {
   const x = clampWear(p, w);
-  const span = p.S0.minus(p.SL);
-  const logisticPart = logisticIntegral(x, p.m, p.beta).minus(p.IS0).minus(p.SL.times(x));
+  const s = p.shape;
+  if (s.method === "EXPONENTIAL") {
+    // ∫₀ˣ e^(−λt) dt = (1 − e^(−λx)) / λ
+    return ONE.minus(decay(p, s.lambda, x)).div(s.lambda);
+  }
+  const span = s.S0.minus(s.SL);
+  const logisticPart = logisticIntegral(x, s.m, s.beta).minus(s.IS0).minus(s.SL.times(x));
   return p.q.times(x).plus(ONE.minus(p.q).times(logisticPart).div(span));
 }
 
 /**
- * Normalised curve Q(w) = q + (1 − q) · (S(w) − S(L)) / (S(0) − S(L)).
- * Q(0) = 1, Q(L) = q. Beyond L it stays at q when wear past the lifespan is charged
- * (`pastLife`), and is 0 otherwise (the reference engine: the shoe stops earning).
+ * Normalised curve, Q(0) = 1 and Q(L) = q:
+ * - S-curve: Q(w) = q + (1 − q) · (S(w) − S(L)) / (S(0) − S(L));
+ * - exponential: Q(w) = e^(−λw) = q^(w/L).
+ * Beyond L it stays at q when wear past the lifespan is charged (`pastLife`), and is 0
+ * otherwise (the reference engine: the shoe stops earning).
  */
 export function Q(p: CurveParams, w: Decimal.Value): D {
   const x = new D(w);
   if (x.lt(0)) throw new RangeError("Wear cannot be negative");
   if (x.gt(p.L)) return p.pastLife ? p.q : new D(0);
-  const s = logistic(x, p.m, p.beta);
-  return p.q.plus(ONE.minus(p.q).times(s.minus(p.SL)).div(p.S0.minus(p.SL)));
+  return qualityAt(p, x);
 }
 
 /** IQ(w) = ∫₀ʷ Q, with w clamped to L. A = IQ(L). */
