@@ -1,8 +1,9 @@
 import "server-only";
 import { z } from "zod";
 import { D } from "@/lib/decimal";
-import type { PhotoKind, Prisma } from "@/generated/prisma/client";
+import type { Audience, PhotoKind, Prisma } from "@/generated/prisma/client";
 import { validateListing } from "@/lib/pricing";
+import { EXPERIENCES, LISTING_AUDIENCES, audiencesFor } from "@/lib/shoe-style";
 import { db } from "../db";
 import { type SettingsRow, getActiveSettings } from "../settings";
 import { checkPhoto, savePhoto } from "../storage";
@@ -20,7 +21,20 @@ export const LISTING_PHOTOS: { kind: PhotoKind; label: string }[] = [
 const MONEY_FORMAT = /^\d+(\.\d{1,2})?$/;
 const WEAR_FORMAT = /^\d+(\.\d{1,2})?$/;
 
-export const CATEGORIES = ["Running", "Lifestyle", "Basketball", "Skate", "Training", "Other"];
+const AUDIENCE_VALUES = LISTING_AUDIENCES.map((a) => a.value) as [Audience, ...Audience[]];
+
+/** Who a pair is for, and an experience that audience offers (src/lib/shoe-style.ts). */
+export const styleSchema = z
+  .object({
+    audience: z.enum(AUDIENCE_VALUES, { error: "Choose who it's for" }),
+    experience: z.string({ error: "Choose the experience" }).trim(),
+  })
+  .refine((s) => EXPERIENCES[s.audience].includes(s.experience), {
+    message: "Choose an experience from the list",
+    path: ["experience"],
+  });
+
+export type StyleInput = z.infer<typeof styleSchema>;
 
 /**
  * Listing form. Lifespan limits come from settings (OPEN DECISION, §10), so the schema is
@@ -32,7 +46,8 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
       brand: z.string().trim().min(1, "Enter the brand").max(60),
       model: z.string().trim().min(1, "Enter the model").max(80),
       size: z.string().trim().min(1, "Enter the size").max(20),
-      category: z.enum(CATEGORIES as [string, ...string[]]),
+      audience: z.enum(AUDIENCE_VALUES, { error: "Choose who it's for" }),
+      experience: z.string({ error: "Choose the experience" }).trim(),
       description: z.string().trim().max(1000).optional().or(z.literal("")),
       value: z
         .string()
@@ -61,6 +76,10 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
         .optional()
         .transform((v) => v || "0")
         .refine((v) => WEAR_FORMAT.test(v), "Enter wear-days, up to 2 decimals"),
+    })
+    .refine((s) => EXPERIENCES[s.audience].includes(s.experience), {
+      message: "Choose an experience from the list",
+      path: ["experience"],
     })
     .refine((s) => !WEAR_FORMAT.test(s.initialWear) || new D(s.initialWear).lt(s.lifespanDays), {
       message: "Wear used must be less than the lifespan",
@@ -177,6 +196,15 @@ async function ownShoe(merchantId: string, shoeId: string) {
   return shoe;
 }
 
+/** Who a pair is for and its experience: the merchant can change these at any time. */
+export async function updateShoeStyle(merchantId: string, shoeId: string, input: StyleInput) {
+  await ownShoe(merchantId, shoeId);
+  return db.shoe.update({
+    where: { id: shoeId },
+    data: { audience: input.audience, experience: input.experience },
+  });
+}
+
 /**
  * Draft → Available. Needs a verified merchant with a payout account, and all five photos.
  * From now on the shoe is priced with the settings version active at publishing.
@@ -262,14 +290,22 @@ function browsableWhere(): Prisma.ShoeWhereInput {
   };
 }
 
-export type BrowseFilters = { size?: string; brand?: string; category?: string; q?: string };
+export type BrowseFilters = {
+  size?: string;
+  brand?: string;
+  /** A shopping tab: Men and Women include Unisex pairs */
+  audience?: Audience;
+  experience?: string;
+  q?: string;
+};
 
 export async function browseShoes(filters: BrowseFilters) {
   const where: Prisma.ShoeWhereInput = {
     AND: [browsableWhere()],
     ...(filters.size && { size: filters.size }),
     ...(filters.brand && { brand: filters.brand }),
-    ...(filters.category && { category: filters.category }),
+    ...(filters.audience && { audience: { in: audiencesFor(filters.audience) } }),
+    ...(filters.experience && { experience: filters.experience }),
     ...(filters.q && {
       OR: [
         { brand: { contains: filters.q, mode: "insensitive" } },
@@ -291,14 +327,13 @@ export async function browseShoes(filters: BrowseFilters) {
 export async function browseFacets() {
   const shoes = await db.shoe.findMany({
     where: browsableWhere(),
-    select: { size: true, brand: true, category: true },
+    select: { size: true, brand: true },
   });
   const uniq = (xs: string[]) =>
     [...new Set(xs)].sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
   return {
     sizes: uniq(shoes.map((s) => s.size)),
     brands: uniq(shoes.map((s) => s.brand)),
-    categories: uniq(shoes.map((s) => s.category)),
   };
 }
 

@@ -15,7 +15,8 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
   await page.getByLabel("Brand").fill("Saucony");
   await page.getByLabel("Model").fill("Endorphin Speed 4");
   await page.getByLabel("Size").fill("UK 11");
-  await page.getByLabel("Category").selectOption("Running");
+  await page.getByLabel("Who it's for").selectOption("Men");
+  await page.getByLabel("Experience").selectOption("Morning Run");
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
     await page.getByLabel(`${view} photo`, { exact: true }).setInputFiles({
       name: `${view}.png`,
@@ -57,7 +58,8 @@ test("a merchant lists an upgraded second-hand pair; borrowers see its condition
   await page.getByLabel("Brand").fill("Adidas");
   await page.getByLabel("Model").fill("Ultraboost Restored");
   await page.getByLabel("Size").fill("UK 8");
-  await page.getByLabel("Category").selectOption("Running");
+  await page.getByLabel("Who it's for").selectOption("Men");
+  await page.getByLabel("Experience").selectOption("Morning Run");
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
     await page.getByLabel(`${view} photo`, { exact: true }).setInputFiles({
       name: `${view}.png`,

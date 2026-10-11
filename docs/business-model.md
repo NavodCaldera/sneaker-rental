@@ -47,7 +47,7 @@ The merchant enters three things and the platform computes every price for the s
 | Photos (front, side, sole, inside, box) | 5 photos | Listing page and the condition baseline |
 | Declared value V | 6,000 LKR | Target income R |
 | Expected lifespan L (wear-days) | 365 | Length of the price curve |
-| Size, brand, model, category | UK 9, running | Search and filters |
+| Size, brand, model, who it's for, experience | UK 9, Men, Morning Run | Search and filters |
 | Condition: brand new, second-hand, or second-hand upgraded (and what was upgraded) | Second-hand, upgraded: new insoles | Shown to borrowers on the listing and in Browse (decided 2026-10-11) |
 | Wear already used (second-hand only) | 60 wear-days | Where the pair starts on the price curve |
 

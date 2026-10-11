@@ -102,6 +102,15 @@ enum Grade {
   D
 }
 
+/// Who a pair is for. Unisex pairs show under Men and under Women.
+enum Audience {
+  MEN
+  WOMEN
+  UNISEX
+  BOYS
+  GIRLS
+}
+
 /// The condition a merchant declares when listing a pair
 enum ShoeCondition {
   /// Brand new, never worn
@@ -118,7 +127,10 @@ model Shoe {
   brand             String
   model             String
   size              String
-  category          String
+  /// Who it's for (shopping tabs: Men, Women, Boys, Girls)
+  audience          Audience
+  /// The experience it's made for, e.g. "Night Out" (lists in src/lib/shoe-style.ts)
+  experience        String
   description       String?
   /// Declared value V (LKR)
   value             Decimal       @db.Decimal(14, 2)

@@ -5,6 +5,7 @@ import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { Card } from "@/components/ui";
 import { D } from "@/lib/decimal";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { styleLabel } from "@/lib/shoe-style";
 import { conditionLabel } from "@/lib/shoe-condition";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { getActiveSettings } from "@/server/settings";
@@ -68,7 +69,7 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
             {shoe.brand} {shoe.model}
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-subtle">
-            {shoe.size} · {shoe.category} · {conditionLabel(shoe.condition)} ·{" "}
+            {shoe.size} · {styleLabel(shoe)} · {conditionLabel(shoe.condition)} ·{" "}
             {shoe.merchant.businessName}
             <ShoeStatusBadge status={shoe.status} />
           </p>

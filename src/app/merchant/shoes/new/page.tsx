@@ -3,7 +3,6 @@ import { PageHeader } from "@/components/ui";
 import { fullAddress } from "@/lib/address";
 import { requireUser } from "@/server/auth/session";
 import {
-  CATEGORIES,
   LISTING_PHOTOS,
   daysToMonths,
   getMerchantForUser,
@@ -25,7 +24,6 @@ export default async function NewShoePage() {
         description="Saved as a draft. You'll see its price curve before you publish."
       />
       <NewShoeForm
-        categories={CATEGORIES}
         photoSlots={LISTING_PHOTOS}
         lifespanMin={limits.minLifespanDays}
         lifespanMax={limits.maxLifespanDays}
