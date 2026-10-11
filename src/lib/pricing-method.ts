@@ -23,7 +23,7 @@ export const PRICING_METHOD_OPTIONS: {
     label: "Exponential decay",
     short: "Exponential",
     description:
-      "Highest when brand new and falls fastest at first, then more gently. Well-worn pairs stay pricier than on the S-curve.",
+      "Highest when new and falls fastest at first, then more gently. Well-worn pairs stay pricier than on the S-curve.",
   },
 ];
 

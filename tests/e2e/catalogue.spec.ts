@@ -66,7 +66,7 @@ test("a merchant picks exponential decay, can switch it as a draft, and it's fix
   await page.goto("/merchant/shoes/new");
   await page.getByLabel("Brand").fill("Hoka");
   await page.getByLabel("Model").fill("Clifton Decay");
-  await page.getByLabel("Size").fill("UK 10");
+  await page.getByLabel("Size", { exact: true }).fill("10");
   await page.getByLabel("Who it's for").selectOption("Men");
   await page.getByLabel("Experience").selectOption("Morning Run");
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
@@ -79,10 +79,10 @@ test("a merchant picks exponential decay, can switch it as a draft, and it's fix
   await page.getByLabel("Declared value (LKR)").fill("6000");
   await page.getByLabel("Expected lifespan (wear-days)").fill("365");
   // S-curve by default; exponential decay is dearer new and ends at the same 30% of new.
-  await expect(page.getByRole("radio", { name: /S-curve/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /^S-curve/ })).toBeChecked();
   await expect(page.getByText("LKR 28.92 / wear-day")).toBeVisible();
   await page.getByText("Exponential decay", { exact: true }).click();
-  await expect(page.getByRole("radio", { name: /Exponential decay/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /^Exponential decay/ })).toBeChecked();
   await expect(page.getByText("LKR 33.93 / wear-day")).toBeVisible();
   await expect(page.getByText("LKR 10.18 / wear-day")).toBeVisible();
   await expect(page.getByText("LKR 6,600.00")).toBeVisible(); // same lifetime share
