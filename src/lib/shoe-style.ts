@@ -7,13 +7,12 @@ import type { Audience } from "@/generated/prisma/enums";
  */
 
 /** The tabs borrowers shop by, in order. A Unisex pair shows under Men and under Women. */
-export const SHOP_AUDIENCES: { value: Exclude<Audience, "UNISEX">; label: string; icon: string }[] =
-  [
-    { value: "MEN", label: "Men", icon: "👨" },
-    { value: "WOMEN", label: "Women", icon: "👩" },
-    { value: "BOYS", label: "Boys", icon: "👦" },
-    { value: "GIRLS", label: "Girls", icon: "👧" },
-  ];
+export const SHOP_AUDIENCES: { value: Exclude<Audience, "UNISEX">; label: string }[] = [
+  { value: "MEN", label: "Men" },
+  { value: "WOMEN", label: "Women" },
+  { value: "BOYS", label: "Boys" },
+  { value: "GIRLS", label: "Girls" },
+];
 
 /** What a merchant can choose when listing, in form order. */
 export const LISTING_AUDIENCES: { value: Audience; label: string }[] = [
@@ -23,24 +22,6 @@ export const LISTING_AUDIENCES: { value: Audience; label: string }[] = [
   { value: "BOYS", label: "Boys" },
   { value: "GIRLS", label: "Girls" },
 ];
-
-export const EXPERIENCE_ICONS: Record<string, string> = {
-  "Morning Run": "🏃",
-  "Work Day": "💼",
-  "Game Day": "🏀",
-  "Gym Session": "🏋️",
-  "Studio & Gym": "🧘",
-  "Brunch & Errands": "☕",
-  "Night Out": "🌃",
-  "Street Session": "🛹",
-  "Weekend Stroll": "🌿",
-  "Big Occasion": "💍",
-  "School Day": "🎒",
-  "Sports Day": "⚽",
-  Playtime: "🛝",
-  "Party Time": "🎉",
-  "Weekend Fun": "🌳",
-};
 
 const MEN = [
   "Morning Run",
@@ -73,7 +54,7 @@ export const EXPERIENCES: Record<Audience, string[]> = {
 };
 
 /** Every experience, for the Browse filter. */
-export const ALL_EXPERIENCES = Object.keys(EXPERIENCE_ICONS);
+export const ALL_EXPERIENCES = [...new Set([...EXPERIENCES.UNISEX, ...KIDS])];
 
 /** The listings a shopping tab shows: Men and Women include Unisex pairs. */
 export function audiencesFor(tab: Audience): Audience[] {

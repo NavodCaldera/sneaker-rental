@@ -5,13 +5,7 @@ import { ShoeRow, ShoeRowItem } from "@/components/shoe-row";
 import { D } from "@/lib/decimal";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
 import { conditionShort } from "@/lib/shoe-condition";
-import {
-  EXPERIENCES,
-  EXPERIENCE_ICONS,
-  SHOP_AUDIENCES,
-  parseShopAudience,
-  styleLabel,
-} from "@/lib/shoe-style";
+import { EXPERIENCES, SHOP_AUDIENCES, parseShopAudience, styleLabel } from "@/lib/shoe-style";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { getCurrentUser } from "@/server/auth/session";
 import { homeFor } from "@/server/auth/service";
@@ -104,22 +98,19 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       <div className="flex flex-col items-center gap-6">
         <nav aria-label="Who it's for" className="w-full overflow-x-auto [scrollbar-width:none]">
           <ul className="mx-auto flex w-max gap-6 px-1 sm:gap-10">
-            {[{ value: undefined, label: "All", icon: "👟" }, ...SHOP_AUDIENCES].map((a) => {
+            {[{ value: undefined, label: "All" }, ...SHOP_AUDIENCES].map((a) => {
               const current = a.value === audience;
               return (
                 <li key={a.label}>
                   <Link
                     href={homeHref({ for: a.value?.toLowerCase() })}
                     aria-current={current ? "page" : undefined}
-                    className={`flex flex-col items-center gap-1 border-b-2 pb-2 text-sm transition ${
+                    className={`block border-b-2 pb-2 text-sm transition ${
                       current
                         ? "border-ink font-semibold text-ink"
                         : "border-transparent text-subtle hover:border-line hover:text-ink"
                     }`}
                   >
-                    <span aria-hidden="true" className="text-2xl">
-                      {a.icon}
-                    </span>
                     {a.label}
                   </Link>
                 </li>
@@ -141,13 +132,12 @@ export default async function Home({ searchParams }: PageProps<"/">) {
                     <Link
                       href={homeHref({ for: forParam, experience: x })}
                       aria-current={current ? "page" : undefined}
-                      className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition ${
+                      className={`block whitespace-nowrap rounded-full border px-4 py-2 text-sm transition ${
                         current
                           ? "border-ink bg-ink font-semibold text-paper"
                           : "border-line text-ink hover:border-ink"
                       }`}
                     >
-                      {x && <span aria-hidden="true">{EXPERIENCE_ICONS[x]}</span>}
                       {x ?? `All ${audienceName}`}
                     </Link>
                   </li>
