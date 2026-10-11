@@ -45,7 +45,7 @@ Conventions:
 
 ## Build order
 
-Status: steps 0–8 are done (MVP complete), and step 9 aligned the app with the rent calculation spec. Steps 10–12 added merchant first, the release discount and the token wallet; step 13 made rentals fixed-term; step 14 made rent post-paid (locked at booking, charged at return) and opened reservations from the holder's day 1. The step branches are on GitHub.
+Status: steps 0–8 are done (MVP complete), and step 9 aligned the app with the rent calculation spec. Steps 10–12 added merchant first, the release discount and the token wallet; step 13 made rentals fixed-term; step 14 made rent post-paid (locked at booking, charged at return) and opened reservations from the holder's day 1; step 15 added the listing condition, then the site got its home page, accounts with one address and city, the blue/white/black palette and day/night mode. All of it is on `main`.
 
 pricing engine → schema and roles → catalogue → booking and wear ledger → payments → logistics → payouts and disputes → polish
 
@@ -77,4 +77,6 @@ Open decisions are listed in §10. When code depends on one, read it from settin
 
 ## Agents
 
-Seven subagents live in `.claude/agents/`, each owning specific directories: `pricing-engine`, `backend-data`, `booking-wear`, `logistics`, `payments-payouts`, `frontend`, `qa-review`. An agent edits only its own directories. Cross-module changes go through the owning agent or an agreed interface. `qa-review` must pass before any merge.
+Seven subagents live in `.claude/agents/`, each owning specific directories: `pricing-engine`, `backend-data`, `booking-wear`, `logistics`, `payments-payouts`, `frontend`, `qa-review`. An agent edits only its own directories. Cross-module changes go through the owning agent or an agreed interface.
+
+**Git workflow (product owner, 2026-10-11): update `main` after every commit, locally and on GitHub.** Work on a short-lived branch (or on `main`), run `npm run check` and `npm run test:int` (and `npm run e2e` when port 3100 is free) before committing, then merge the commit into local `main` (`--no-ff` for a branch) and `git push origin main` straight away. Local `main` and `origin/main` must never be left behind the latest commit. `qa-review` reviews `main` when asked; it no longer gates merges.
