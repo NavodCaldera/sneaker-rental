@@ -10,12 +10,11 @@
  * (accounts, merchants, the first settings version, sample listings and starting tokens):
  * pairs can't be rented before they were listed.
  *
- * - Amaya rents the Puma Suede Classic and the Adidas Samba OG for 30 days, ending in 5 days:
- *   both are "Reserve next" with a small discount.
- * - Ravi rents the Vans Old Skool for 14 days, ending in 2 days: a bigger discount.
- * - Nimal rented the Converse Chuck 70 Hi for 21 days, ending 3 days ago; it was collected,
- *   checked (grade A), his rent charged and the pair cleaned: it is available again at a bigger
- *   discount still.
+ * Every shopping tab gets at least one discounted pair (product owner, 2026-10-12): Men and
+ * Women (the Vans and the Puma, plus the unisex Converse and Samba, which show under both),
+ * Boys (Nike Air Force 1 Kids) and Girls (Skechers Twinkle Toes). See RENTALS below. Pairs still
+ * out are "Reserve next" with a small discount; returned ones were collected, checked (grade A),
+ * the rent charged and the pair cleaned, so they are available at a bigger discount.
  */
 import "dotenv/config";
 import { colomboDay, dayToDate } from "../src/lib/wear-ledger";
@@ -134,26 +133,81 @@ async function datebackSampleData(launch: Date) {
   ]);
 }
 
-async function main() {
-  await datebackSampleData(at(-60));
-  // Nimal: 21 days, delivered 24 days ago, so the term's last day was 3 days ago.
-  const nimal = await rent("nimal@sneakers.test", [["Converse", "Chuck 70 Hi"]], 21, -25);
-  await rent(
-    "amaya@sneakers.test",
-    [
+type DemoRental = {
+  email: string;
+  /** For whom, so every shopping tab has a discounted pair */
+  forTab: string;
+  pairs: [string, string][];
+  plannedDays: number;
+  /** Days from today it was booked; delivered the next day, day 1 the day after that */
+  bookedDay: number;
+  /** Returned at the end of the term (collected, checked and cleaned), or still out */
+  returned: boolean;
+};
+
+/**
+ * The term's last day, in days from today: booked + 1 (delivery) + plannedDays. Each
+ * customer's rentals are booked in date order, after their earlier ones, so a rerun that adds
+ * a rental never books before something already in the database.
+ */
+const lastDayOf = (r: DemoRental) => r.bookedDay + 1 + r.plannedDays;
+
+const RENTALS: DemoRental[] = [
+  // Ends in 5 days: "Reserve next", small discount (Women, and Men/Women for the unisex Samba)
+  {
+    email: "amaya@sneakers.test",
+    forTab: "Women",
+    pairs: [
       ["Puma", "Suede Classic"],
       ["Adidas", "Samba OG"],
     ],
-    30,
-    -26,
-  );
-  await rent("ravi@sneakers.test", [["Vans", "Old Skool"]], 14, -13);
+    plannedDays: 30,
+    bookedDay: -26,
+    returned: false,
+  },
+  // Came back 3 days ago: available, bigger discount (unisex: Men and Women)
+  {
+    email: "nimal@sneakers.test",
+    forTab: "Men and Women",
+    pairs: [["Converse", "Chuck 70 Hi"]],
+    plannedDays: 21,
+    bookedDay: -25,
+    returned: true,
+  },
+  // A parent renting for their son: ends in 4 days
+  {
+    email: "ravi@sneakers.test",
+    forTab: "Boys",
+    pairs: [["Nike", "Air Force 1 Kids"]],
+    plannedDays: 14,
+    bookedDay: -11,
+    returned: false,
+  },
+  // A parent renting for their daughter: came back 2 days ago
+  {
+    email: "amaya@sneakers.test",
+    forTab: "Girls",
+    pairs: [["Skechers", "Twinkle Toes"]],
+    plannedDays: 14,
+    bookedDay: -17,
+    returned: true,
+  },
+  // Ends in 2 days
+  {
+    email: "ravi@sneakers.test",
+    forTab: "Men",
+    pairs: [["Vans", "Old Skool"]],
+    plannedDays: 14,
+    bookedDay: -13,
+    returned: false,
+  },
+];
 
-  if (nimal) {
-    // The daily job ends Nimal's term; a driver brings the pair back; the merchant checks it.
-    await runDailyRentals(at(-2));
-    const [item] = nimal;
-    await deliver(item.id, "COLLECT", at(-2));
+/** The daily job ends the term; a driver brings the pair back; the merchant checks it. */
+async function bringBack(items: { id: string; shoeId: string }[], lastDay: number) {
+  await runDailyRentals(at(lastDay + 1));
+  for (const item of items) {
+    await deliver(item.id, "COLLECT", at(lastDay + 1));
     const shoe = await db.shoe.findUniqueOrThrow({
       where: { id: item.shoeId },
       include: { merchant: true },
@@ -165,17 +219,32 @@ async function main() {
         grade: "A",
         photos: [new File([PNG], "returned.png", { type: "image/png" })],
       },
-      at(-2),
+      at(lastDay + 1),
     );
-    console.log("Nimal's pair is back with the merchant, checked and his rent charged");
   }
-  // The merchant cleans it and puts it back on sale.
-  const returned = await db.shoe.findFirst({
-    where: { brand: "Converse", model: "Chuck 70 Hi", status: "CLEANING" },
-  });
-  if (returned) {
-    await markCleaned(returned.merchantId, returned.id);
-    console.log("Converse Chuck 70 Hi is cleaned and available again");
+}
+
+async function main() {
+  await datebackSampleData(at(-60));
+  const toReturn: { rental: DemoRental; items: { id: string; shoeId: string }[] }[] = [];
+  for (const r of [...RENTALS].sort((a, b) => a.bookedDay - b.bookedDay)) {
+    const items = await rent(r.email, r.pairs, r.plannedDays, r.bookedDay);
+    if (items && r.returned) toReturn.push({ rental: r, items });
+  }
+  for (const { rental, items } of toReturn.sort(
+    (a, b) => lastDayOf(a.rental) - lastDayOf(b.rental),
+  )) {
+    await bringBack(items, lastDayOf(rental));
+    console.log(`${rental.pairs.map((p) => p.join(" ")).join(", ")} came back and was checked`);
+  }
+  // The merchant cleans returned pairs and puts them back on sale.
+  for (const r of RENTALS.filter((x) => x.returned)) {
+    for (const [brand, model] of r.pairs) {
+      const shoe = await db.shoe.findFirst({ where: { brand, model, status: "CLEANING" } });
+      if (!shoe) continue;
+      await markCleaned(shoe.merchantId, shoe.id);
+      console.log(`${brand} ${model} is cleaned and available again (${r.forTab})`);
+    }
   }
   await db.$disconnect();
 }
