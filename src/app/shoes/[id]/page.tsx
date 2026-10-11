@@ -6,6 +6,7 @@ import { ShoeSizePanel } from "@/components/size-bits";
 import { Card } from "@/components/ui";
 import { D } from "@/lib/decimal";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { pricingMethodLabel } from "@/lib/pricing-method";
 import { sizeSummary } from "@/lib/shoe-size";
 import { styleLabel } from "@/lib/shoe-style";
 import { conditionLabel } from "@/lib/shoe-condition";
@@ -58,8 +59,9 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
         <Card>
           <h2 className="mb-1 font-medium">How the price changes</h2>
           <p className="mb-3 text-sm text-subtle">
-            You pay upfront for the days you book, at the price for the pair&apos;s age. The next
-            borrower pays less.
+            {pricingMethodLabel(shoe.pricingMethod)}, picked by the merchant: the price per wear-day
+            falls as the pair wears. Rent is charged when you return the pair, at the price for its
+            wear, and the next borrower pays less.
           </p>
           <CurveChart points={preview.points} currentWear={shoe.committedWear.toString()} />
         </Card>

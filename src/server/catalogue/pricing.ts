@@ -3,6 +3,7 @@ import type Decimal from "decimal.js";
 import { type D, toD } from "@/lib/decimal";
 import {
   type CurveParams,
+  type PricingMethod,
   type PricingSettings,
   catchUpPhi,
   curveParams,
@@ -32,12 +33,15 @@ export type PricedShoe = {
   initialWear: Num;
   collectedSoFar: Num;
   merchantCollected: Num;
+  /** The price curve the merchant picked (S-curve or exponential decay) */
+  pricingMethod: PricingMethod;
   settings: SettingsRow;
 };
 
 /**
  * A shoe's curve, built from the settings version it was listed under (pricing-spec.md
- * "Inputs"), plus what it has collected over its whole life including F(w₀).
+ * "Inputs") and the pricing method its merchant picked, plus what it has collected over its
+ * whole life including F(w₀).
  */
 export function shoeCurve(shoe: PricedShoe): {
   params: CurveParams;
@@ -45,7 +49,7 @@ export function shoeCurve(shoe: PricedShoe): {
   collected: D;
 } {
   const settings = toPricingSettings(shoe.settings);
-  const params = curveParams(toD(shoe.value), shoe.lifespanDays, settings);
+  const params = curveParams(toD(shoe.value), shoe.lifespanDays, settings, shoe.pricingMethod);
   const collected = lifetimeCollected(params, toD(shoe.initialWear), toD(shoe.collectedSoFar));
   return { params, settings, collected };
 }
@@ -143,6 +147,7 @@ export function shoePricing(shoe: PricedShoe, discount: Decimal.Value = 0): Shoe
 }
 
 export type CurvePreview = {
+  method: PricingMethod;
   priceNew: string;
   priceEnd: string;
   lifetimeIncome: string;
@@ -151,15 +156,17 @@ export type CurvePreview = {
   points: { wear: string; price: string }[];
 };
 
-/** The price curve a merchant sees before publishing (§5.1). */
+/** The price curve a merchant sees before publishing (§5.1), for the method they pick. */
 export function curvePreview(
   value: Decimal.Value,
   lifespanDays: Decimal.Value,
   settings: PricingSettings,
+  method: PricingMethod = "LOGISTIC",
 ): CurvePreview {
-  const p = curveParams(value, lifespanDays, settings);
+  const p = curveParams(value, lifespanDays, settings, method);
   const shares = splitCharge(settings, p.R);
   return {
+    method,
     priceNew: p.K.toString(),
     priceEnd: priceAt(p, p.L).toString(),
     lifetimeIncome: p.R.toString(),
@@ -172,7 +179,12 @@ export function curvePreview(
   };
 }
 
-/** The curve of a stored shoe, with its own settings snapshot. */
+/** The curve of a stored shoe, with its own settings snapshot and pricing method. */
 export function shoeCurvePreview(shoe: PricedShoe): CurvePreview {
-  return curvePreview(toD(shoe.value), shoe.lifespanDays, toPricingSettings(shoe.settings));
+  return curvePreview(
+    toD(shoe.value),
+    shoe.lifespanDays,
+    toPricingSettings(shoe.settings),
+    shoe.pricingMethod,
+  );
 }

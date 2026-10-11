@@ -60,6 +60,8 @@ The merchant enters three things and the platform computes every price for the s
 
 For a 6,000 LKR shoe with L = 365 this gives K = 28.92 LKR per wear-day when new and 8.68 LKR at end of life.
 
+**The merchant picks the pricing method** (decided 2026-10-11). The curve above is the **S-curve (logistic decay)** and is the default. A merchant can instead price a listing on **exponential decay**, Q(w) = q^(w ÷ L): the same floor q, target R and end-of-life price share, but the price falls fastest when the pair is new (A = 0.5814 × L; the 6,000 LKR / 365-day shoe costs 33.93 LKR new and 10.18 LKR at end of life). They choose on the listing form with a live preview and can change it while the listing is a draft; it is fixed once published. Details: pricing-spec.md §2.
+
 **Wear.** A wear-day is one day a pair is held. A borrower holding n pairs on a day adds 1 ÷ n wear-day to each, so holding four pairs costs about the same per day as holding one. The bill is worked out at return from the wear actually added.
 
 **Discounts.** A discount d is a one-off percentage off the curve price for one rental. The next borrower always starts at the undiscounted curve price; discounts never stack.
@@ -227,7 +229,7 @@ Create seven agents in `.claude/agents/`, build the pricing engine first, and le
 1. Prices and wear come only from the pricing engine and wear ledger.
 2. Keep values unrounded; round only what is shown or charged, to 2 decimals.
 3. Discounts never stack: always start from the curve price at the shoe's current wear.
-4. Use the exact curve ratios: midpoint m = 200 × L ÷ 365, steepness β = 0.03 × 365 ÷ L, floor q = 0.30.
+4. Use the exact curve ratios: midpoint m = 200 × L ÷ 365, steepness β = 0.03 × 365 ÷ L, floor q = 0.30 (S-curve); λ = ln(1 ÷ q) ÷ L for exponential decay.
 
 **Acceptance tests for the pricing engine** (from the Rental Pricing Formula Guide v2, μm + μp = 0.20)
 

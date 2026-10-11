@@ -1,17 +1,21 @@
 import type { Metadata } from "next";
+import { pricingMethodLabel } from "@/lib/pricing-method";
 import { conditionLabel } from "@/lib/shoe-condition";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { Card, PageHeader } from "@/components/ui";
+import { toD } from "@/lib/decimal";
 import { formatDate, formatLKR, formatWear } from "@/lib/format";
 import { sizeSummary } from "@/lib/shoe-size";
 import { styleLabel } from "@/lib/shoe-style";
 import { requireUser } from "@/server/auth/session";
 import { CatalogueError, getMerchantForUser, getMerchantShoe } from "@/server/catalogue";
 import { shoeCurvePreview, shoePricing } from "@/server/catalogue/pricing";
+import { getActiveSettings } from "@/server/settings";
 import { DraftActions } from "./draft-actions";
+import { PricingMethodForm } from "./pricing-method-form";
 import { StyleForm } from "./style-form";
 
 export const metadata: Metadata = { title: "Shoe" };
@@ -27,6 +31,13 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
   const now = new Date();
   const pricing = shoePricing(shoe);
   const preview = shoeCurvePreview(shoe);
+  // A draft's method can still change; the hint quotes the floor new listings get.
+  const floorPercent =
+    shoe.status === "DRAFT"
+      ? toD((await getActiveSettings()).floor)
+          .times(100)
+          .toString()
+      : "";
 
   return (
     <main className="flex flex-col gap-6">
@@ -40,10 +51,18 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
       />
 
       {shoe.status === "DRAFT" && <DraftActions shoeId={shoe.id} />}
+      {shoe.status === "DRAFT" && (
+        <PricingMethodForm
+          shoeId={shoe.id}
+          method={shoe.pricingMethod}
+          floorPercent={floorPercent}
+        />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <Card>
-          <h2 className="mb-3 font-medium">Price curve</h2>
+          <h2 className="font-medium">Price curve</h2>
+          <p className="mb-3 text-sm text-subtle">{pricingMethodLabel(shoe.pricingMethod)}</p>
           <CurveChart points={preview.points} currentWear={shoe.committedWear.toString()} />
         </Card>
         <Card className="flex flex-col gap-4 text-sm">

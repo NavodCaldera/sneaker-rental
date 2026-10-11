@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { CurveChart } from "@/components/curve-chart";
+import { PricingMethodFields } from "@/components/pricing-method-fields";
 import { SizeFields } from "@/components/size-fields";
 import { StyleFields } from "@/components/style-fields";
 import { Alert, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
-import type { Audience } from "@/generated/prisma/enums";
+import type { Audience, PricingMethod } from "@/generated/prisma/enums";
 import { formatLKR } from "@/lib/format";
 import { SHOE_CONDITIONS } from "@/lib/shoe-condition";
 import type { CurvePreview } from "@/server/catalogue/pricing";
@@ -21,6 +22,7 @@ export function NewShoeForm({
   monthsMin,
   monthsMax,
   pickupAddress,
+  floorPercent,
 }: {
   photoSlots: { kind: string; label: string }[];
   lifespanMin: number;
@@ -29,6 +31,8 @@ export function NewShoeForm({
   monthsMax: number;
   /** The merchant's one address: every pair is picked up from and returned to it */
   pickupAddress: string | null;
+  /** End-of-life price as a percentage of the new price (settings floor q) */
+  floorPercent: string;
 }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(createShoeAction, {});
   const errors = state.fieldErrors ?? {};
@@ -36,7 +40,8 @@ export function NewShoeForm({
   const [lifespan, setLifespan] = useState("365");
   const [condition, setCondition] = useState("NEW");
   const [audience, setAudience] = useState<Audience | "">("");
-  const preview = useCurvePreview(value, lifespan);
+  const [method, setMethod] = useState<PricingMethod>("LOGISTIC");
+  const preview = useCurvePreview(value, lifespan, method);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
   return (
@@ -177,6 +182,12 @@ export function NewShoeForm({
               <Textarea name="upgradeNotes" maxLength={300} required />
             </Field>
           )}
+          <PricingMethodFields
+            value={method}
+            onChange={setMethod}
+            floorPercent={floorPercent}
+            error={errors.pricingMethod}
+          />
         </Card>
 
         <Card>
@@ -224,7 +235,7 @@ function PreviewSummary({ preview }: { preview: CurvePreview }) {
   );
 }
 
-function useCurvePreview(value: string, lifespan: string) {
+function useCurvePreview(value: string, lifespan: string, method: PricingMethod) {
   const [result, setResult] = useState<{ data?: CurvePreview; error?: string }>({});
   useEffect(() => {
     if (!value) return;
@@ -232,7 +243,7 @@ function useCurvePreview(value: string, lifespan: string) {
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/pricing/preview?value=${encodeURIComponent(value)}&lifespan=${encodeURIComponent(lifespan)}`,
+          `/api/pricing/preview?value=${encodeURIComponent(value)}&lifespan=${encodeURIComponent(lifespan)}&method=${method}`,
           { signal: ctrl.signal },
         );
         const body = await res.json();
@@ -245,6 +256,6 @@ function useCurvePreview(value: string, lifespan: string) {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [value, lifespan]);
+  }, [value, lifespan, method]);
   return value ? result : {};
 }

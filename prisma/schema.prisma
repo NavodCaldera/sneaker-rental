@@ -135,6 +135,16 @@ enum SizeSystem {
   US
 }
 
+/// How a pair's price falls with wear; the merchant picks one per listing
+/// (pricing-spec.md §2). Fixed once the pair is published.
+enum PricingMethod {
+  /// S-curve (logistic decay): holds its price early, falls fastest around the midpoint,
+  /// then levels off at the floor q
+  LOGISTIC
+  /// Exponential decay q^(w/L): falls fastest when new, reaching the floor q at L
+  EXPONENTIAL
+}
+
 /// The condition a merchant declares when listing a pair
 enum ShoeCondition {
   /// Brand new, never worn
@@ -192,6 +202,9 @@ model Shoe {
   /// The current or last holder's term end (or the day they ended early): the release
   /// discount counts from it
   releaseDay        DateTime?     @db.Date
+  /// Price curve the merchant picked: S-curve (default) or exponential decay. Can change
+  /// while a draft; fixed once published, so the curve never changes under a rental
+  pricingMethod     PricingMethod @default(LOGISTIC)
   /// Settings version the shoe is priced with: snapshotted when listed, so its curve
   /// never changes under a running rental
   settingsId        String

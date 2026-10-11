@@ -19,6 +19,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 8. **Booking up to the lifespan, charging past it** (§3, §6). A pair with any life left (`committedWear` < L) can be booked for any term. Past L, wear keeps counting and every further wear-day is charged at the end-of-life price P(L) = K · q until the pair is returned, even if the pair then collects more than its target R (`chargePastLife`, on). Once a pair's committed wear reaches L nobody can book it. The reference engine stopped wear and rent at L; its acceptance scenarios still run with `chargePastLife` off.
 9. **Trips are not handled by us.** Whoever receives the pair pays the driver directly in the ride-hailing app: the borrower for deliveries, the next borrower for handoffs, the merchant for returns. No trip fee or booking fee ever goes through tokens.
 10. **Anytime forward booking** (§6a). A pair someone holds can be reserved from the holder's day 1, for a term starting right after the holder's term (direct handoff), priced at the wear the pair will have at the holder's `termEndDay`. If the holder gives notice of an early return, the reserved borrower is offered the earlier start date at the new price (less wear costs more per day), in the app and by email, with `offerResponseHours` (24) to accept. Accept: their plan and rent lock move to the new dates and the pair is handed over after the holder's new last day. Decline, want to keep the original dates, or no answer in time: the reservation is **cancelled**, all its tokens (deposit and rent estimate) unlocked, and the borrower told in the app and by email; the pair stays with the holder, free (no rent, no wear), once their term ends, and is not collected: it waits with them until a new borrower books it, then goes straight to that borrower by direct handoff (`holdForNext`). (Decided 2026-10-11; replaces the 10-day reservation window.)
+11. **The merchant picks the pricing method** (§2). Each listing is priced on either the **S-curve (logistic decay)**, the default and the curve every earlier listing has, or **exponential decay**. Both start at the new price K, end at the same floor q (30% of new) at L, aim for the same target R and charge P(L) = K · q per wear-day past L; only how the price falls in between differs. The merchant chooses on the listing form (with a live preview of each) and can change it while the pair is a draft; once published it is fixed (`Shoe.pricingMethod`), like the settings snapshot, so rent estimates, reservations and the merchant's target never move under a rental. (Decided 2026-10-11.)
 
 ---
 
@@ -30,7 +31,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 |---|---|---|---|
 | `merchantMargin` | μm | 0.10 | Merchant margin on declared value (OPEN DECISION) |
 | `platformMargin` | μp | 0.10 | Platform margin on declared value (OPEN DECISION) |
-| `floor` | q | 0.30 | End-of-life price ÷ new price |
+| `floor` | q | 0.30 | End-of-life price ÷ new price, for both pricing methods. Must be above 0 and below 1 (exponential decay q^(w/L) needs it) |
 | `midpointRatio` | m ÷ L | 200 / 365 | Where in the life quality falls fastest |
 | `baseSteepness` | β at L = refLife | 0.03 | Steepness of the curve |
 | `refLife` | | 365 | Lifespan the curve shape was tuned for |
@@ -55,6 +56,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | Declared value | V | 6,000 LKR |
 | Expected lifespan | L | 365 wear-days |
 | Wear already used, if listed second-hand (`initialWear`) | w₀ | 0 |
+| Pricing method (`pricingMethod`: `LOGISTIC` = S-curve, the default, or `EXPONENTIAL`; §2) | — | `LOGISTIC` |
 | Condition the merchant declares (`condition`: `NEW`, `SECOND_HAND`, `SECOND_HAND_UPGRADED`, plus `upgradeNotes`) | — | `NEW` |
 
 The condition is information for borrowers and never enters the price: a brand-new pair must have w₀ = 0, a second-hand pair (upgraded or not) must have w₀ > 0, and an upgraded pair must say what was upgraded. Two pairs with the same V, L and w₀ cost the same whatever their condition.
@@ -87,6 +89,20 @@ Shoe state: `wear` (w, starts at w₀; settled wear, updated when an item closes
 
 ## 2. The curve (per shoe)
 
+Every curve is a quality Q(w) with Q(0) = 1 and Q(L) = q, scaled to the shoe's lifespan. The merchant picks its shape per listing (`Shoe.pricingMethod`, decision 11); `curveParams(V, L, settings, method)` defaults to the S-curve. Whatever the shape:
+
+```
+IQ(w) = ∫₀ʷ Q                              area under Q from 0 to w
+A     = IQ(L)                              always computed, never a constant
+R     = (1 + μm + μp) × V                  target lifetime income
+K     = R ÷ A                              price per wear-day when new
+P(L)  = K × q                              end-of-life price, also charged past L
+```
+
+so both methods collect R over the life (plus P(L) a wear-day past L), and everything after this section (charges, merchant first, catch-up, remaining value, release discount) works on either curve unchanged.
+
+### 2.1 S-curve: logistic decay (`LOGISTIC`, the default)
+
 Scale the base curve to the shoe's lifespan so every shoe has the same shape:
 
 ```
@@ -97,22 +113,36 @@ H(w)  = w − ln(1 + e^(β(w − m))) ÷ β       antiderivative of G
 a     = (1 − q) ÷ (G(0) − G(L))
 Q(w)  = q + a × (G(w) − G(L))              quality: Q(0) = 1, Q(L) = q
 IQ(w) = q·w + a × [H(w) − H(0) − G(L)·w]   area under Q from 0 to w
-A     = IQ(L)                              ≈ 0.681976 × L; always computed, never the constant
-R     = (1 + μm + μp) × V                  target lifetime income
-K     = R ÷ A                              price per wear-day when new
+A     = IQ(L)                              ≈ 0.681976 × L
 ```
+
+The price stays close to K while the pair is fresh, falls fastest around the midpoint m (55% of L), then levels off towards the floor.
+
+### 2.2 Exponential decay (`EXPONENTIAL`)
+
+```
+λ     = ln(1 ÷ q) ÷ L                      (= 1.2039728 ÷ L for q = 0.30)
+Q(w)  = e^(−λw) = q^(w ÷ L)                quality: Q(0) = 1, Q(L) = q exactly
+IQ(w) = (1 − e^(−λw)) ÷ λ
+A     = (1 − q) ÷ λ = (1 − q) × L ÷ ln(1 ÷ q)   ≈ 0.581408 × L
+```
+
+The price is highest when the pair is brand new and falls fastest straight away, then more gently: compared with the S-curve, a brand-new pair costs more, a part-worn pair less (the curves cross at about 14% of L and again at about 58%), and a well-worn pair more. The S-curve collects about 69% of R in the first half of the life, exponential decay about 65%. The midpoint and steepness settings don't apply. It needs 0 < q < 1 (`curveParams` throws otherwise; the settings form enforces it). At w = L the engine returns q exactly, so P(L) = K × q to the last digit, as on the S-curve.
 
 Numerics: `ln(1 + e^x)` is computed as a stable softplus. Clamp w to [0, L] before use. All arithmetic in decimal.js at precision 40, never JS `number`.
 
 `validateListing(V, L, limits)`: V > 0 and minLife ≤ L ≤ maxLife, or it throws. It runs when a shoe is created and published, with the limits that apply to that merchant (`listingLimits`: the settings, or the merchant's extension). `curveParams` only requires V > 0 and L > 0, so a shoe listed under an extension keeps its curve after the extension is removed.
 
-| 6,000 LKR shoe, L = 365 | Value |
-|---|---|
-| A | 248.9214 |
-| R | 7,200.00 LKR |
-| K (new price per wear-day) | 28.9248 LKR |
-| Price at end of life | 8.6774 LKR |
-| Same shoe, L = 730: A | 497.8428 |
+| 6,000 LKR shoe, L = 365 | S-curve | Exponential decay |
+|---|---|---|
+| A | 248.9214 | 212.2141 |
+| R | 7,200.00 LKR | 7,200.00 LKR |
+| K (new price per wear-day) | 28.9248 LKR | 33.9280 LKR |
+| Price at a quarter of life (w = 91.25) | 28.2214 LKR | 25.1095 LKR |
+| Price at half of life (w = 182.5) | 21.3775 LKR | 18.5831 LKR |
+| Price at three quarters (w = 273.75) | 10.5499 LKR | 13.7531 LKR |
+| Price at end of life, and per wear-day past it | 8.6774 LKR | 10.1784 LKR |
+| Same shoe, L = 730: A | 497.8428 | 424.4282 |
 
 ---
 

@@ -11,6 +11,7 @@ import {
   shoeSchema,
   styleSchema,
   updatePayoutAccount,
+  updatePricingMethod,
   updateShoeStyle,
 } from "@/server/catalogue";
 import { curvePreview, shoeCurve, shoePricing } from "@/server/catalogue/pricing";
@@ -224,6 +225,48 @@ describe("listing a shoe", () => {
     const { params } = shoeCurve(listed!);
     expect(params.R.toString()).toBe("7500"); // (1 + 0.15 + 0.10) × 6,000
   });
+
+  it("the merchant picks the pricing method: S-curve by default, changeable only as a draft", async () => {
+    const schema = shoeSchema(LIMITS);
+    expect(input.pricingMethod).toBe("LOGISTIC");
+    expect(schema.parse({ ...input, pricingMethod: "EXPONENTIAL" }).pricingMethod).toBe(
+      "EXPONENTIAL",
+    );
+    expect(schema.safeParse({ ...input, pricingMethod: "LINEAR" }).success).toBe(false);
+
+    const user = await makeUser("MERCHANT");
+    const other = await makeUser("MERCHANT");
+    const merchantId = user.merchant!.id;
+    const sCurve = await createShoe(merchantId, input, allPhotos());
+    expect(sCurve.pricingMethod).toBe("LOGISTIC");
+    const shoe = await createShoe(
+      merchantId,
+      { ...input, pricingMethod: "EXPONENTIAL" },
+      allPhotos(),
+    );
+    expect(shoe.pricingMethod).toBe("EXPONENTIAL");
+
+    // A draft can switch; another merchant can't touch it.
+    await expect(updatePricingMethod(other.merchant!.id, shoe.id, "LOGISTIC")).rejects.toThrow(
+      /not found/,
+    );
+    expect((await updatePricingMethod(merchantId, shoe.id, "LOGISTIC")).pricingMethod).toBe(
+      "LOGISTIC",
+    );
+    await updatePricingMethod(merchantId, shoe.id, "EXPONENTIAL");
+
+    // Published: priced on the exponential curve, and the method is fixed.
+    await publishShoe(merchantId, shoe.id);
+    await publishShoe(merchantId, sCurve.id);
+    await expect(updatePricingMethod(merchantId, shoe.id, "LOGISTIC")).rejects.toThrow(
+      /before publishing/,
+    );
+    const listed = await getListing(shoe.id);
+    expect(listed!.pricingMethod).toBe("EXPONENTIAL");
+    expect(shoeCurve(listed!).params.method).toBe("EXPONENTIAL");
+    expect(shoePricing(listed!).priceToday.slice(0, 7)).toBe("33.9280");
+    expect(shoePricing((await getListing(sCurve.id))!).priceToday.slice(0, 7)).toBe("28.9247");
+  });
 });
 
 describe("browsing and prices", () => {
@@ -407,6 +450,7 @@ describe("browsing and prices", () => {
       initialWear: "0",
       collectedSoFar: "0",
       merchantCollected: "0",
+      pricingMethod: "LOGISTIC" as const,
     };
     const pricing = shoePricing({ ...shoe, wear: "0", settings: row });
     expect(pricing.priceToday.slice(0, 7)).toBe("28.9247");
@@ -420,5 +464,17 @@ describe("browsing and prices", () => {
     expect(preview.merchantShare).toBe("6600");
     expect(preview.platformShare).toBe("600");
     expect(preview.points).toHaveLength(61);
+    expect(preview.method).toBe("LOGISTIC");
+
+    // Exponential decay: same lifetime income and shares, 33.9280 new and 10.1784 at the end.
+    const exp = shoePricing({ ...shoe, pricingMethod: "EXPONENTIAL", wear: "0", settings: row });
+    expect(exp.priceToday.slice(0, 7)).toBe("33.9280");
+    expect(exp.priceEnd.slice(0, 7)).toBe("10.1784");
+    expect(exp.lifetimeIncome).toBe("7200");
+    expect(exp.merchantTarget).toBe("6600");
+    const expPreview = curvePreview("6000", 365, settings, "EXPONENTIAL");
+    expect(expPreview.method).toBe("EXPONENTIAL");
+    expect(expPreview.priceNew.slice(0, 7)).toBe("33.9280");
+    expect(expPreview.merchantShare).toBe("6600");
   });
 });
