@@ -44,7 +44,10 @@ const WOMEN = [
 ];
 const KIDS = ["School Day", "Sports Day", "Playtime", "Party Time", "Weekend Fun"];
 
-/** The experiences each audience offers, in chip order. Unisex pairs can take any adult one. */
+/**
+ * The experiences each audience offers, in chip order. A pair can be made for several of its
+ * audience's experiences (product owner, 2026-10-12); Unisex pairs can take any adult one.
+ */
 export const EXPERIENCES: Record<Audience, string[]> = {
   MEN,
   WOMEN,
@@ -67,9 +70,9 @@ export function audienceLabel(audience: Audience) {
     : LISTING_AUDIENCES.find((a) => a.value === audience)!.label;
 }
 
-/** "Women · Night Out", shown on cards and listings. */
-export function styleLabel(shoe: { audience: Audience; experience: string }) {
-  return `${audienceLabel(shoe.audience)} · ${shoe.experience}`;
+/** "Women · Night Out, Work Day", shown on cards and listings. */
+export function styleLabel(shoe: { audience: Audience; experiences: string[] }) {
+  return `${audienceLabel(shoe.audience)} · ${shoe.experiences.join(", ")}`;
 }
 
 /** Reads `?for=` (men, women, boys, girls); anything else means all. */

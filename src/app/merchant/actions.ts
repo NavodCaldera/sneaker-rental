@@ -9,6 +9,7 @@ import {
   LISTING_PHOTOS,
   createShoe,
   deleteDraft,
+  formFields,
   getMerchantForUser,
   listingLimits,
   pricingMethodSchema,
@@ -39,7 +40,7 @@ export async function createShoeAction(
 ): Promise<ActionState> {
   const merchant = await currentMerchant();
   const limits = listingLimits(await getActiveSettings(), merchant);
-  const parsed = shoeSchema(limits).safeParse(Object.fromEntries(formData));
+  const parsed = shoeSchema(limits).safeParse(formFields(formData));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
 
   const photos: Partial<Record<PhotoKind, File>> = {};
@@ -75,7 +76,7 @@ export async function updateShoeStyleAction(
   formData: FormData,
 ): Promise<ActionState> {
   const merchant = await currentMerchant();
-  const parsed = styleSchema.safeParse(Object.fromEntries(formData));
+  const parsed = styleSchema.safeParse(formFields(formData));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
   try {
     await updateShoeStyle(merchant.id, shoeId, parsed.data);

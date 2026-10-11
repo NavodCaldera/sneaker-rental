@@ -6,6 +6,7 @@ import { formatDateTime, formatLKR } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { listDeliveries } from "@/server/logistics";
 import { DeliveryControls } from "./delivery-controls";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Deliveries" };
 
@@ -57,7 +58,7 @@ export default async function AdminDeliveries({ searchParams }: PageProps<"/admi
               <li key={d.id}>
                 <Card
                   className="flex flex-col gap-3"
-                  aria-label={`${TYPE_LABEL[d.type]}: ${shoe.brand} ${shoe.model}`}
+                  aria-label={`${TYPE_LABEL[d.type]}: ${shoeName(shoe)}`}
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{TYPE_LABEL[d.type]}</span>
@@ -65,7 +66,7 @@ export default async function AdminDeliveries({ searchParams }: PageProps<"/admi
                       {d.status.toLowerCase().replace("_", " ")}
                     </Badge>
                     <span className="text-sm text-subtle">
-                      {shoe.brand} {shoe.model} · {shoe.size}
+                      {shoeName(shoe)} · {shoe.size}
                     </span>
                   </div>
                   <dl className="grid gap-2 text-sm sm:grid-cols-2">

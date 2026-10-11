@@ -67,7 +67,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             : undefined,
       price: formatLKR(pricing.priceToday),
       priceBefore: discounted ? formatLKR(pricing.priceBeforeDiscount) : undefined,
-      wear: `${formatWear(shoe.committedWear.toString())} of ${shoe.lifespanDays} wear-days used`,
+      wear: `${formatWear(shoe.committedWear.toString())} of ${shoe.lifespanDays} days used`,
       note:
         held && release.releaseDay !== null
           ? release.releaseDay < today

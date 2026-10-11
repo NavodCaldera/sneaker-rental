@@ -158,8 +158,10 @@ enum ShoeCondition {
 model Shoe {
   id                String        @id @default(cuid())
   merchantId        String
-  brand             String
-  model             String
+  /// Brand and model are optional (product owner, 2026-10-12): "" when the merchant left them
+  /// empty; shown through shoeName() ("Unbranded shoes" when both are empty)
+  brand             String        @default("")
+  model             String        @default("")
   /// The size as listed, e.g. "EU 39": the label system (sizeSystem) and its number
   size              String
   /// The size system on the pair's label, as the merchant listed it
@@ -174,8 +176,9 @@ model Shoe {
   sizeCm            Decimal?      @db.Decimal(4, 1)
   /// Who it's for (shopping tabs: Men, Women, Boys, Girls)
   audience          Audience
-  /// The experience it's made for, e.g. "Night Out" (lists in src/lib/shoe-style.ts)
-  experience        String
+  /// The experiences it's made for, one or more, e.g. ["Work Day", "Night Out"] (lists in
+  /// src/lib/shoe-style.ts). Borrowers shop by any of them.
+  experiences       String[]
   description       String?
   /// Declared value V (LKR)
   value             Decimal       @db.Decimal(14, 2)

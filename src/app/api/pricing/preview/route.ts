@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     return Response.json({ error: "Enter a value" }, { status: 400 });
   }
   if (!/^\d+$/.test(lifespan)) {
-    return Response.json({ error: "Lifespan must be whole wear-days" }, { status: 400 });
+    return Response.json({ error: "Lifespan must be whole days" }, { status: 400 });
   }
   if (!method.success) {
     return Response.json({ error: "Choose a pricing method" }, { status: 400 });

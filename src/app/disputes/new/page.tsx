@@ -5,6 +5,7 @@ import { formatDate, formatLKR } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { db } from "@/server/db";
 import { OpenDisputeForm } from "./open-dispute-form";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Report a problem" };
 
@@ -26,7 +27,7 @@ export default async function NewDisputePage({ searchParams }: PageProps<"/dispu
     <main className="max-w-xl">
       <PageHeader
         title="Report a problem"
-        description={`${item.shoe.brand} ${item.shoe.model} · closed ${formatDate(item.closedAt)} · charged ${formatLKR(item.charge?.toString() ?? "0")}`}
+        description={`${shoeName(item.shoe)} · closed ${formatDate(item.closedAt)} · charged ${formatLKR(item.charge?.toString() ?? "0")}`}
       />
       <Card>
         <p className="mb-4 text-sm text-subtle">

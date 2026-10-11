@@ -49,11 +49,11 @@ export function NewShoeForm({
       <div className="flex flex-col gap-6">
         {state.error && <Alert>{state.error}</Alert>}
         <Card className="grid gap-4 sm:grid-cols-2">
-          <Field label="Brand" name="brand" error={errors.brand}>
-            <Input name="brand" required />
+          <Field label="Brand (optional)" name="brand" error={errors.brand}>
+            <Input name="brand" />
           </Field>
-          <Field label="Model" name="model" error={errors.model}>
-            <Input name="model" required />
+          <Field label="Model (optional)" name="model" error={errors.model}>
+            <Input name="model" />
           </Field>
           <StyleFields errors={errors} onAudienceChange={setAudience} />
           <SizeFields audience={audience} errors={errors} />
@@ -129,10 +129,10 @@ export function NewShoeForm({
             />
           </Field>
           <Field
-            label="Expected lifespan (wear-days)"
+            label="Expected lifespan (days)"
             name="lifespanDays"
             error={errors.lifespanDays}
-            hint={`${lifespanMin}–${lifespanMax} wear-days (${monthsMin}–${monthsMax} months). Need longer? Ask us to extend your limit. Longer means a lower daily price and more rentals, but if the pair wears out early you lose the income it didn't collect.`}
+            hint={`${lifespanMin}–${lifespanMax} days (${monthsMin}–${monthsMax} months). Need longer? Ask us to extend your limit. Longer means a lower daily price and more rentals, but if the pair wears out early you lose the income it didn't collect.`}
           >
             <Input
               name="lifespanDays"
@@ -164,7 +164,7 @@ export function NewShoeForm({
           </Field>
           {condition !== "NEW" && (
             <Field
-              label="Wear already used (wear-days)"
+              label="Wear already used (days)"
               name="initialWear"
               error={errors.initialWear}
               hint="The days it has been worn. Rentals start further down the curve, so the daily price is lower."
@@ -215,11 +215,11 @@ function PreviewSummary({ preview }: { preview: CurvePreview }) {
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <div>
           <dt className="text-subtle">New</dt>
-          <dd className="font-medium">{formatLKR(preview.priceNew)} / wear-day</dd>
+          <dd className="font-medium">{formatLKR(preview.priceNew)} per day</dd>
         </div>
         <div>
           <dt className="text-subtle">End of life</dt>
-          <dd className="font-medium">{formatLKR(preview.priceEnd)} / wear-day</dd>
+          <dd className="font-medium">{formatLKR(preview.priceEnd)} per day</dd>
         </div>
         <div>
           <dt className="text-subtle">Borrowers pay in total</dt>

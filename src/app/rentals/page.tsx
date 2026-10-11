@@ -7,6 +7,7 @@ import { formatDate, formatDateTime, formatLKR, formatTokens, formatWear } from 
 import { requireUser } from "@/server/auth/session";
 import { borrowerRentals } from "@/server/booking/queries";
 import { EarlyReturnForm, EndRentalForm, ExtendForm, OfferButtons } from "./item-forms";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "My rentals" };
 
@@ -59,7 +60,7 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
               <ul className="flex flex-col gap-3">
                 {rental.items.map((item) => {
                   const status = ITEM_STATUS[item.status];
-                  const name = `${item.shoe.brand} ${item.shoe.model}`;
+                  const name = shoeName(item.shoe);
                   return (
                     <li key={item.id}>
                       <Card className="flex flex-wrap items-center gap-4 p-3">
@@ -123,10 +124,10 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                                     {formatDate(item.plannedFirstDay)}
                                   </>
                                 )}
-                                . It will have {formatWear(item.offerWearStart!.toString())}{" "}
-                                wear-days used, not {formatWear(item.plannedWearStart!.toString())},
-                                and a pair with less wear costs more per day: your{" "}
-                                {item.plannedDays}-day rent estimate is now{" "}
+                                . It will have {formatWear(item.offerWearStart!.toString())} days
+                                used, not {formatWear(item.plannedWearStart!.toString())}, and a
+                                pair with less wear costs more per day: your {item.plannedDays}-day
+                                rent estimate is now{" "}
                                 <strong>{formatTokens(item.offerCharge.toString())}</strong> instead
                                 of {formatTokens(item.plannedCharge!.toString())}. Accept by{" "}
                                 {formatDateTime(item.offerDueAt)} to take it on these terms. If

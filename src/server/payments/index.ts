@@ -17,6 +17,7 @@ import {
   unlockDeposit,
   unlockRental,
 } from "../wallet";
+import { shoeName } from "@/lib/shoe-name";
 
 export class PaymentError extends Error {}
 
@@ -74,7 +75,7 @@ export async function collectRent(tx: Tx, itemId: string): Promise<D> {
   if (item.status !== "CLOSED" || !item.charge) {
     throw new PaymentError("Rent is charged only when an item closes");
   }
-  const name = `${item.shoe.brand} ${item.shoe.model}`;
+  const name = shoeName(item.shoe);
   await releaseRentLock(tx, item, `Rent estimate released: ${name}`);
   await settleRent(tx, {
     userId: item.rental.borrowerId,

@@ -133,7 +133,7 @@ export async function makeShoe(
       model: "Pegasus 41",
       ...shoeSizeFields("MEN", "UK", "9"),
       audience: "MEN",
-      experience: "Morning Run",
+      experiences: ["Morning Run"],
       value: overrides.value ?? "6000",
       lifespanDays: overrides.lifespanDays ?? 365,
       initialWear: overrides.initialWear ?? "0",

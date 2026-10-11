@@ -17,6 +17,7 @@ import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings } from "@/server/settings";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Browse" };
 
@@ -46,7 +47,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
     <main>
       <PageHeader
         title="Browse shoes"
-        description="Prices are per wear-day and fall as a pair ages. Hold up to four pairs and the wear is split between them."
+        description="Prices are per day and fall as a pair ages. Hold up to four pairs and the wear is split between them."
       />
       <form className="mb-6 flex flex-wrap items-end gap-2" role="search">
         <Input
@@ -111,7 +112,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                 <Link
                   href={`/shoes/${shoe.id}`}
                   className="group flex flex-col gap-2"
-                  aria-label={`${shoe.brand} ${shoe.model}, ${sizeSummary(shoe, sizeSystem)}`}
+                  aria-label={`${shoeName(shoe)}, ${sizeSummary(shoe, sizeSystem)}`}
                 >
                   <div className="relative">
                     <PhotoImg
@@ -128,9 +129,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                     </span>
                   </div>
                   <div>
-                    <div className="text-sm font-medium">
-                      {shoe.brand} {shoe.model}
-                    </div>
+                    <div className="text-sm font-medium">{shoeName(shoe)}</div>
                     <div className="text-xs text-subtle">
                       {sizeSummary(shoe, sizeSystem)} · {styleLabel(shoe)}
                     </div>
@@ -142,7 +141,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                         {formatLKR(pricing.priceBeforeDiscount)}
                       </s>
                     )}
-                    <span className="text-subtle"> / wear-day</span>
+                    <span className="text-subtle"> per day</span>
                   </div>
                   {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
                     <div className="text-xs text-subtle">

@@ -23,17 +23,17 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
       {
         name: "refLife",
         label: "Reference lifespan",
-        hint: "Wear-days the base curve was tuned for (365)",
+        hint: "Days the base curve was tuned for (365)",
       },
     ],
   },
   {
     title: "Listings: lifespan limits",
     fields: [
-      { name: "minLifespanDays", label: "Shortest lifespan (wear-days)", hint: "183 = 6 months" },
+      { name: "minLifespanDays", label: "Shortest lifespan (days)", hint: "183 = 6 months" },
       {
         name: "maxLifespanDays",
-        label: "Longest lifespan (wear-days)",
+        label: "Longest lifespan (days)",
         hint: "730 = 24 months. Extend single merchants on the Merchants page.",
       },
     ],
@@ -119,8 +119,8 @@ export function SettingsForm({ values }: { values: Values }) {
         />
         <span>
           <strong>Charge past the lifespan.</strong> Once a pair has used its lifespan, each further
-          wear-day is charged at the end-of-life price until it is returned, even if that takes it
-          past R. Off: wear and rent stop at the lifespan. Applies to new listings.
+          day is charged at the end-of-life price until it is returned, even if that takes it past
+          R. Off: wear and rent stop at the lifespan. Applies to new listings.
         </span>
       </label>
       <Button type="submit" disabled={pending} className="self-start">

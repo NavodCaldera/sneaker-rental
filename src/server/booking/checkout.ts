@@ -16,6 +16,7 @@ import { BookingError } from "./errors";
 import { asOfToday } from "./holdings";
 import { type PlanItem, loadPlanItems, planItems, replan, toPlanItem } from "./plan";
 import { handOffIfWaiting } from "./reservations";
+import { shoeName } from "@/lib/shoe-name";
 
 export { BookingError };
 
@@ -153,7 +154,7 @@ export async function quoteBundle(
     const info = release.get(shoe.id)!;
     const phi = settings.catchUp ? catchUpPhi(params, collected, p.wearStart) : new D(1);
     const problem = lineProblem(shoe, borrowerId);
-    if (problem) problems.push(`${shoe.brand} ${shoe.model}: ${problem}`);
+    if (problem) problems.push(`${shoeName(shoe)}: ${problem}`);
     return {
       shoeId: shoe.id,
       brand: shoe.brand,
@@ -291,7 +292,7 @@ export async function checkout(
           where: { id: line.shoeId, status: "AVAILABLE" },
           data: { status: "RESERVED" },
         });
-        if (count === 0) throw new BookingError(`${line.brand} ${line.model} was just taken`);
+        if (count === 0) throw new BookingError(`${shoeName(line)} was just taken`);
         const shoe = await tx.shoe.findUniqueOrThrow({ where: { id: line.shoeId } });
         item = await tx.rentalItem.create({
           data: { rentalId: rental.id, shoeId: line.shoeId, status: "AWAITING_DELIVERY", ...terms },
@@ -306,8 +307,7 @@ export async function checkout(
         const taken = await tx.rentalItem.count({
           where: { shoeId: line.shoeId, status: "WAITING_HANDOFF" },
         });
-        if (taken > 0)
-          throw new BookingError(`${line.brand} ${line.model} is already reserved next`);
+        if (taken > 0) throw new BookingError(`${shoeName(line)} is already reserved next`);
         item = await tx.rentalItem.create({
           data: { rentalId: rental.id, shoeId: line.shoeId, status: "WAITING_HANDOFF", ...terms },
         });

@@ -5,6 +5,7 @@ import { formatDateTime, formatLKR } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { listDisputes } from "@/server/disputes";
 import { DecideForm } from "./decide-form";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Disputes" };
 
@@ -42,9 +43,7 @@ export default async function AdminDisputes({ searchParams }: PageProps<"/admin/
               <li key={d.id}>
                 <Card className="flex flex-col gap-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">
-                      {item.shoe.brand} {item.shoe.model}
-                    </span>
+                    <span className="font-medium">{shoeName(item.shoe)}</span>
                     <span className="text-sm text-subtle">
                       {item.shoe.merchant.businessName} · borrower {item.rental.borrower.name}
                     </span>

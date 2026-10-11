@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PhotoImg } from "./shoe-bits";
+import { shoeName } from "@/lib/shoe-name";
 
 export type ShoeCardData = {
   id: string;
@@ -22,7 +23,7 @@ export type ShoeCardData = {
 
 /** A marketplace card: rounded square photo with one pill, then name, details and price. */
 export function ShoeCard({ shoe }: { shoe: ShoeCardData }) {
-  const name = `${shoe.brand} ${shoe.model}`;
+  const name = shoeName(shoe);
   return (
     <Link
       href={`/shoes/${shoe.id}`}
@@ -50,7 +51,7 @@ export function ShoeCard({ shoe }: { shoe: ShoeCardData }) {
         <div className="mt-1 truncate">
           <span className="font-semibold">{shoe.price}</span>
           {shoe.priceBefore && <s className="ml-1 text-subtle">{shoe.priceBefore}</s>}
-          <span className="text-subtle"> / wear-day</span>
+          <span className="text-subtle"> per day</span>
         </div>
         <div className="truncate text-xs text-subtle">{shoe.wear}</div>
       </div>

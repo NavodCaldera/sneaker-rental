@@ -7,6 +7,7 @@ import { requireUser } from "@/server/auth/session";
 import { gateway } from "@/server/payments/gateway";
 import { walletBalance, walletHistory } from "@/server/wallet";
 import { TopUpForm, WithdrawForm } from "./wallet-forms";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Wallet" };
 
@@ -95,7 +96,7 @@ export default async function WalletPage({ searchParams }: PageProps<"/wallet">)
                       {" "}
                       ·{" "}
                       <Link href="/rentals" className="underline">
-                        {e.rentalItem.shoe.brand} {e.rentalItem.shoe.model}
+                        {shoeName(e.rentalItem.shoe)}
                       </Link>
                     </span>
                   )}

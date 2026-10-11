@@ -10,7 +10,7 @@ test("home: who-it's-for tabs, experience chips, rows, and search leads to Brows
 }) => {
   await page.goto("/");
   const justListed = page.getByRole("region", { name: "Just listed" });
-  await expect(justListed.getByText("/ wear-day").first()).toBeVisible();
+  await expect(justListed.getByText("per day").first()).toBeVisible();
   // Before picking a tab there are no experience chips.
   await expect(page.getByRole("navigation", { name: /Experiences for/ })).toHaveCount(0);
 

@@ -226,7 +226,7 @@ describe("reserve from day 1; the holder returns early (pricing-spec.md §6a)", 
     });
     expect(notice.body).toMatch(/returning the Nike Pegasus 41 early/);
     expect(notice.body).toMatch(/day 1 on/);
-    expect(notice.body).toMatch(/30 wear-days used, not 90/);
+    expect(notice.body).toMatch(/30 days used, not 90/);
     expect(notice.body).toMatch(/original dates/);
     expect(notice.emailedAt).not.toBeNull();
     expect(mail.sent.map((m) => m.to)).toContain(

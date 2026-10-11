@@ -37,7 +37,7 @@ export function homeRows<C>(items: HomeItem<C>[], scope?: string): HomeRow<C>[] 
     },
     {
       title: `Best value today${where}`,
-      subtitle: "The lowest price per wear-day right now",
+      subtitle: "The lowest price per day right now",
       items: [...available].sort((a, b) => a.price.comparedTo(b.price)),
     },
     {

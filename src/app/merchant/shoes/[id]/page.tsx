@@ -17,6 +17,7 @@ import { getActiveSettings } from "@/server/settings";
 import { DraftActions } from "./draft-actions";
 import { PricingMethodForm } from "./pricing-method-form";
 import { StyleForm } from "./style-form";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Shoe" };
 
@@ -42,7 +43,7 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
   return (
     <main className="flex flex-col gap-6">
       <PageHeader
-        title={`${shoe.brand} ${shoe.model}`}
+        title={shoeName(shoe)}
         description={
           <span className="flex flex-wrap items-center gap-2">
             {sizeSummary(shoe)} · {styleLabel(shoe)} <ShoeStatusBadge status={shoe.status} />
@@ -66,7 +67,7 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
           <CurveChart points={preview.points} currentWear={shoe.committedWear.toString()} />
         </Card>
         <Card className="flex flex-col gap-4 text-sm">
-          <Stat label="Price today" value={`${formatLKR(pricing.priceToday)} / wear-day`} />
+          <Stat label="Price today" value={`${formatLKR(pricing.priceToday)} per day`} />
           <Stat
             label="New → end of life"
             value={`${formatLKR(pricing.priceNew)} → ${formatLKR(pricing.priceEnd)}`}
@@ -75,8 +76,8 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
             <div className="mb-1 text-subtle">Wear</div>
             <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
             <div className="mt-1">
-              {formatWear(shoe.committedWear.toString())} of {shoe.lifespanDays} wear-days used,
-              counting current bookings
+              {formatWear(shoe.committedWear.toString())} of {shoe.lifespanDays} days used, counting
+              current bookings
               {shoe.initialWear.gt(0) && (
                 <span className="text-subtle">
                   {" "}
@@ -105,7 +106,7 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
         </Card>
       </div>
 
-      <StyleForm shoeId={shoe.id} audience={shoe.audience} experience={shoe.experience} />
+      <StyleForm shoeId={shoe.id} audience={shoe.audience} experiences={shoe.experiences} />
 
       <Card>
         <h2 className="mb-3 font-medium">Photos</h2>

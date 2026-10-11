@@ -47,7 +47,7 @@ The merchant enters three things and the platform computes every price for the s
 | Photos (front, side, sole, inside, box) | 5 photos | Listing page and the condition baseline |
 | Declared value V | 6,000 LKR | Target income R |
 | Expected lifespan L (wear-days) | 365 | Length of the price curve |
-| Size (as on the label: UK, EU or US; shown in UK, EU, US and cm), brand, model, who it's for, experience | EU 43 (= UK 9), Men, Morning Run | Search in any size system, and filters |
+| Size (as on the label: UK, EU or US; shown in UK, EU, US and cm), brand and model (optional; "Unbranded shoes" without either), who it's for, experiences (one or more) | EU 43 (= UK 9), Men, Morning Run and Work Day | Search in any size system, and filters (decided 2026-10-12) |
 | Condition: brand new, second-hand, or second-hand upgraded (and what was upgraded) | Second-hand, upgraded: new insoles | Shown to borrowers on the listing and in Browse (decided 2026-10-11) |
 | Wear already used (second-hand only) | 60 wear-days | Where the pair starts on the price curve |
 
@@ -59,6 +59,8 @@ The merchant enters three things and the platform computes every price for the s
 - K = R ÷ A · P(w) = K × Q(w) · Income = (1 − d) × φ × K × [IQ(w_end) − IQ(w_start)]
 
 For a 6,000 LKR shoe with L = 365 this gives K = 28.92 LKR per wear-day when new and 8.68 LKR at end of life.
+
+**Wording on the website (decided 2026-10-12).** This brief and the specs count wear in wear-days. The website says "per day" for prices and "days" for counts and lifespans ("LKR 28.92 per day", "120 of 365 days used").
 
 **The merchant picks the pricing method** (decided 2026-10-11). The curve above is the **S-curve (logistic decay)** and is the default. A merchant can instead price a listing on **exponential decay**, Q(w) = q^(w ÷ L): the same floor q, target R and end-of-life price share, but the price falls fastest when the pair is new (A = 0.5814 × L; the 6,000 LKR / 365-day shoe costs 33.93 LKR new and 10.18 LKR at end of life). They choose on the listing form with a live preview and can change it while the listing is a draft; it is fixed once published. Details: pricing-spec.md §2.
 
@@ -111,7 +113,7 @@ Four journeys carry the business; every step records who held the shoe and when,
 
 **5.1 Merchant lists a shoe**
 1. Signs up with the business's one address and city (where drivers pick up and return its pairs; we say why we ask), verifies the business and adds a payout account.
-2. Adds a shoe: photos, value V, lifespan L, size, brand, model, and its condition: brand new, or second-hand with or without upgrades. A second-hand pair also gives the wear-days it has been worn, and an upgraded one what was upgraded.
+2. Adds a shoe: photos, value V, lifespan L, size, brand and model (optional), who it's for and one or more experiences, and its condition: brand new, or second-hand with or without upgrades. A second-hand pair also gives the wear-days it has been worn, and an upgraded one what was upgraded.
 3. Sees the computed price curve before publishing: starting price, end price and lifetime income.
 4. Publishes. The shoe is Available, priced at P(w) for its current wear.
 
@@ -199,7 +201,7 @@ Build one web app with four role views (merchant, borrower, admin, and a courier
 |---|---|
 | User | id, role (merchant / borrower / admin), name, phone, email, verified, tier |
 | Merchant | user_id, business name, payout account, lifespan accuracy score |
-| Shoe | id, merchant_id, brand, model, size, photos, value V, lifespan L, wear w, collected so far, lost to discounts, status, latest grade |
+| Shoe | id, merchant_id, brand, model (both optional), audience, experiences (one or more), size, photos, value V, lifespan L, wear w, collected so far, lost to discounts, status, latest grade |
 | PricingSettings | μm, μp, floor q, midpoint ratio 0.548, base steepness 0.03, idle discount cap, capital rate r, hold cost h |
 | Rental | id, borrower_id, status, estimate, deposit hold reference, created at |
 | RentalItem | rental_id, shoe_id, start date, end date, wear start, wear end, discount d, φ, charge, merchant share, platform share |

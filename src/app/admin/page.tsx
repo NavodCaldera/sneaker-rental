@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/format";
 import { adminOverview } from "@/server/admin";
 import { requireUser } from "@/server/auth/session";
 import { markLost } from "@/server/payments";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Admin" };
 
@@ -54,11 +55,9 @@ export default async function AdminHome() {
               <li key={item.id}>
                 <Card className="flex flex-wrap items-center gap-3 p-3 text-sm">
                   <div className="min-w-0 flex-1">
-                    <span className="font-medium">
-                      {item.shoe.brand} {item.shoe.model}
-                    </span>{" "}
-                    · {item.shoe.size} · {item.rental.borrower.name} ({item.rental.borrower.email})
-                    · since {formatDate(item.startDate)}
+                    <span className="font-medium">{shoeName(item.shoe)}</span> · {item.shoe.size} ·{" "}
+                    {item.rental.borrower.name} ({item.rental.borrower.email}) · since{" "}
+                    {formatDate(item.startDate)}
                   </div>
                   <Badge tone={item.status === "RETURNING" ? "warn" : "info"}>
                     {item.status === "RETURNING" ? "Returning" : "With borrower"}
@@ -67,7 +66,7 @@ export default async function AdminHome() {
                     <Button
                       type="submit"
                       variant="danger"
-                      aria-label={`Mark ${item.shoe.brand} ${item.shoe.model} as lost`}
+                      aria-label={`Mark ${shoeName(item.shoe)} as lost`}
                     >
                       Mark lost
                     </Button>

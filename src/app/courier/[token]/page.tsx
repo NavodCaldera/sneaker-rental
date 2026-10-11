@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Alert, Card } from "@/components/ui";
 import { deliveryForToken } from "@/server/logistics";
 import { CourierForm } from "./courier-form";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Courier", robots: { index: false } };
 
@@ -42,7 +43,7 @@ export default async function CourierPage({ params }: PageProps<"/courier/[token
         <div>
           <div className="text-subtle">Package</div>
           <div className="font-medium">
-            {shoe.brand} {shoe.model} · {shoe.size}
+            {shoeName(shoe)} · {shoe.size}
           </div>
         </div>
         <div>

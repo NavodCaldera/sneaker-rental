@@ -34,16 +34,32 @@ const SIZE_FORMAT = /^\d{1,2}(\.[05])?$/;
 
 const AUDIENCE_VALUES = LISTING_AUDIENCES.map((a) => a.value) as [Audience, ...Audience[]];
 
-/** Who a pair is for, and an experience that audience offers (src/lib/shoe-style.ts). */
+/**
+ * The experiences a pair is made for: one or more (product owner, 2026-10-12). Forms send
+ * them as repeated `experiences` fields; duplicates are dropped.
+ */
+const experiencesField = z
+  .array(z.string().trim(), { error: "Choose at least one experience" })
+  .min(1, "Choose at least one experience")
+  .transform((list) => [...new Set(list)]);
+
+/** Every experience must be one the audience offers (src/lib/shoe-style.ts). */
+function offered(s: { audience: Audience; experiences: string[] }) {
+  return s.experiences.every((x) => EXPERIENCES[s.audience].includes(x));
+}
+
+/** Who a pair is for, and the experiences that audience offers it for. */
 export const styleSchema = z
   .object({
     audience: z.enum(AUDIENCE_VALUES, { error: "Choose who it's for" }),
-    experience: z.string({ error: "Choose the experience" }).trim(),
+    experiences: experiencesField,
   })
-  .refine((s) => EXPERIENCES[s.audience].includes(s.experience), {
-    message: "Choose an experience from the list",
-    path: ["experience"],
-  });
+  .refine(offered, { message: "Choose experiences from the list", path: ["experiences"] });
+
+/** A form's fields, with the repeated `experiences` checkboxes kept as a list. */
+export function formFields(formData: FormData) {
+  return { ...Object.fromEntries(formData), experiences: formData.getAll("experiences") };
+}
 
 export type StyleInput = z.infer<typeof styleSchema>;
 
@@ -62,8 +78,9 @@ export const pricingMethodSchema = z.enum(METHOD_VALUES, { error: "Choose a pric
 export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLifespanDays">) =>
   z
     .object({
-      brand: z.string().trim().min(1, "Enter the brand").max(60),
-      model: z.string().trim().min(1, "Enter the model").max(80),
+      /** Optional (product owner, 2026-10-12): stored as "" when left empty */
+      brand: z.string().trim().max(60).optional().default(""),
+      model: z.string().trim().max(80).optional().default(""),
       /** The size on the pair's label: its system and number */
       sizeSystem: z.enum(["UK", "EU", "US"], { error: "Choose UK, EU or US" }),
       size: z
@@ -74,7 +91,7 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
           message: "Enter a size from 1 to 60",
         }),
       audience: z.enum(AUDIENCE_VALUES, { error: "Choose who it's for" }),
-      experience: z.string({ error: "Choose the experience" }).trim(),
+      experiences: experiencesField,
       description: z.string().trim().max(1000).optional().or(z.literal("")),
       value: z
         .string()
@@ -88,8 +105,8 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
       lifespanDays: z.coerce
         .number()
         .int("Whole days only")
-        .min(limits.minLifespanDays, `At least ${limits.minLifespanDays} wear-days`)
-        .max(limits.maxLifespanDays, `At most ${limits.maxLifespanDays} wear-days`),
+        .min(limits.minLifespanDays, `At least ${limits.minLifespanDays} days`)
+        .max(limits.maxLifespanDays, `At most ${limits.maxLifespanDays} days`),
       /** Brand new, or second-hand with or without upgrades */
       condition: z.enum(["NEW", "SECOND_HAND", "SECOND_HAND_UPGRADED"], {
         error: "Choose the condition",
@@ -104,12 +121,9 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
         .trim()
         .optional()
         .transform((v) => v || "0")
-        .refine((v) => WEAR_FORMAT.test(v), "Enter wear-days, up to 2 decimals"),
+        .refine((v) => WEAR_FORMAT.test(v), "Enter days, up to 2 decimals"),
     })
-    .refine((s) => EXPERIENCES[s.audience].includes(s.experience), {
-      message: "Choose an experience from the list",
-      path: ["experience"],
-    })
+    .refine(offered, { message: "Choose experiences from the list", path: ["experiences"] })
     .refine((s) => !WEAR_FORMAT.test(s.initialWear) || new D(s.initialWear).lt(s.lifespanDays), {
       message: "Wear used must be less than the lifespan",
       path: ["initialWear"],
@@ -229,7 +243,7 @@ async function ownShoe(merchantId: string, shoeId: string) {
 }
 
 /**
- * Who a pair is for and its experience: the merchant can change these at any time. The label
+ * Who a pair is for and its experiences: the merchant can change these at any time. The label
  * size stays; its other systems are read again from the new audience's chart.
  */
 export async function updateShoeStyle(merchantId: string, shoeId: string, input: StyleInput) {
@@ -239,7 +253,7 @@ export async function updateShoeStyle(merchantId: string, shoeId: string, input:
     where: { id: shoeId },
     data: {
       audience: input.audience,
-      experience: input.experience,
+      experiences: input.experiences,
       ...shoeSizeFields(input.audience, shoe.sizeSystem, listed),
     },
   });
@@ -356,6 +370,7 @@ export type BrowseFilters = {
   brand?: string;
   /** A shopping tab: Men and Women include Unisex pairs */
   audience?: Audience;
+  /** Pairs made for this experience (among others) */
   experience?: string;
   q?: string;
 };
@@ -366,7 +381,7 @@ export async function browseShoes(filters: BrowseFilters) {
     ...sizeWhere(filters.size),
     ...(filters.brand && { brand: filters.brand }),
     ...(filters.audience && { audience: { in: audiencesFor(filters.audience) } }),
-    ...(filters.experience && { experience: filters.experience }),
+    ...(filters.experience && { experiences: { has: filters.experience } }),
     ...(filters.q && {
       OR: [
         { brand: { contains: filters.q, mode: "insensitive" } },
@@ -411,7 +426,10 @@ export async function browseFacets() {
     sizes: Object.fromEntries(
       (Object.keys(SIZE_KEY) as SearchSystem[]).map((sys) => [sys, sizesIn(sys)]),
     ) as Record<SearchSystem, string[]>,
-    brands: [...new Set(shoes.map((s) => s.brand))].sort((a, b) => a.localeCompare(b)),
+    // Brand is optional: unbranded pairs aren't a brand to filter by.
+    brands: [...new Set(shoes.map((s) => s.brand).filter(Boolean))].sort((a, b) =>
+      a.localeCompare(b),
+    ),
   };
 }
 

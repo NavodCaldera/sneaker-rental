@@ -7,6 +7,7 @@ import { requireUser } from "@/server/auth/session";
 import { getMerchantForUser } from "@/server/catalogue";
 import { markCleaned } from "@/server/booking/lifecycle";
 import { merchantReturns } from "@/server/booking/queries";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Returns" };
 
@@ -42,7 +43,7 @@ export default async function MerchantReturns() {
                   <PhotoImg id={item.shoe.photos[0]?.id} alt="" className="size-14 rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <div className="font-medium">
-                      {item.shoe.brand} {item.shoe.model} · {item.shoe.size}
+                      {shoeName(item.shoe)} · {item.shoe.size}
                     </div>
                     <div className="text-sm text-subtle">
                       From {item.rental.borrower.name} · arrived {formatDate(item.endDate)}
@@ -68,7 +69,7 @@ export default async function MerchantReturns() {
                   <PhotoImg id={shoe.photos[0]?.id} alt="" className="size-14 rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <div className="font-medium">
-                      {shoe.brand} {shoe.model} · {shoe.size}
+                      {shoeName(shoe)} · {shoe.size}
                     </div>
                     <div className="text-sm text-subtle">Grade {shoe.latestGrade ?? "—"}</div>
                   </div>
@@ -88,7 +89,7 @@ export default async function MerchantReturns() {
           <ul className="flex flex-col gap-2 text-sm">
             {inTransit.map((item) => (
               <li key={item.id} className="flex items-center gap-2">
-                {item.shoe.brand} {item.shoe.model}{" "}
+                {shoeName(item.shoe)}{" "}
                 <Badge tone="info">
                   {item.deliveries.some((d) => d.type === "COLLECT")
                     ? "Collection requested"
