@@ -4,7 +4,7 @@
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, type Role } from "../src/generated/prisma/client";
+import { type Audience, PrismaClient, type Role } from "../src/generated/prisma/client";
 import { hashPassword } from "../src/server/auth/password";
 import { LocalDiskStorage, storageDir } from "../src/server/storage/local";
 
@@ -121,7 +121,8 @@ type SeedShoe = {
   brand: string;
   model: string;
   size: string;
-  category: string;
+  audience: Audience;
+  experience: string;
   value: string;
   lifespanDays: number;
   description?: string;
@@ -134,7 +135,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "Nike",
       model: "Pegasus 41",
       size: "UK 9",
-      category: "Running",
+      audience: "MEN",
+      experience: "Morning Run",
       value: "6000",
       lifespanDays: 365,
       description: "Acceptance-test shoe: 6,000 LKR, L = 365.",
@@ -143,7 +145,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "Nike",
       model: "Pegasus 41",
       size: "UK 9",
-      category: "Running",
+      audience: "MEN",
+      experience: "Morning Run",
       value: "6000",
       lifespanDays: 730,
       description: "Acceptance-test shoe: same shoe declared L = 730.",
@@ -152,7 +155,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "Adidas",
       model: "Samba OG",
       size: "UK 8",
-      category: "Lifestyle",
+      audience: "UNISEX",
+      experience: "Weekend Stroll",
       value: "28000",
       lifespanDays: 400,
     },
@@ -160,7 +164,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "New Balance",
       model: "550",
       size: "UK 10",
-      category: "Lifestyle",
+      audience: "MEN",
+      experience: "Work Day",
       value: "32000",
       lifespanDays: 450,
     },
@@ -168,9 +173,37 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "Asics",
       model: "Gel-Kayano 31",
       size: "UK 9",
-      category: "Running",
+      audience: "WOMEN",
+      experience: "Morning Run",
       value: "38000",
       lifespanDays: 300,
+    },
+    {
+      brand: "Adidas",
+      model: "Ultraboost Light",
+      size: "UK 5",
+      audience: "WOMEN",
+      experience: "Studio & Gym",
+      value: "36000",
+      lifespanDays: 300,
+    },
+    {
+      brand: "Nike",
+      model: "Air Force 1 Kids",
+      size: "UK 3",
+      audience: "BOYS",
+      experience: "School Day",
+      value: "15000",
+      lifespanDays: 200,
+    },
+    {
+      brand: "Adidas",
+      model: "Duramo SL Kids",
+      size: "UK 2",
+      audience: "BOYS",
+      experience: "Sports Day",
+      value: "9000",
+      lifespanDays: 200,
     },
   ],
   "sole@sneakers.test": [
@@ -178,7 +211,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "Nike",
       model: "Air Jordan 1 Mid",
       size: "UK 9",
-      category: "Basketball",
+      audience: "MEN",
+      experience: "Game Day",
       value: "42000",
       lifespanDays: 365,
     },
@@ -186,7 +220,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "Puma",
       model: "Suede Classic",
       size: "UK 7",
-      category: "Lifestyle",
+      audience: "WOMEN",
+      experience: "Brunch & Errands",
       value: "18000",
       lifespanDays: 350,
     },
@@ -194,7 +229,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "Converse",
       model: "Chuck 70 Hi",
       size: "UK 8",
-      category: "Lifestyle",
+      audience: "UNISEX",
+      experience: "Night Out",
       value: "16000",
       lifespanDays: 300,
     },
@@ -202,7 +238,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "Nike",
       model: "Dunk Low",
       size: "UK 10",
-      category: "Lifestyle",
+      audience: "MEN",
+      experience: "Night Out",
       value: "35000",
       lifespanDays: 380,
     },
@@ -210,9 +247,37 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       brand: "Vans",
       model: "Old Skool",
       size: "UK 9",
-      category: "Skate",
+      audience: "MEN",
+      experience: "Street Session",
       value: "14000",
       lifespanDays: 250,
+    },
+    {
+      brand: "Skechers",
+      model: "Twinkle Toes",
+      size: "UK 1",
+      audience: "GIRLS",
+      experience: "Party Time",
+      value: "8000",
+      lifespanDays: 200,
+    },
+    {
+      brand: "Nike",
+      model: "Revolution 7 Kids",
+      size: "UK 13",
+      audience: "GIRLS",
+      experience: "Playtime",
+      value: "8500",
+      lifespanDays: 200,
+    },
+    {
+      brand: "Veja",
+      model: "V-10",
+      size: "UK 5",
+      audience: "WOMEN",
+      experience: "Weekend Stroll",
+      value: "30000",
+      lifespanDays: 365,
     },
   ],
 };
@@ -281,8 +346,31 @@ async function main() {
 
     const shoes = shoesByMerchant[u.email];
     if (!shoes || !user.merchant) continue;
-    if ((await db.shoe.count({ where: { merchantId: user.merchant.id } })) > 0) continue;
+    let added = 0;
     for (const [i, s] of shoes.entries()) {
+      // Each sample shoe is added once. One seeded before audiences existed (still on the
+      // migration's default, Men) gets its own audience and experience.
+      const existing = await db.shoe.findFirst({
+        where: {
+          merchantId: user.merchant.id,
+          brand: s.brand,
+          model: s.model,
+          lifespanDays: s.lifespanDays,
+        },
+      });
+      if (existing) {
+        if (
+          existing.audience === "MEN" &&
+          (existing.audience !== s.audience || existing.experience !== s.experience)
+        ) {
+          await db.shoe.update({
+            where: { id: existing.id },
+            data: { audience: s.audience, experience: s.experience },
+          });
+        }
+        continue;
+      }
+      added++;
       const colour = COLOURS[(i + (u.email.startsWith("sole") ? 4 : 0)) % COLOURS.length];
       const photos = [];
       for (const kind of PHOTO_KINDS) {
@@ -308,7 +396,7 @@ async function main() {
         },
       });
     }
-    console.log(`Seeded ${shoes.length} shoes for ${u.businessName}`);
+    if (added) console.log(`Seeded ${added} shoes for ${u.businessName}`);
   }
   // Backfill placeholder photos for any shoe seeded before photos existed.
   const bare = await db.shoe.findMany({ where: { photos: { none: {} } } });

@@ -22,7 +22,7 @@ test("delivery → condition → return → close → restock, across all four r
 
   // 5.2 Borrower books one pair.
   await signIn(page, ACCOUNTS.borrower3);
-  await page.goto("/browse?category=Skate");
+  await page.goto("/browse?experience=Street+Session");
   await page.getByRole("link", { name: new RegExp(shoe) }).click();
   await page.getByRole("button", { name: "Add to bundle" }).click();
   // Delivered to the account's one address; nothing to type.

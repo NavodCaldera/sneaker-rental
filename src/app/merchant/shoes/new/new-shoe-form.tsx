@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { CurveChart } from "@/components/curve-chart";
+import { StyleFields } from "@/components/style-fields";
 import { Alert, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
 import { formatLKR } from "@/lib/format";
 import { SHOE_CONDITIONS } from "@/lib/shoe-condition";
@@ -12,7 +13,6 @@ import { type ActionState, createShoeAction } from "../../actions";
 /* eslint-disable @next/next/no-img-element -- local object-URL previews */
 
 export function NewShoeForm({
-  categories,
   photoSlots,
   lifespanMin,
   lifespanMax,
@@ -20,7 +20,6 @@ export function NewShoeForm({
   monthsMax,
   pickupAddress,
 }: {
-  categories: string[];
   photoSlots: { kind: string; label: string }[];
   lifespanMin: number;
   lifespanMax: number;
@@ -51,16 +50,8 @@ export function NewShoeForm({
           <Field label="Size" name="size" error={errors.size}>
             <Input name="size" placeholder="UK 9" required />
           </Field>
-          <Field label="Category" name="category" error={errors.category}>
-            <Select name="category" defaultValue="">
-              <option value="" disabled>
-                Choose…
-              </option>
-              {categories.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </Select>
-          </Field>
+          <div aria-hidden="true" className="hidden sm:block" />
+          <StyleFields errors={errors} />
           <div className="sm:col-span-2">
             <Field label="Description (optional)" name="description" error={errors.description}>
               <Textarea name="description" maxLength={1000} />

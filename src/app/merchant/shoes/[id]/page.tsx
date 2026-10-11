@@ -6,10 +6,12 @@ import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { Card, PageHeader } from "@/components/ui";
 import { formatDate, formatLKR, formatWear } from "@/lib/format";
+import { styleLabel } from "@/lib/shoe-style";
 import { requireUser } from "@/server/auth/session";
 import { CatalogueError, getMerchantForUser, getMerchantShoe } from "@/server/catalogue";
 import { shoeCurvePreview, shoePricing } from "@/server/catalogue/pricing";
 import { DraftActions } from "./draft-actions";
+import { StyleForm } from "./style-form";
 
 export const metadata: Metadata = { title: "Shoe" };
 
@@ -31,7 +33,7 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
         title={`${shoe.brand} ${shoe.model}`}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            {shoe.size} · {shoe.category} <ShoeStatusBadge status={shoe.status} />
+            {shoe.size} · {styleLabel(shoe)} <ShoeStatusBadge status={shoe.status} />
           </span>
         }
       />
@@ -82,6 +84,8 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
           <Stat label="Lost to discounts" value={formatLKR(shoe.lostToDiscounts.toString())} />
         </Card>
       </div>
+
+      <StyleForm shoeId={shoe.id} audience={shoe.audience} experience={shoe.experience} />
 
       <Card>
         <h2 className="mb-3 font-medium">Photos</h2>

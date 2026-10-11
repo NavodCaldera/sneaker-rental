@@ -8,7 +8,9 @@ import {
   publishShoe,
   setLifespanExtension,
   shoeSchema,
+  styleSchema,
   updatePayoutAccount,
+  updateShoeStyle,
 } from "@/server/catalogue";
 import { curvePreview, shoeCurve, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings, toPricingSettings } from "@/server/settings";
@@ -34,7 +36,8 @@ const input = shoeSchema(LIMITS).parse({
   brand: "Nike",
   model: "Pegasus 41",
   size: "UK 9",
-  category: "Running",
+  audience: "MEN",
+  experience: "Morning Run",
   value: "6000",
   lifespanDays: "365",
   condition: "NEW",
@@ -256,6 +259,61 @@ describe("browsing and prices", () => {
     expect(await browseShoes({ size: "UK 10" })).toHaveLength(1);
     expect(await browseShoes({ q: "adi" })).toHaveLength(1);
     expect(await browseShoes({ brand: "Puma" })).toHaveLength(1);
+  });
+
+  it("shops by who it's for, then by experience; Unisex pairs show under Men and Women", async () => {
+    const merchant = await makeUser("MERCHANT");
+    const { id: settingsId } = await getActiveSettings();
+    const base = {
+      ...input,
+      description: null,
+      settingsId,
+      merchantId: merchant.merchant!.id,
+      status: "AVAILABLE" as const,
+    };
+    await db.shoe.createMany({
+      data: [
+        { ...base, brand: "M", audience: "MEN", experience: "Night Out" },
+        { ...base, brand: "W", audience: "WOMEN", experience: "Brunch & Errands" },
+        { ...base, brand: "U", audience: "UNISEX", experience: "Night Out" },
+        { ...base, brand: "B", audience: "BOYS", experience: "School Day" },
+        { ...base, brand: "G", audience: "GIRLS", experience: "Party Time" },
+      ],
+    });
+    const brands = async (f: Parameters<typeof browseShoes>[0]) =>
+      (await browseShoes(f)).map((s) => s.brand).sort();
+    expect(await brands({ audience: "MEN" })).toEqual(["M", "U"]);
+    expect(await brands({ audience: "WOMEN" })).toEqual(["U", "W"]);
+    expect(await brands({ audience: "BOYS" })).toEqual(["B"]);
+    expect(await brands({ audience: "GIRLS" })).toEqual(["G"]);
+    expect(await brands({ audience: "WOMEN", experience: "Night Out" })).toEqual(["U"]);
+    expect(await brands({ experience: "Night Out" })).toEqual(["M", "U"]);
+  });
+
+  it("accepts only an experience the audience offers, and the merchant can change it", async () => {
+    const LIMITS = { minLifespanDays: 183, maxLifespanDays: 730 };
+    const raw = { ...input, lifespanDays: "365" };
+    expect(shoeSchema(LIMITS).safeParse({ ...raw, audience: "BOYS" }).success).toBe(false);
+    expect(
+      shoeSchema(LIMITS).safeParse({ ...raw, audience: "BOYS", experience: "School Day" }).success,
+    ).toBe(true);
+    // Unisex pairs take any adult experience.
+    expect(styleSchema.safeParse({ audience: "UNISEX", experience: "Studio & Gym" }).success).toBe(
+      true,
+    );
+    expect(styleSchema.safeParse({ audience: "GIRLS", experience: "Work Day" }).success).toBe(
+      false,
+    );
+
+    const user = await makeUser("MERCHANT");
+    const other = await makeUser("MERCHANT");
+    const shoe = await createShoe(user.merchant!.id, input, allPhotos());
+    const style = styleSchema.parse({ audience: "WOMEN", experience: "Big Occasion" });
+    await expect(updateShoeStyle(other.merchant!.id, shoe.id, style)).rejects.toThrow(
+      CatalogueError,
+    );
+    const updated = await updateShoeStyle(user.merchant!.id, shoe.id, style);
+    expect([updated.audience, updated.experience]).toEqual(["WOMEN", "Big Occasion"]);
   });
 
   it("prices the 6,000 LKR / 365-day shoe at 28.9248 new and 8.6774 at end of life", async () => {

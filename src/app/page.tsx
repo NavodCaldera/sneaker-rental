@@ -5,38 +5,46 @@ import { ShoeRow, ShoeRowItem } from "@/components/shoe-row";
 import { D } from "@/lib/decimal";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
 import { conditionShort } from "@/lib/shoe-condition";
+import {
+  EXPERIENCES,
+  EXPERIENCE_ICONS,
+  SHOP_AUDIENCES,
+  parseShopAudience,
+  styleLabel,
+} from "@/lib/shoe-style";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { getCurrentUser } from "@/server/auth/session";
 import { homeFor } from "@/server/auth/service";
-import { CATEGORIES, browseFacets, browseShoes } from "@/server/catalogue";
+import { browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings } from "@/server/settings";
 import { homeRows } from "./home-rows";
 
-/** Decorative icons for the style tabs. */
-const CATEGORY_ICONS: Record<string, string> = {
-  All: "👟",
-  Running: "🏃",
-  Lifestyle: "🕶️",
-  Basketball: "🏀",
-  Skate: "🛹",
-  Training: "🏋️",
-  Other: "✨",
-};
+/** A home-page link that keeps only the given shopping filters. */
+function homeHref(params: { for?: string; experience?: string }) {
+  const qs = new URLSearchParams(
+    Object.entries(params).filter((e): e is [string, string] => !!e[1]),
+  ).toString();
+  return qs ? `/?${qs}` : "/";
+}
 
 /**
- * The marketplace home for visitors and borrowers: style tabs, a search bar and rows of pairs
- * to scroll through. Merchants and admins go to their own dashboards.
+ * The marketplace home for visitors and borrowers: tabs for who it's for (Men, Women, Boys,
+ * Girls), that audience's experiences as chips, a search bar and rows of pairs to scroll
+ * through. Merchants and admins go to their own dashboards.
  */
 export default async function Home({ searchParams }: PageProps<"/">) {
   const user = await getCurrentUser();
   if (user && user.role !== "BORROWER") redirect(homeFor(user.role));
 
   const sp = await searchParams;
-  const picked = typeof sp.category === "string" ? sp.category : undefined;
-  const category = picked && CATEGORIES.includes(picked) ? picked : undefined;
+  const audience = parseShopAudience(typeof sp.for === "string" ? sp.for : undefined);
+  const picked = typeof sp.experience === "string" ? sp.experience : undefined;
+  const experience =
+    audience && picked && EXPERIENCES[audience].includes(picked) ? picked : undefined;
+  const forParam = audience?.toLowerCase();
   const [shoes, facets, active] = await Promise.all([
-    browseShoes({ category }),
+    browseShoes({ audience, experience }),
     browseFacets(),
     getActiveSettings(),
   ]);
@@ -52,7 +60,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       brand: shoe.brand,
       model: shoe.model,
       size: shoe.size,
-      category: shoe.category,
+      style: styleLabel(shoe),
       photoId: shoe.photos[0]?.id,
       badge: discounted
         ? `${formatPercent(release.discount)} off`
@@ -80,23 +88,28 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     };
   });
 
-  const where = category ? ` in ${category}` : "";
-  const seeAll = `/browse?${new URLSearchParams({ ...(category && { category }) })}`;
-  const rows = homeRows(cards, category);
+  const audienceName = SHOP_AUDIENCES.find((a) => a.value === audience)?.label;
+  const scope = audienceName && (experience ? `${audienceName} · ${experience}` : audienceName);
+  const where = scope ? ` in ${scope}` : "";
+  const seeAll = `/browse?${new URLSearchParams({
+    ...(forParam && { for: forParam }),
+    ...(experience && { experience }),
+  })}`;
+  const rows = homeRows(cards, scope);
 
   return (
     <main className="flex flex-col gap-10">
       <h1 className="sr-only">Shoe Rental: rent shoes by the wear</h1>
 
       <div className="flex flex-col items-center gap-6">
-        <nav aria-label="Styles" className="w-full overflow-x-auto [scrollbar-width:none]">
-          <ul className="mx-auto flex w-max gap-6 px-1 sm:gap-8">
-            {["All", ...CATEGORIES].map((c) => {
-              const current = c === "All" ? !category : c === category;
+        <nav aria-label="Who it's for" className="w-full overflow-x-auto [scrollbar-width:none]">
+          <ul className="mx-auto flex w-max gap-6 px-1 sm:gap-10">
+            {[{ value: undefined, label: "All", icon: "👟" }, ...SHOP_AUDIENCES].map((a) => {
+              const current = a.value === audience;
               return (
-                <li key={c}>
+                <li key={a.label}>
                   <Link
-                    href={c === "All" ? "/" : `/?category=${encodeURIComponent(c)}`}
+                    href={homeHref({ for: a.value?.toLowerCase() })}
                     aria-current={current ? "page" : undefined}
                     className={`flex flex-col items-center gap-1 border-b-2 pb-2 text-sm transition ${
                       current
@@ -105,9 +118,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
                     }`}
                   >
                     <span aria-hidden="true" className="text-2xl">
-                      {CATEGORY_ICONS[c] ?? "👟"}
+                      {a.icon}
                     </span>
-                    {c}
+                    {a.label}
                   </Link>
                 </li>
               );
@@ -115,13 +128,43 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </ul>
         </nav>
 
+        {audience && (
+          <nav
+            aria-label={`Experiences for ${audienceName}`}
+            className="-mt-2 w-full overflow-x-auto [scrollbar-width:none]"
+          >
+            <ul className="mx-auto flex w-max gap-2 px-1">
+              {[undefined, ...EXPERIENCES[audience]].map((x) => {
+                const current = x === experience;
+                return (
+                  <li key={x ?? "all"}>
+                    <Link
+                      href={homeHref({ for: forParam, experience: x })}
+                      aria-current={current ? "page" : undefined}
+                      className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition ${
+                        current
+                          ? "border-ink bg-ink font-semibold text-paper"
+                          : "border-line text-ink hover:border-ink"
+                      }`}
+                    >
+                      {x && <span aria-hidden="true">{EXPERIENCE_ICONS[x]}</span>}
+                      {x ?? `All ${audienceName}`}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        )}
+
         <form
           action="/browse"
           role="search"
           aria-label="Find shoes"
           className="flex w-full max-w-3xl items-center rounded-full border border-line bg-paper py-2 pl-2 pr-2 shadow-md"
         >
-          {category && <input type="hidden" name="category" value={category} />}
+          {forParam && <input type="hidden" name="for" value={forParam} />}
+          {experience && <input type="hidden" name="experience" value={experience} />}
           <label className="flex min-w-0 flex-1 flex-col rounded-full px-5 py-1.5 hover:bg-muted">
             <span className="text-xs font-semibold">Size</span>
             <select
@@ -170,7 +213,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <p className="py-16 text-center text-subtle">
           No pairs{where} yet.{" "}
           <Link href="/" className="underline">
-            See all styles
+            See everything
           </Link>
         </p>
       ) : (

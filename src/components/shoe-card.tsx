@@ -6,7 +6,8 @@ export type ShoeCardData = {
   brand: string;
   model: string;
   size: string;
-  category: string;
+  /** Who it's for and the experience, e.g. "Women · Night Out" */
+  style: string;
   photoId?: string;
   /** Pill on the photo, e.g. "10% off", "Reserve next", "Upgraded" (only when it says something) */
   badge?: string;
@@ -43,7 +44,7 @@ export function ShoeCard({ shoe }: { shoe: ShoeCardData }) {
       <div className="min-w-0 px-0.5 text-sm leading-snug">
         <div className="truncate font-semibold">{name}</div>
         <div className="truncate text-subtle">
-          {shoe.size} · {shoe.category}
+          {shoe.size} · {shoe.style}
           {shoe.note && <> · {shoe.note}</>}
         </div>
         <div className="mt-1 truncate">

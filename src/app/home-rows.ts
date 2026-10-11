@@ -16,11 +16,12 @@ export const ROW_SIZE = 12;
 
 /**
  * The home page rows, in order, empty ones left out. Discounted pairs come first, biggest
- * discount first (then the lower price). `items` must be newest first.
+ * discount first (then the lower price). `items` must be newest first. `scope` names the
+ * tab and experience picked, e.g. "Women · Night Out".
  */
-export function homeRows<C>(items: HomeItem<C>[], category?: string): HomeRow<C>[] {
+export function homeRows<C>(items: HomeItem<C>[], scope?: string): HomeRow<C>[] {
   const available = items.filter((i) => i.status === "AVAILABLE");
-  const where = category ? ` in ${category}` : "";
+  const where = scope ? ` in ${scope}` : "";
   const rows: HomeRow<C>[] = [
     {
       title: `Deals${where}: biggest discounts first`,

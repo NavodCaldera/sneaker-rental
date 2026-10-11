@@ -4,6 +4,13 @@ import { PhotoImg, WearBar } from "@/components/shoe-bits";
 import { Badge, Button, EmptyState, Input, PageHeader, Select } from "@/components/ui";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
 import { conditionShort } from "@/lib/shoe-condition";
+import {
+  ALL_EXPERIENCES,
+  EXPERIENCES,
+  SHOP_AUDIENCES,
+  parseShopAudience,
+  styleLabel,
+} from "@/lib/shoe-style";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
@@ -20,7 +27,8 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
   const filters = {
     size: one(sp.size),
     brand: one(sp.brand),
-    category: one(sp.category),
+    audience: parseShopAudience(one(sp.for)),
+    experience: one(sp.experience),
     q: one(sp.q),
   };
   const [shoes, facets, active] = await Promise.all([
@@ -56,16 +64,28 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
             <option key={b}>{b}</option>
           ))}
         </Select>
-        <Select name="category" defaultValue={filters.category ?? ""} aria-label="Style">
-          <option value="">All styles</option>
-          {facets.categories.map((c) => (
-            <option key={c}>{c}</option>
+        <Select
+          name="for"
+          defaultValue={filters.audience?.toLowerCase() ?? ""}
+          aria-label="Who it's for"
+        >
+          <option value="">Everyone</option>
+          {SHOP_AUDIENCES.map((a) => (
+            <option key={a.value} value={a.value.toLowerCase()}>
+              {a.label}
+            </option>
+          ))}
+        </Select>
+        <Select name="experience" defaultValue={filters.experience ?? ""} aria-label="Experience">
+          <option value="">All experiences</option>
+          {(filters.audience ? EXPERIENCES[filters.audience] : ALL_EXPERIENCES).map((x) => (
+            <option key={x}>{x}</option>
           ))}
         </Select>
         <Button type="submit" variant="secondary">
           Filter
         </Button>
-        {(filters.q || filters.size || filters.brand || filters.category) && (
+        {(filters.q || filters.size || filters.brand || filters.audience || filters.experience) && (
           <Link href="/browse" className="px-2 text-sm underline">
             Clear
           </Link>
@@ -106,7 +126,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                       {shoe.brand} {shoe.model}
                     </div>
                     <div className="text-xs text-subtle">
-                      {shoe.size} · {shoe.category}
+                      {shoe.size} · {styleLabel(shoe)}
                     </div>
                   </div>
                   <div className="text-sm">

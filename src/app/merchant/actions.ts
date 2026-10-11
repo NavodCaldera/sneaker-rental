@@ -13,7 +13,9 @@ import {
   listingLimits,
   publishShoe,
   shoeSchema,
+  styleSchema,
   updatePayoutAccount,
+  updateShoeStyle,
 } from "@/server/catalogue";
 import { getActiveSettings } from "@/server/settings";
 import { PhotoError } from "@/server/storage";
@@ -63,6 +65,24 @@ export async function publishShoeAction(shoeId: string, _prev: ActionState): Pro
   }
   revalidatePath(`/merchant/shoes/${shoeId}`);
   return { ok: "Published. Your shoe is now available to borrowers." };
+}
+
+export async function updateShoeStyleAction(
+  shoeId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const merchant = await currentMerchant();
+  const parsed = styleSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
+  try {
+    await updateShoeStyle(merchant.id, shoeId, parsed.data);
+  } catch (e) {
+    if (e instanceof CatalogueError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/merchant/shoes/${shoeId}`);
+  return { ok: "Saved. Borrowers now find it there." };
 }
 
 export async function deleteDraftAction(shoeId: string) {

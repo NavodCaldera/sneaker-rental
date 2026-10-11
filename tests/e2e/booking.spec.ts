@@ -3,7 +3,7 @@ import { ACCOUNTS, signIn } from "./helpers";
 
 test("5.2 borrower builds a 4-pair bundle and checks out", async ({ page }) => {
   await signIn(page, ACCOUNTS.borrower2);
-  await page.goto("/browse?category=Lifestyle");
+  await page.goto("/browse?for=women");
   const hrefs = await page
     .locator('main ul a[href^="/shoes/"]')
     .evaluateAll((links) => links.map((a) => a.getAttribute("href")!));
@@ -21,7 +21,7 @@ test("5.2 borrower builds a 4-pair bundle and checks out", async ({ page }) => {
   await expect(page.getByText("Deposit: pair values, locked while you rent")).toBeVisible();
 
   // A fifth pair breaks the 4-pair cap.
-  await page.goto("/browse?category=Running");
+  await page.goto("/browse?for=men&experience=Morning+Run");
   await page.locator('main ul a[href^="/shoes/"]').first().click();
   await page.getByRole("button", { name: "Add to bundle" }).click();
   await expect(page.getByText(/hold up to 4 pairs/i).first()).toBeVisible();
@@ -31,7 +31,8 @@ test("5.2 borrower builds a 4-pair bundle and checks out", async ({ page }) => {
     .click();
   await expect(page.getByText("Daily cost (4 pairs held)")).toBeVisible();
 
-  await expect(page.getByText("No. 8, Flower Road, Colombo 07")).toBeVisible();
+  // Ravi's account address (seed).
+  await expect(page.getByText("21/3 Hill Street, Dehiwala")).toBeVisible();
   await page.getByRole("button", { name: "Check out" }).click();
   await expect(page).toHaveURL(/\/rentals\?booked=1/);
   await expect(page.getByText("On its way")).toHaveCount(4);
