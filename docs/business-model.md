@@ -114,7 +114,7 @@ Four journeys carry the business; every step records who held the shoe and when,
 4. Publishes. The shoe is Available, priced at P(w) for its current wear.
 
 **5.2 Borrower rents**
-0. Signs up as a customer with one address and city, where pairs are delivered and collected (we say why we ask). It can be changed later; there is no address to type at checkout.
+0. Signs up as a customer with their date of birth (we work out their age from it) and one address and city, where pairs are delivered and collected (we say why we ask). It can be changed later; there is no address to type at checkout.
 1. Browses by size, brand and style; each listing shows today's price per wear-day and the shoe's wear so far.
 2. Adds one to four pairs to a bundle and sees the daily cost of the whole bundle.
 3. Checks out: card pre-authorised for the estimate plus the deposit hold; a delivery is booked with a ride-hailing app.
