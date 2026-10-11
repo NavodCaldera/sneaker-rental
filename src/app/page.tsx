@@ -11,6 +11,7 @@ import { homeFor } from "@/server/auth/service";
 import { CATEGORIES, browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings } from "@/server/settings";
+import { homeRows } from "./home-rows";
 
 /** Decorative icons for the style tabs. */
 const CATEGORY_ICONS: Record<string, string> = {
@@ -22,8 +23,6 @@ const CATEGORY_ICONS: Record<string, string> = {
   Training: "🏋️",
   Other: "✨",
 };
-
-const ROW_SIZE = 12;
 
 /**
  * The marketplace home for visitors and borrowers: style tabs, a search bar and rows of pairs
@@ -72,45 +71,18 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             : `free from ${formatDate(dayToDate(release.releaseDay + 1))}`
           : undefined,
     };
-    return { shoe, card, price: new D(pricing.priceToday) };
+    return {
+      card,
+      status: shoe.status,
+      condition: shoe.condition,
+      price: new D(pricing.priceToday),
+      discount: release.discount,
+    };
   });
 
-  const available = cards.filter((c) => c.shoe.status === "AVAILABLE");
   const where = category ? ` in ${category}` : "";
-  const browse = (extra = "") =>
-    `/browse?${new URLSearchParams({ ...(category && { category }) })}${extra}`;
-  const rows = [
-    {
-      title: `Just listed${where}`,
-      subtitle: "Fresh pairs from our merchants, newest first",
-      href: browse(),
-      items: available.slice(0, ROW_SIZE),
-    },
-    {
-      title: `Best value today${where}`,
-      subtitle: "The lowest price per wear-day right now",
-      href: browse(),
-      items: [...available].sort((a, b) => a.price.comparedTo(b.price)).slice(0, ROW_SIZE),
-    },
-    {
-      title: "Brand new pairs",
-      subtitle: "Never worn: be the first",
-      href: browse(),
-      items: available.filter((c) => c.shoe.condition === "NEW").slice(0, ROW_SIZE),
-    },
-    {
-      title: "Pre-loved and upgraded",
-      subtitle: "Second-hand pairs start lower on the price curve",
-      href: browse(),
-      items: available.filter((c) => c.shoe.condition !== "NEW").slice(0, ROW_SIZE),
-    },
-    {
-      title: "Being worn now: reserve next",
-      subtitle: "Book it today and it comes straight to you when the current term ends",
-      href: browse(),
-      items: cards.filter((c) => c.shoe.status === "WITH_BORROWER").slice(0, ROW_SIZE),
-    },
-  ].filter((row) => row.items.length > 0);
+  const seeAll = `/browse?${new URLSearchParams({ ...(category && { category }) })}`;
+  const rows = homeRows(cards, category);
 
   return (
     <main className="flex flex-col gap-10">
@@ -203,7 +175,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         </p>
       ) : (
         rows.map((row) => (
-          <ShoeRow key={row.title} title={row.title} subtitle={row.subtitle} href={row.href}>
+          <ShoeRow key={row.title} title={row.title} subtitle={row.subtitle} href={seeAll}>
             {row.items.map(({ card }) => (
               <ShoeRowItem key={card.id}>
                 <ShoeCard shoe={card} />
