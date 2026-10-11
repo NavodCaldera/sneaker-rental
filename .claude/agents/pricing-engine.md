@@ -27,8 +27,9 @@ Pure functions, decimal.js only (`D` from `src/lib/decimal.ts`, precision 40), n
 
 - `validateListing(V, L, limits)`: V > 0 and minLife ≤ L ≤ maxLife, else RangeError. Called at listing time with the merchant's limits; `curveParams` only requires V > 0 and L > 0, so admin-extended shoes stay priceable
 - A listing's declared condition (brand new / second-hand / upgraded) is not a pricing input: second-hand pairs are priced only through w₀. Don't add a condition factor without a spec change.
-- `targetIncome(V, settings)` → R; `curveParams(V, L, settings)` → `{ V, L, R, m, beta, q, A, K }`
-- `Q(p, w)`, `IQ(p, w)` (closed form, stable softplus, w clamped to [0, L])
+- `targetIncome(V, settings)` → R; `curveParams(V, L, settings, method = "LOGISTIC")` → `{ method, V, L, R, q, A, K, pastLife, shape }`, where `shape` is `{ method: "LOGISTIC", m, beta, S0, SL, IS0 }` or `{ method: "EXPONENTIAL", lambda }`
+- **Pricing method (product decision 11, 2026-10-11):** `PricingMethod` = `"LOGISTIC"` (S-curve, the default) | `"EXPONENTIAL"`; `PRICING_METHODS` lists both. The merchant picks one per listing (`Shoe.pricingMethod`); callers pass it through `shoeCurve(shoe)`. Exponential decay is Q(w) = e^(−λw) = q^(w/L) with λ = ln(1/q)/L, IQ(w) = (1 − e^(−λw))/λ, A = (1 − q)·L/ln(1/q) ≈ 0.581408·L; Q(L) returns q exactly so P(L) = K·q to the last digit. It needs 0 < q < 1 (else RangeError). Both methods share R, K = R/A, the floor q, P(L) past L, and every function below; never add a method-specific branch outside `curve.ts`. A new method needs a spec change (§2), a closed-form IQ, and its own property tests (`exponential.test.ts` is the model).
+- `Q(p, w)`, `IQ(p, w)` (closed form, stable softplus for the S-curve, w clamped to [0, L])
 - `priceAt(p, w)` → P(w) = K·Q(w); `shownPrice(p, w, d, φ)` → (1 − d)·φ·P(w); `curveIncome(p, w)` → F(w); `curvePoints(p, n)`
 - `rentIntegral(p, w)` → IQ(w), plus q·(w − L) past L when `p.pastLife`
 - `incomeBetween(p, wStart, wEnd, d = 0, φ = 1)` → `{ income, undiscounted, discountCost }`, on `rentIntegral` (P(L) per wear-day past L when `pastLife`)
@@ -48,11 +49,12 @@ Pure functions, decimal.js only (`D` from `src/lib/decimal.ts`, precision 40), n
 
 - Round any intermediate value.
 - Let a discount or φ from one rental item carry into the next item's base price.
-- Use the 0.68198 constant. A is always computed as IQ(L).
+- Use the 0.68198 (or 0.581408) constant. A is always computed as IQ(L).
+- Change the S-curve's numbers when touching exponential decay: the S-curve stays the default and the acceptance tests run on it.
 - Import anything from `src/server/`, `src/app/`, Prisma or Next.js.
 
 ## Done when
 
 - Every row of the acceptance table in `docs/pricing-spec.md` §11 passes in `acceptance.test.ts`, including both scenarios (90-day A–E = 3,030.2730; hard test = 33,600.00 with every shoe collecting R). No `it.todo` or skipped tests.
-- Property tests pass: Q(0) = 1, Q(L) = q, Q non-increasing, IQ(L) = A, incomes over consecutive ranges add up to R, charged shares add up to the charge to the cent; with `chargePastLife` on, P(w > L) = P(L), 365 → 385 costs 20 × P(L) and lifetime income exceeds R; with it off, nothing is earned past L.
+- Property tests pass for **both** pricing methods (`properties.test.ts` for the S-curve, `exponential.test.ts` for exponential decay, including its 6,000 LKR / 365 values A = 212.2141, K = 33.9280, P(L) = 10.1784): Q(0) = 1, Q(L) = q, Q non-increasing, IQ(L) = A, incomes over consecutive ranges add up to R, charged shares add up to the charge to the cent; with `chargePastLife` on, P(w > L) = P(L), 365 → 385 costs 20 × P(L) and lifetime income exceeds R; with it off, nothing is earned past L.
 - `npx vitest run src/lib/pricing` is green, with 100% branch coverage on the module.

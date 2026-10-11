@@ -52,7 +52,11 @@ export const settingsSchema = z
   .object({
     merchantMargin: ratio,
     platformMargin: ratio,
-    floor: ratio,
+    // Both curves end at q; exponential decay (q^(w/L)) needs 0 < q < 1.
+    floor: ratio.refine(
+      (v) => RATIO.test(v) && new D(v).gt(0) && new D(v).lt(1),
+      "Must be above 0 and below 1",
+    ),
     midpointRatio: ratio,
     baseSteepness: ratio,
     refLife: z.coerce.number().int().min(1).max(3650),

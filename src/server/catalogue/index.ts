@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { D } from "@/lib/decimal";
 import type { Audience, PhotoKind, Prisma } from "@/generated/prisma/client";
-import { validateListing } from "@/lib/pricing";
+import { PRICING_METHODS, type PricingMethod, validateListing } from "@/lib/pricing";
 import {
   SIZE_COLUMN,
   SIZE_KEY,
@@ -47,6 +47,14 @@ export const styleSchema = z
 
 export type StyleInput = z.infer<typeof styleSchema>;
 
+const METHOD_VALUES = PRICING_METHODS as [PricingMethod, ...PricingMethod[]];
+
+/**
+ * How the pair's price falls with wear (pricing-spec.md §2): S-curve (the default) or
+ * exponential decay. The merchant picks it when listing and can change it while a draft.
+ */
+export const pricingMethodSchema = z.enum(METHOD_VALUES, { error: "Choose a pricing method" });
+
 /**
  * Listing form. Lifespan limits come from settings (OPEN DECISION, §10), so the schema is
  * built per settings version.
@@ -88,6 +96,8 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
       }),
       /** What was upgraded (upgraded pairs only) */
       upgradeNotes: z.string().trim().max(300).optional().or(z.literal("")),
+      /** How the price falls with wear: S-curve unless the merchant picks exponential decay */
+      pricingMethod: pricingMethodSchema.default("LOGISTIC"),
       /** Wear already used if listed second-hand (w₀) */
       initialWear: z
         .string()
@@ -232,6 +242,26 @@ export async function updateShoeStyle(merchantId: string, shoeId: string, input:
       experience: input.experience,
       ...shoeSizeFields(input.audience, shoe.sizeSystem, listed),
     },
+  });
+}
+
+/**
+ * The merchant changes a draft's pricing method (S-curve or exponential decay) after seeing
+ * its curve. Once published the method is fixed, like the settings snapshot: rent estimates,
+ * reservations and the merchant's target are all priced on the shoe's one curve.
+ */
+export async function updatePricingMethod(
+  merchantId: string,
+  shoeId: string,
+  method: PricingMethod,
+) {
+  const shoe = await ownShoe(merchantId, shoeId);
+  if (shoe.status !== "DRAFT") {
+    throw new CatalogueError("The pricing method can only be changed before publishing");
+  }
+  return db.shoe.update({
+    where: { id: shoeId },
+    data: { pricingMethod: pricingMethodSchema.parse(method) },
   });
 }
 

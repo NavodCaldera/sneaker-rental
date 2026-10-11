@@ -5,6 +5,11 @@
 export { DEFAULT_PRICING_SETTINGS, type PricingSettings } from "./settings";
 export {
   type CurveParams,
+  type CurveShape,
+  type ExponentialShape,
+  type LogisticShape,
+  PRICING_METHODS,
+  type PricingMethod,
   curveIncome,
   curveParams,
   curvePoints,

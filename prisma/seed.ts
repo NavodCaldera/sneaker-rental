@@ -4,7 +4,12 @@
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { type Audience, PrismaClient, type Role } from "../src/generated/prisma/client";
+import {
+  type Audience,
+  type PricingMethod,
+  PrismaClient,
+  type Role,
+} from "../src/generated/prisma/client";
 import { parseSize, shoeSizeFields } from "../src/lib/shoe-size";
 import { hashPassword } from "../src/server/auth/password";
 import { LocalDiskStorage, storageDir } from "../src/server/storage/local";
@@ -133,6 +138,8 @@ type SeedShoe = {
   value: string;
   lifespanDays: number;
   description?: string;
+  /** Price curve the merchant picked; S-curve unless set */
+  pricingMethod?: PricingMethod;
 };
 
 /** The first two are the acceptance-test shoes (business-model.md §9). */
@@ -232,6 +239,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       experience: "Brunch & Errands",
       value: "18000",
       lifespanDays: 350,
+      pricingMethod: "EXPONENTIAL",
+      description: "Priced on exponential decay: dearest when new, then falls fastest at first.",
     },
     {
       brand: "Converse",

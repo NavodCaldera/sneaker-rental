@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui";
 import { fullAddress } from "@/lib/address";
+import { toD } from "@/lib/decimal";
 import { requireUser } from "@/server/auth/session";
 import {
   LISTING_PHOTOS,
@@ -16,7 +17,8 @@ export const metadata: Metadata = { title: "Add shoe" };
 export default async function NewShoePage() {
   const user = await requireUser("MERCHANT");
   const merchant = await getMerchantForUser(user.id);
-  const limits = listingLimits(await getActiveSettings(), merchant);
+  const settings = await getActiveSettings();
+  const limits = listingLimits(settings, merchant);
   return (
     <main>
       <PageHeader
@@ -30,6 +32,7 @@ export default async function NewShoePage() {
         monthsMin={daysToMonths(limits.minLifespanDays)}
         monthsMax={daysToMonths(limits.maxLifespanDays)}
         pickupAddress={fullAddress(user)}
+        floorPercent={toD(settings.floor).times(100).toString()}
       />
     </main>
   );

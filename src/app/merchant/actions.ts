@@ -11,10 +11,12 @@ import {
   deleteDraft,
   getMerchantForUser,
   listingLimits,
+  pricingMethodSchema,
   publishShoe,
   shoeSchema,
   styleSchema,
   updatePayoutAccount,
+  updatePricingMethod,
   updateShoeStyle,
 } from "@/server/catalogue";
 import { getActiveSettings } from "@/server/settings";
@@ -83,6 +85,24 @@ export async function updateShoeStyleAction(
   }
   revalidatePath(`/merchant/shoes/${shoeId}`);
   return { ok: "Saved. Borrowers now find it there." };
+}
+
+export async function updatePricingMethodAction(
+  shoeId: string,
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const merchant = await currentMerchant();
+  const parsed = pricingMethodSchema.safeParse(formData.get("pricingMethod"));
+  if (!parsed.success) return { fieldErrors: { pricingMethod: [parsed.error.issues[0].message] } };
+  try {
+    await updatePricingMethod(merchant.id, shoeId, parsed.data);
+  } catch (e) {
+    if (e instanceof CatalogueError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath(`/merchant/shoes/${shoeId}`);
+  return { ok: "Saved. The curve above now uses it." };
 }
 
 export async function deleteDraftAction(shoeId: string) {

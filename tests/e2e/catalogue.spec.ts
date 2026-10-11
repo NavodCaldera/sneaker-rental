@@ -59,6 +59,59 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
   await expect(size.getByRole("definition")).toHaveText(["11", "46", "11.5", "29.5"]);
 });
 
+test("a merchant picks exponential decay, can switch it as a draft, and it's fixed once published", async ({
+  page,
+}) => {
+  await signIn(page, ACCOUNTS.merchant);
+  await page.goto("/merchant/shoes/new");
+  await page.getByLabel("Brand").fill("Hoka");
+  await page.getByLabel("Model").fill("Clifton Decay");
+  await page.getByLabel("Size", { exact: true }).fill("10");
+  await page.getByLabel("Who it's for").selectOption("Men");
+  await page.getByLabel("Experience").selectOption("Morning Run");
+  for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
+    await page.getByLabel(`${view} photo`, { exact: true }).setInputFiles({
+      name: `${view}.png`,
+      mimeType: "image/png",
+      buffer: PNG,
+    });
+  }
+  await page.getByLabel("Declared value (LKR)").fill("6000");
+  await page.getByLabel("Expected lifespan (wear-days)").fill("365");
+  // S-curve by default; exponential decay is dearer new and ends at the same 30% of new.
+  await expect(page.getByRole("radio", { name: /^S-curve/ })).toBeChecked();
+  await expect(page.getByText("LKR 28.92 / wear-day")).toBeVisible();
+  await page.getByText("Exponential decay", { exact: true }).click();
+  await expect(page.getByRole("radio", { name: /^Exponential decay/ })).toBeChecked();
+  await expect(page.getByText("LKR 33.93 / wear-day")).toBeVisible();
+  await expect(page.getByText("LKR 10.18 / wear-day")).toBeVisible();
+  await expect(page.getByText("LKR 6,600.00")).toBeVisible(); // same lifetime share
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page).toHaveURL(/\/merchant\/shoes\/\w+/);
+
+  // The draft can switch back to the S-curve and the curve follows.
+  await expect(page.getByText("LKR 33.93 → LKR 10.18")).toBeVisible();
+  await page.getByText("S-curve (logistic decay)", { exact: true }).last().click();
+  await page.getByRole("button", { name: "Save pricing method" }).click();
+  await expect(page.getByText("LKR 28.92 → LKR 8.68")).toBeVisible();
+  await page.getByText("Exponential decay", { exact: true }).click();
+  await page.getByRole("button", { name: "Save pricing method" }).click();
+  await expect(page.getByText("LKR 33.93 → LKR 10.18")).toBeVisible();
+
+  // Published: the method is fixed and borrowers see it.
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("Available", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save pricing method" })).toHaveCount(0);
+  await signOut(page);
+
+  await page.goto("/browse");
+  await page.getByLabel("Search").fill("Clifton Decay");
+  await page.getByRole("button", { name: "Filter" }).click();
+  await page.getByRole("link", { name: /Hoka Clifton Decay/ }).click();
+  await expect(page.getByText(/Exponential decay, picked by the merchant/)).toBeVisible();
+  await expect(page.locator("aside").getByText("LKR 33.93", { exact: true })).toBeVisible();
+});
+
 test("a merchant lists an upgraded second-hand pair; borrowers see its condition", async ({
   page,
 }) => {
