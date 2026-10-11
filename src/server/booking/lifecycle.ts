@@ -29,6 +29,7 @@ import { BookingError } from "./errors";
 import { loadHoldings } from "./holdings";
 import { replan } from "./plan";
 import { cancelReservation } from "./reservations";
+import { shoeName } from "@/lib/shoe-name";
 
 // ─── Borrower ends a pair (§5.3) ───────────────────────────────────────────
 
@@ -99,7 +100,7 @@ export async function endRental(
         kind: "TERM_ENDED",
         rentalItemId: item.id,
         link: "/rentals",
-        title: `${item.shoe.brand} ${item.shoe.model}: your rental has ended`,
+        title: `${shoeName(item.shoe)}: your rental has ended`,
         body: item.holdForNext
           ? `Your term ended on ${formatDate(dayToDate(lastDay))}. Please keep the pair safe ` +
             `for now: as soon as the next borrower books it, a driver takes it straight to ` +

@@ -4,7 +4,7 @@ import { formatDate, formatLKR } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { getMerchantForUser } from "@/server/catalogue";
 import { merchantPayouts } from "@/server/payouts";
-import { getActiveSettings } from "@/server/settings";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Payouts" };
 
@@ -17,17 +17,11 @@ const STATE = {
 export default async function MerchantPayouts() {
   const user = await requireUser("MERCHANT");
   const merchant = await getMerchantForUser(user.id);
-  const [{ payouts, waiting }, settings] = await Promise.all([
-    merchantPayouts(merchant.id),
-    getActiveSettings(),
-  ]);
+  const { payouts, waiting } = await merchantPayouts(merchant.id);
 
   return (
     <main className="flex flex-col gap-8">
-      <PageHeader
-        title="Payouts"
-        description={`Your share of each rental is paid weekly, ${settings.disputeWindowDays} days after the rental closes. Paid to ${merchant.payoutAccount ?? "— add a payout account"}.`}
-      />
+      <PageHeader title="Payouts" />
       <section>
         <h2 className="mb-3 font-medium">Coming up</h2>
         {waiting.length === 0 ? (
@@ -38,10 +32,8 @@ export default async function MerchantPayouts() {
               <li key={i.id}>
                 <Card className="flex flex-wrap items-center gap-3 p-3 text-sm">
                   <span className="flex-1">
-                    <span className="font-medium">
-                      {i.shoe.brand} {i.shoe.model}
-                    </span>{" "}
-                    · closed {formatDate(i.closedAt)} · payable from {formatDate(i.payableAt)}
+                    <span className="font-medium">{shoeName(i.shoe)}</span> · closed{" "}
+                    {formatDate(i.closedAt)} · payable from {formatDate(i.payableAt)}
                   </span>
                   <Badge tone={STATE[i.state].tone}>{STATE[i.state].label}</Badge>
                   <span className="font-medium">{formatLKR(i.payable)}</span>
@@ -74,8 +66,7 @@ export default async function MerchantPayouts() {
                   <ul className="mt-2 text-subtle">
                     {p.items.map((i) => (
                       <li key={i.id}>
-                        {i.shoe.brand} {i.shoe.model}:{" "}
-                        {formatLKR(i.merchantShare?.toString() ?? "0")}
+                        {shoeName(i.shoe)}: {formatLKR(i.merchantShare?.toString() ?? "0")}
                         {i.disputes.some((d) => d.status === "UPHELD") &&
                           " (adjusted by a dispute)"}
                       </li>

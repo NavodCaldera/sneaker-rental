@@ -7,6 +7,7 @@ import { requireUser } from "@/server/auth/session";
 import { getMerchantForUser } from "@/server/catalogue";
 import { db } from "@/server/db";
 import { getActiveSettings } from "@/server/settings";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Record condition" };
 
@@ -27,7 +28,7 @@ export default async function MerchantConditionPage({
     <main className="max-w-2xl">
       <PageHeader
         title="Record condition"
-        description={`${item.shoe.brand} ${item.shoe.model} · returned by ${item.rental.borrower.name}`}
+        description={`${shoeName(item.shoe)} · returned by ${item.rental.borrower.name}`}
       />
       <Card>
         <p className="mb-4 text-sm text-subtle">

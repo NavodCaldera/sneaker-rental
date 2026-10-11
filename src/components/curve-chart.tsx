@@ -69,10 +69,10 @@ export function CurveChart({
           onBlur={() => setActive(null)}
         >
           <desc id={`${id}-desc`}>
-            Price per wear-day falls from {formatLKR(points[0].price)} when new to{" "}
+            Price per day falls from {formatLKR(points[0].price)} when new to{" "}
             {formatLKR(points[points.length - 1].price)} at{" "}
-            {formatWear(points[points.length - 1].wear)} wear-days. Use the left and right arrow
-            keys to read values.
+            {formatWear(points[points.length - 1].wear)} days. Use the left and right arrow keys to
+            read values.
           </desc>
           {yTicks.map((t) => (
             <g key={t}>
@@ -112,14 +112,14 @@ export function CurveChart({
             textAnchor="middle"
             className="fill-subtle text-[11px]"
           >
-            Wear (wear-days)
+            Wear (days)
           </text>
           <text
             transform={`translate(12 ${(pad.top + H - pad.bottom) / 2}) rotate(-90)`}
             textAnchor="middle"
             className="fill-subtle text-[11px]"
           >
-            LKR per wear-day
+            LKR per day
           </text>
 
           <path
@@ -190,8 +190,8 @@ export function CurveChart({
             }}
             aria-live="polite"
           >
-            <div className="font-medium">{formatLKR(points[shown].price)} / wear-day</div>
-            <div className="text-subtle">at {formatWear(points[shown].wear)} wear-days</div>
+            <div className="font-medium">{formatLKR(points[shown].price)} per day</div>
+            <div className="text-subtle">at {formatWear(points[shown].wear)} days</div>
           </div>
         )}
       </div>
@@ -200,8 +200,8 @@ export function CurveChart({
         <table className="mt-2 w-full max-w-sm">
           <thead>
             <tr className="text-left">
-              <th className="py-1 font-medium">Wear-days</th>
-              <th className="py-1 font-medium">LKR per wear-day</th>
+              <th className="py-1 font-medium">Days worn</th>
+              <th className="py-1 font-medium">LKR per day</th>
             </tr>
           </thead>
           <tbody>

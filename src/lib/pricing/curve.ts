@@ -90,7 +90,7 @@ export function validateListing(
   const l = new D(L);
   if (l.lt(settings.minLife) || l.gt(settings.maxLife)) {
     throw new RangeError(
-      `Lifespan must be between ${settings.minLife} and ${settings.maxLife} wear-days`,
+      `Lifespan must be between ${settings.minLife} and ${settings.maxLife} days`,
     );
   }
 }

@@ -6,6 +6,7 @@ import { formatLKR, formatWear } from "@/lib/format";
 import { requireUser } from "@/server/auth/session";
 import { getMerchantForUser, listMerchantShoes, merchantSummary } from "@/server/catalogue";
 import { shoePricing } from "@/server/catalogue/pricing";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "My shoes" };
 
@@ -59,7 +60,7 @@ export default async function MerchantHome() {
 
       {shoes.length === 0 ? (
         <EmptyState title="No shoes yet">
-          Add your first pair: five photos, its value and how many wear-days it will last.
+          Add your first pair: five photos, its value and how many days it will last.
         </EmptyState>
       ) : (
         <ul className="grid gap-3">
@@ -78,9 +79,7 @@ export default async function MerchantHome() {
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">
-                        {shoe.brand} {shoe.model}
-                      </span>
+                      <span className="font-medium">{shoeName(shoe)}</span>
                       <span className="text-sm text-subtle">{shoe.size}</span>
                       <ShoeStatusBadge status={shoe.status} />
                     </div>
@@ -91,13 +90,12 @@ export default async function MerchantHome() {
                           lifespan={shoe.lifespanDays}
                         />
                       </div>
-                      {formatWear(shoe.committedWear.toString())} / {shoe.lifespanDays} wear-days
-                      used
+                      {formatWear(shoe.committedWear.toString())} / {shoe.lifespanDays} days used
                     </div>
                   </div>
                   <div className="hidden text-right text-sm sm:block">
                     <div className="font-medium">{formatLKR(pricing.priceToday)}</div>
-                    <div className="text-xs text-subtle">per wear-day today</div>
+                    <div className="text-xs text-subtle">per day today</div>
                   </div>
                   <div className="hidden text-right text-sm md:block">
                     <div className="font-medium">{formatLKR(shoe.collectedSoFar.toString())}</div>

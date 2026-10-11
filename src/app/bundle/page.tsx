@@ -19,6 +19,7 @@ import { requireUser } from "@/server/auth/session";
 import { getBundle } from "@/server/booking/bundle";
 import { DEFAULT_PLANNED_DAYS, quoteBundle } from "@/server/booking/checkout";
 import { CheckoutForm } from "./checkout-form";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Bundle" };
 
@@ -58,7 +59,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2 font-medium">
                     <Link href={`/shoes/${line.shoeId}`} className="hover:underline">
-                      {line.brand} {line.model}
+                      {shoeName(line)}
                     </Link>
                     {line.mode === "handoff" && <Badge tone="info">Reserved next · handoff</Badge>}
                     {new D(line.discount).gt(0) && (
@@ -67,7 +68,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
                   </div>
                   <div className="text-sm text-subtle">
                     {line.size} · worn {formatWear(line.wear)} → {formatWear(line.wearEnd)} /{" "}
-                    {line.lifespanDays} · {formatLKR(line.priceToday)} / wear-day · rent about{" "}
+                    {line.lifespanDays} · {formatLKR(line.priceToday)} per day · rent about{" "}
                     {formatLKR(line.estimate)}
                   </div>
                   <div className="text-xs text-subtle">
@@ -77,11 +78,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
                   {line.problem && <p className="mt-1 text-sm text-danger">{line.problem}</p>}
                 </div>
                 <form action={removeFromBundleAction.bind(null, line.shoeId)}>
-                  <Button
-                    type="submit"
-                    variant="ghost"
-                    aria-label={`Remove ${line.brand} ${line.model}`}
-                  >
+                  <Button type="submit" variant="ghost" aria-label={`Remove ${shoeName(line)}`}>
                     Remove
                   </Button>
                 </form>

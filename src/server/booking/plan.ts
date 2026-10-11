@@ -18,6 +18,7 @@ import type { Tx } from "../db";
 import { notify } from "../notify";
 import { lockRent } from "../payments";
 import { type SettingsRow, getActiveSettings } from "../settings";
+import { shoeName } from "@/lib/shoe-name";
 
 /**
  * Planning (pricing-spec.md §6a). A booked term's rent estimate is locked at booking and the
@@ -280,7 +281,7 @@ export async function replan(
     const p = plan.items.get(row.id);
     if (!p) continue;
     const borrowerId = row.rental.borrowerId;
-    const name = `${row.shoe.brand} ${row.shoe.model}`;
+    const name = shoeName(row.shoe);
     const agreed = row.plannedCharge === null ? null : toD(row.plannedCharge);
     const agreedFirst = row.plannedFirstDay === null ? null : dateToDay(row.plannedFirstDay);
 
@@ -376,7 +377,7 @@ function offerNotice(
   const shownBefore = row.plannedWearStart === null ? null : toD(row.plannedWearStart);
   const wear =
     shownBefore && !shownBefore.eq(p.wearStart)
-      ? ` It will have ${formatWear(p.wearStart)} wear-days used, not ${formatWear(shownBefore)}, ` +
+      ? ` It will have ${formatWear(p.wearStart)} days used, not ${formatWear(shownBefore)}, ` +
         `and a pair with less wear costs more per day.`
       : "";
   const price = p.charge.gt(agreed)

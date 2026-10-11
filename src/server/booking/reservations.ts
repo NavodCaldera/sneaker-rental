@@ -10,6 +10,7 @@ import { pairLocked, rentLockedFor, walletBalance } from "../wallet";
 import { customerAddress } from "./addresses";
 import { BookingError } from "./errors";
 import { replan } from "./plan";
+import { shoeName } from "@/lib/shoe-name";
 
 /**
  * Reservations of a pair someone else holds ("reserve next", pricing-spec.md §6a). A held
@@ -42,7 +43,7 @@ export async function cancelReservation(
     include: { rental: true, shoe: true },
   });
   if (item.status !== "WAITING_HANDOFF") return null;
-  const name = `${item.shoe.brand} ${item.shoe.model}`;
+  const name = shoeName(item.shoe);
   await tx.rentalItem.update({
     where: { id: item.id },
     data: {

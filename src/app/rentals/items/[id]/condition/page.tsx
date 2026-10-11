@@ -5,6 +5,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/server/auth/session";
 import { db } from "@/server/db";
 import { recordConditionAction } from "../../../actions";
+import { shoeName } from "@/lib/shoe-name";
 
 export const metadata: Metadata = { title: "Confirm condition" };
 
@@ -24,7 +25,7 @@ export default async function BorrowerConditionPage({
     <main className="max-w-2xl">
       <PageHeader
         title="Confirm condition"
-        description={`${item.shoe.brand} ${item.shoe.model} · ${item.shoe.size}`}
+        description={`${shoeName(item.shoe)} · ${item.shoe.size}`}
       />
       <Card>
         <p className="mb-4 text-sm text-subtle">
