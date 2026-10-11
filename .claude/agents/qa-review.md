@@ -37,7 +37,7 @@ You are the quality check. `main` is updated after every commit (product owner, 
    - [ ] The reference acceptance scenarios still run with `chargePastLife: false` and their expected values are unchanged.
    - [ ] No trip fee or booking fee moves through tokens, payments or payouts; `Delivery.paidBy` is the receiver (borrower for DELIVER/HANDOFF, merchant for COLLECT).
    - [ ] Addresses: one per customer and merchant account, required at sign-up with the reason shown; no address input at checkout or per listing; every trip's addresses come from `customerAddress` / `merchantAddress` at the time it is booked.
-   - [ ] Sign-up asks for the city after the address (both account types). Only white, black and #35D6ED appear as website colours (no new hex values or palette tokens); no blue text on white; UI text says "shoes", not "sneakers". Day and night mode both render (header switch, remembered by cookie; device setting when no pick).
+   - [ ] Sign-up asks for the city after the address (both account types). Customers (only) give a date of birth; age is computed from it, never stored. Only white, black and #35D6ED appear as website colours (no new hex values or palette tokens); no blue text on white; UI text says "shoes", not "sneakers". Day and night mode both render (header switch, remembered by cookie; device setting when no pick).
    - [ ] No hard-coded settings values (0.10, 3 days, 4 pairs, 183 / 730 lifespan limits, 10 days' notice, 24-hour offers) outside PricingSettings defaults and seed.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] The release discount comes from `releaseDiscount`, is fixed on the item at checkout, and never reaches the current holder.
