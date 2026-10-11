@@ -80,6 +80,19 @@ test("a merchant picks exponential decay, can switch it as a draft, and it's fix
   await page.getByLabel("Expected lifespan (days)").fill("365");
   // S-curve by default; exponential decay is dearer new and ends at the same 30% of new.
   await expect(page.getByRole("radio", { name: /^S-curve/ })).toBeChecked();
+  // The "?" explains how to choose: match the curve to how the pair's quality degrades.
+  const help = page.getByRole("tooltip");
+  await expect(help).toBeHidden();
+  await page.getByRole("button", { name: "How to choose a pricing method" }).hover();
+  await expect(help).toBeVisible();
+  await expect(help).toContainText("Its price should fall the way its quality does.");
+  await expect(help).toContainText("Choose exponential decay if the pair loses its fresh look");
+  await page.mouse.move(0, 0);
+  await expect(help).toBeHidden();
+  await page.getByRole("button", { name: "How to choose a pricing method" }).focus();
+  await expect(help).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(help).toBeHidden();
   await expect(page.getByText("LKR 28.92 per day")).toBeVisible();
   await page.getByText("Exponential decay", { exact: true }).click();
   await expect(page.getByRole("radio", { name: /^Exponential decay/ })).toBeChecked();
