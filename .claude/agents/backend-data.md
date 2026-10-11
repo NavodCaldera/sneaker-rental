@@ -14,6 +14,7 @@ You build the data layer and core APIs for the Sneaker Rental Marketplace. Read 
 
 ## Must deliver
 
+0. **Demo data:** `scripts/demo-discounts.ts` (`npm run db:demo-discounts`, after `npm run db:seed`) makes realistic discounted pairs for the home page's "Exceptional Value" row by running real rentals through the services with past dates (checkout, deliveries, the daily job, `recordCondition`, `markCleaned`), after dating the seeded sample data back to a launch 60 days ago. Never fake a discount by writing `releaseDay` or prices directly. Keep it working when booking or seed code changes (product owner, 2026-10-12).
 1. **Prisma schema** for every entity in §8: User, Merchant, Shoe, PricingSettings, Rental, RentalItem, Delivery, ConditionReport, Payment, Payout, Dispute, Photo, Session.
    - Every money and wear field is `Decimal`, never `Float`: charged amounts `Decimal(14, 2)`, unrounded money and wear `Decimal(28, 12)`, ratios `Decimal(20, 16)`.
    - Enums: `Role` (MERCHANT, BORROWER, ADMIN), `ShoeStatus` (DRAFT, AVAILABLE, RESERVED, OUT_FOR_DELIVERY, WITH_BORROWER, IN_HANDOFF, CLEANING, RETIRED, SOLD), `Grade` (A–D), `DeliveryType` (DELIVER, COLLECT, HANDOFF), plus status enums for Rental, RentalItem, Delivery, Payment, Payout, Dispute.

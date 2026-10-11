@@ -32,13 +32,13 @@ Conventions:
 
 ## Databases
 
-`npm run db:start` runs two local PostgreSQL 18 servers from the embedded-postgres binaries (no install, no password, data in `.data/pg/`): dev on port 5544 and test on 5545. The test runs wipe the test database. `npm run db:stop` / `db:status` manage them. Both URLs are in `.env`. Inside `db.$transaction(async (tx) => …)` use only `tx`, never `db`. Seed accounts all use password `password123`: admin@, kicks@ / sole@ (merchants), amaya@ / ravi@ / nimal@ (borrowers), all `@sneakers.test`.
+`npm run db:start` runs two local PostgreSQL 18 servers from the embedded-postgres binaries (no install, no password, data in `.data/pg/`): dev on port 5544 and test on 5545. The test runs wipe the test database. `npm run db:stop` / `db:status` manage them. Both URLs are in `.env`. Inside `db.$transaction(async (tx) => …)` use only `tx`, never `db`. `npm run db:demo-discounts` (after the seed) dates the sample marketplace back to a launch 60 days ago and runs real rentals through the services (Amaya: Puma + Samba, ending in 5 days; Ravi: Vans, ending in 2; Nimal: Converse, returned 3 days ago), so the home page's "Exceptional Value" row has discounted pairs (product owner, 2026-10-12); it skips pairs already rented. Seed accounts all use password `password123`: admin@, kicks@ / sole@ (merchants), amaya@ / ravi@ / nimal@ (borrowers), all `@sneakers.test`.
 
 (Prisma's `prisma dev` PGlite server was tried first and crashed under repeated test runs, so don't go back to it.)
 
 ## Commands
 
-`npm run dev` · `npm run check` (typecheck + lint + unit tests) · `npm test` (unit) · `npm run test:int` (integration, test DB) · `npm run e2e` (Playwright on port 3100, test DB) · `npm run db:migrate` · `npm run db:seed` · `npm run format`
+`npm run dev` · `npm run check` (typecheck + lint + unit tests) · `npm test` (unit) · `npm run test:int` (integration, test DB) · `npm run e2e` (Playwright on port 3100, test DB) · `npm run db:migrate` · `npm run db:seed` · `npm run db:demo-discounts` · `npm run format`
 
 ## Hard rules (§9)
 

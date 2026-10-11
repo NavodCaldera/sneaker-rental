@@ -17,6 +17,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev && prisma generate",
     "db:seed": "prisma db seed",
+    "db:demo-discounts": "node --conditions=react-server --import tsx scripts/demo-discounts.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "check": "npm run typecheck && npm run lint && npm run test",
