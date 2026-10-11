@@ -32,10 +32,13 @@ export async function SiteHeader() {
   const user = await getCurrentUser();
   const unread = user ? await unreadCount(user.id) : 0;
   return (
-    <header className="border-b border-line">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-        <Link href="/" className="font-semibold tracking-tight">
-          <span className="text-accent">●</span> Sneaker Rental
+    <header className="sticky top-0 z-20 border-b border-line bg-paper/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-4">
+        <Link
+          href="/"
+          className="flex items-center gap-1.5 text-xl font-bold tracking-tight text-accent"
+        >
+          <span aria-hidden="true">👟</span> Sneaker Rental
         </Link>
         {user ? (
           <>
@@ -44,31 +47,48 @@ export async function SiteHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="rounded-md px-2 py-1 hover:bg-muted"
+                  className="rounded-full px-3 py-1.5 font-medium hover:bg-muted"
                 >
                   {item.label}
                 </Link>
               ))}
             </nav>
             <div className="ml-auto flex items-center gap-3 text-sm">
-              <Link href="/notifications" className="rounded-md px-2 py-1 hover:bg-muted">
+              <Link
+                href="/notifications"
+                className="rounded-full px-3 py-1.5 font-medium hover:bg-muted"
+              >
                 Notices{unread > 0 && <span className="ml-1 font-semibold">({unread})</span>}
               </Link>
               <span className="hidden text-subtle sm:inline">{user.name}</span>
               <form action={signOutAction}>
-                <button className="rounded-md px-2 py-1 hover:bg-muted">Sign out</button>
+                <button className="rounded-full border border-line px-3 py-1.5 font-medium shadow-sm hover:shadow">
+                  Sign out
+                </button>
               </form>
             </div>
           </>
         ) : (
-          <div className="ml-auto flex gap-2 text-sm">
-            <Link href="/browse" className="rounded-md px-2 py-1 hover:bg-muted">
+          <div className="ml-auto flex items-center gap-1 text-sm">
+            <Link
+              href="/sign-up?role=MERCHANT"
+              className="hidden rounded-full px-4 py-2 font-medium hover:bg-muted sm:inline"
+            >
+              List your shoes
+            </Link>
+            <Link href="/browse" className="rounded-full px-3 py-2 font-medium hover:bg-muted">
               Browse
             </Link>
-            <Link href="/sign-in" className="rounded-md px-2 py-1 hover:bg-muted">
+            <Link
+              href="/sign-in"
+              className="rounded-full border border-line px-4 py-2 font-medium shadow-sm hover:shadow"
+            >
               Sign in
             </Link>
-            <Link href="/sign-up" className="rounded-md bg-ink px-3 py-1 text-paper">
+            <Link
+              href="/sign-up"
+              className="rounded-full bg-ink px-4 py-2 font-medium text-paper hover:opacity-90"
+            >
               Sign up
             </Link>
           </div>
