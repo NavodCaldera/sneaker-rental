@@ -62,21 +62,19 @@ test("a new merchant can sign up", async ({ page }) => {
   await expect(page.getByLabel("City")).toHaveValue("Colombo 06");
 });
 
-test("a new customer signs up with their date of birth; merchants aren't asked", async ({
-  page,
-}) => {
+test("a new customer signs up with their age; merchants aren't asked", async ({ page }) => {
   await page.goto("/sign-up");
   await page.getByText("Merchant", { exact: true }).click();
-  await expect(page.getByLabel("Date of birth")).toHaveCount(0);
+  await expect(page.getByLabel("Age", { exact: true })).toHaveCount(0);
   await page.getByText("Customer", { exact: true }).click();
   await page.getByLabel("Full name").fill("Test Customer");
   await page.getByLabel("Email").fill(`customer-${Date.now()}@test.local`);
-  await page.getByLabel("Date of birth").fill("2000-06-15");
+  await page.getByLabel("Age", { exact: true }).fill("26");
   await page.getByLabel("Delivery and collection address").fill("5 Lake Road");
   await page.getByLabel("City").fill("Kandy");
   await page.getByLabel("Password", { exact: true }).fill("password123");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL("/browse");
   await page.goto("/account");
-  await expect(page.getByText(/15 Jun 2000 \(age \d+\)/)).toBeVisible();
+  await expect(page.getByText("Age 26")).toBeVisible();
 });

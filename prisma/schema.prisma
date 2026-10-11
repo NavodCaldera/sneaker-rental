@@ -23,10 +23,10 @@ enum Role {
 }
 
 model User {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   role         Role
   name         String
-  email        String    @unique
+  email        String   @unique
   phone        String?
   /// The account's one address, entered at sign-up (customers and merchants; null for
   /// admins). Customers: where pairs are delivered and collected. Merchants: where drivers
@@ -34,16 +34,16 @@ model User {
   address      String?
   /// The town or city of that address, asked for separately at sign-up (both roles)
   city         String?
-  /// Customers' date of birth, asked at sign-up (their age is worked out from it; null for
-  /// merchants and admins)
-  dateOfBirth  DateTime? @db.Date
+  /// Customers' age in years, asked at sign-up (null for merchants and admins). It is the age
+  /// they gave when the account was created (`createdAt`).
+  age          Int?
   passwordHash String
-  verified     Boolean   @default(false)
+  verified     Boolean  @default(false)
   /// Locked after a lost shoe (§6)
-  locked       Boolean   @default(false)
+  locked       Boolean  @default(false)
   /// Trusted borrower tier (Phase 2; stored now, no logic yet)
-  tier         Int       @default(0)
-  createdAt    DateTime  @default(now())
+  tier         Int      @default(0)
+  createdAt    DateTime @default(now())
 
   merchant         Merchant?
   sessions         Session[]
