@@ -29,6 +29,14 @@ export async function addToBundleAction(shoeId: string) {
   redirect("/bundle");
 }
 
+/** Adds a rotation planned in the closet to the bundle, keeping the pairs already in it. */
+export async function addRotationToBundleAction(shoeIds: string[]) {
+  await requireUser("BORROWER");
+  const ids = Array.isArray(shoeIds) ? shoeIds.filter((id) => typeof id === "string") : [];
+  await setBundle([...(await getBundle()), ...ids]);
+  redirect("/bundle");
+}
+
 export async function removeFromBundleAction(shoeId: string) {
   await requireUser("BORROWER");
   await setBundle((await getBundle()).filter((id) => id !== shoeId));
