@@ -26,6 +26,7 @@ You are the quality check. `main` is updated after every commit (product owner, 
    - [ ] Rounding (`toFixed`, `roundMoney`, `toDecimalPlaces`) only at display or charge boundaries.
    - [ ] Discounts and φ apply to one rental item only. The next item starts from the curve.
    - [ ] Charged amounts come from `chargedAmounts`, merchant first: the platform gets nothing on a shoe until its merchant is paid (1 + μm) × V, and `Shoe.merchantCollected` stays in step (closes, lost pairs, refunds).
+   - [ ] Style packs: a merchant's pack never reaches borrowers without an admin's approval (and goes back to review when a merchant edits it after publishing); packs have no price or discount of their own; pack pages only show listed pairs.
    - [ ] No user-facing text says "wear-day": prices read "per day", counts "days" (product owner, 2026-10-12). Shoe names go through `shoeName()` (brand and model are optional; "Unbranded shoes"), and experiences are a list (`experiences`), shown joined by `styleLabel`.
    - [ ] A shoe is priced on its own `pricingMethod` (through `shoeCurve`), never on a hard-coded S-curve; the method changes only on drafts; no method-specific maths outside `src/lib/pricing/curve.ts`.
    - [ ] A listing's condition agrees with its wear used (brand new ⇒ 0, second-hand ⇒ > 0, upgraded ⇒ upgrades described) and never changes its price.
