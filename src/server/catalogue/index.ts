@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { D } from "@/lib/decimal";
 import type { Audience, PhotoKind, Prisma } from "@/generated/prisma/client";
@@ -8,6 +9,7 @@ import {
   SIZE_KEY,
   type SearchSystem,
   formatSize,
+  normalizeSize,
   parseSize,
   shoeSizeFields,
   sortSizes,
@@ -56,10 +58,63 @@ export const styleSchema = z
   })
   .refine(offered, { message: "Choose experiences from the list", path: ["experiences"] });
 
-/** A form's fields, with the repeated `experiences` checkboxes kept as a list. */
+/**
+ * A form's fields, with the repeated `experiences` checkboxes kept as a list, and the listing
+ * form's stock rows (repeated `stockSize` / `stockQuantity`) as `stock`.
+ */
 export function formFields(formData: FormData) {
-  return { ...Object.fromEntries(formData), experiences: formData.getAll("experiences") };
+  const quantities = formData.getAll("stockQuantity");
+  return {
+    ...Object.fromEntries(formData),
+    experiences: formData.getAll("experiences"),
+    stock: formData
+      .getAll("stockSize")
+      .map((size, i) => ({ size, quantity: quantities[i] }))
+      // A row the merchant added and left empty isn't a size.
+      .filter((line) => `${line.size}`.trim() !== "" || `${line.quantity ?? ""}`.trim() !== ""),
+  };
 }
+
+/** Most pairs of one size, and of one listing, a merchant can list at once. */
+export const MAX_PAIRS_PER_SIZE = 20;
+export const MAX_PAIRS_PER_LISTING = 100;
+
+/** A label size: whole or half sizes, 1 to 60. */
+const sizeNumber = z
+  .string({ error: "Enter the size" })
+  .trim()
+  .regex(SIZE_FORMAT, "Enter the number on the label, e.g. 9 or 9.5")
+  .refine((v) => !SIZE_FORMAT.test(v) || (Number(v) >= 1 && Number(v) <= 60), {
+    message: "Enter a size from 1 to 60",
+  });
+
+/**
+ * How many pairs the merchant has of each size (product owner, 2026-10-13): one row per size,
+ * each size once. Every pair becomes its own Shoe row in one listing.
+ */
+const stockField = z
+  .array(
+    z.object({
+      size: sizeNumber,
+      quantity: z.coerce
+        .number({ error: "Enter how many pairs" })
+        .int("Whole pairs only")
+        .min(1, "At least 1 pair of each size")
+        .max(MAX_PAIRS_PER_SIZE, `At most ${MAX_PAIRS_PER_SIZE} pairs of one size`),
+    }),
+    { error: "Add at least one size" },
+  )
+  .min(1, "Add at least one size")
+  .refine(
+    (lines) =>
+      new Set(lines.map((l) => (SIZE_FORMAT.test(l.size) ? normalizeSize(l.size) : l.size)))
+        .size === lines.length,
+    "List each size once",
+  )
+  .refine(
+    (lines) => lines.reduce((n, l) => n + l.quantity, 0) <= MAX_PAIRS_PER_LISTING,
+    `At most ${MAX_PAIRS_PER_LISTING} pairs in one listing`,
+  );
 
 export type StyleInput = z.infer<typeof styleSchema>;
 
@@ -81,15 +136,9 @@ export const shoeSchema = (limits: Pick<SettingsRow, "minLifespanDays" | "maxLif
       /** Optional (product owner, 2026-10-12): stored as "" when left empty */
       brand: z.string().trim().max(60).optional().default(""),
       model: z.string().trim().max(80).optional().default(""),
-      /** The size on the pair's label: its system and number */
+      /** The size system on the pairs' labels, and how many pairs of each size */
       sizeSystem: z.enum(["UK", "EU", "US"], { error: "Choose UK, EU or US" }),
-      size: z
-        .string()
-        .trim()
-        .regex(SIZE_FORMAT, "Enter the number on the label, e.g. 9 or 9.5")
-        .refine((v) => !SIZE_FORMAT.test(v) || (Number(v) >= 1 && Number(v) <= 60), {
-          message: "Enter a size from 1 to 60",
-        }),
+      stock: stockField,
       audience: z.enum(AUDIENCE_VALUES, { error: "Choose who it's for" }),
       experiences: experiencesField,
       description: z.string().trim().max(1000).optional().or(z.literal("")),
@@ -195,6 +244,10 @@ function checkListing(value: string, lifespanDays: number, limits: LifespanLimit
  * Creates a Draft listing with its five listing photos (§5.1 step 2), with the condition the
  * merchant declared (brand new, second-hand, or second-hand upgraded). A second-hand pair
  * starts at its declared wear w₀; the condition itself doesn't change the price.
+ *
+ * The merchant says how many pairs they have of each size (product owner, 2026-10-13): every
+ * pair becomes its own Shoe row (its own size, wear, price and deposit), all sharing one
+ * `listingId` and the same five photo files. Returns the first pair.
  */
 export async function createShoe(
   merchantId: string,
@@ -212,24 +265,37 @@ export async function createShoe(
   }
   checkListing(input.value, input.lifespanDays, listingLimits(settings, merchant));
   for (const { kind, label } of LISTING_PHOTOS) checkPhoto(photos[kind] as File, label);
-  const saved = [];
+  const saved: ({ kind: PhotoKind } & Awaited<ReturnType<typeof savePhoto>>)[] = [];
   for (const { kind } of LISTING_PHOTOS) {
     saved.push({ kind, ...(await savePhoto(photos[kind]!, `shoes/${merchantId}`)) });
   }
-  const { size, sizeSystem, ...rest } = input;
-  return db.shoe.create({
-    data: {
-      ...rest,
-      // The label size, and the same size in every system from the chart (src/lib/shoe-size.ts)
-      ...shoeSizeFields(input.audience, sizeSystem, size),
-      description: input.description || null,
-      upgradeNotes: input.condition === "SECOND_HAND_UPGRADED" ? input.upgradeNotes || null : null,
-      wear: input.initialWear,
-      committedWear: input.initialWear,
-      merchantId,
-      settingsId: settings.id,
-      photos: { create: saved },
-    },
+  const { stock, sizeSystem, ...rest } = input;
+  const listingId = randomUUID();
+  const sizes = stock.flatMap((line) => Array.from({ length: line.quantity }, () => line.size));
+  return db.$transaction(async (tx) => {
+    const pairs = [];
+    for (const size of sizes) {
+      pairs.push(
+        await tx.shoe.create({
+          data: {
+            ...rest,
+            listingId,
+            // The label size, and the same size in every system (src/lib/shoe-size.ts)
+            ...shoeSizeFields(input.audience, sizeSystem, size),
+            description: input.description || null,
+            upgradeNotes:
+              input.condition === "SECOND_HAND_UPGRADED" ? input.upgradeNotes || null : null,
+            wear: input.initialWear,
+            committedWear: input.initialWear,
+            merchantId,
+            settingsId: settings.id,
+            // One photo row per pair on the shared files: each pair keeps its own baseline.
+            photos: { create: saved },
+          },
+        }),
+      );
+    }
+    return pairs[0];
   });
 }
 
@@ -243,20 +309,30 @@ async function ownShoe(merchantId: string, shoeId: string) {
 }
 
 /**
- * Who a pair is for and its experiences: the merchant can change these at any time. The label
- * size stays; its other systems are read again from the new audience's chart.
+ * Who a listing is for and its experiences: the merchant can change these at any time, for
+ * every pair of the listing. Each pair's label size stays; its other systems are read again
+ * from the new audience's chart. Returns this pair.
  */
 export async function updateShoeStyle(merchantId: string, shoeId: string, input: StyleInput) {
   const shoe = await ownShoe(merchantId, shoeId);
-  const listed = shoe[SIZE_COLUMN[shoe.sizeSystem]]!.toString();
-  return db.shoe.update({
-    where: { id: shoeId },
-    data: {
-      audience: input.audience,
-      experiences: input.experiences,
-      ...shoeSizeFields(input.audience, shoe.sizeSystem, listed),
-    },
-  });
+  const pairs = await db.shoe.findMany({ where: { merchantId, listingId: shoe.listingId } });
+  await db.$transaction(
+    pairs.map((pair) =>
+      db.shoe.update({
+        where: { id: pair.id },
+        data: {
+          audience: input.audience,
+          experiences: input.experiences,
+          ...shoeSizeFields(
+            input.audience,
+            pair.sizeSystem,
+            pair[SIZE_COLUMN[pair.sizeSystem]]!.toString(),
+          ),
+        },
+      }),
+    ),
+  );
+  return db.shoe.findUniqueOrThrow({ where: { id: shoeId } });
 }
 
 /**
@@ -273,15 +349,18 @@ export async function updatePricingMethod(
   if (shoe.status !== "DRAFT") {
     throw new CatalogueError("The pricing method can only be changed before publishing");
   }
-  return db.shoe.update({
-    where: { id: shoeId },
+  // Every draft pair of the listing gets it: they are published together.
+  await db.shoe.updateMany({
+    where: { merchantId, listingId: shoe.listingId, status: "DRAFT" },
     data: { pricingMethod: pricingMethodSchema.parse(method) },
   });
+  return db.shoe.findUniqueOrThrow({ where: { id: shoeId } });
 }
 
 /**
- * Draft → Available. Needs a verified merchant with a payout account, and all five photos.
- * From now on the shoe is priced with the settings version active at publishing.
+ * Draft → Available, for every draft pair of the listing at once. Needs a verified merchant
+ * with a payout account, and all five photos. From now on the pairs are priced with the
+ * settings version active at publishing. Returns this pair.
  */
 export async function publishShoe(merchantId: string, shoeId: string) {
   const shoe = await ownShoe(merchantId, shoeId);
@@ -302,8 +381,8 @@ export async function publishShoe(merchantId: string, shoeId: string) {
   if (!LISTING_PHOTOS.every((p) => kinds.has(p.kind))) {
     throw new CatalogueError("All five listing photos are required");
   }
-  return db.shoe.update({
-    where: { id: shoeId },
+  await db.shoe.updateMany({
+    where: { merchantId, listingId: shoe.listingId, status: "DRAFT" },
     data: {
       status: "AVAILABLE",
       publishedAt: new Date(),
@@ -311,12 +390,34 @@ export async function publishShoe(merchantId: string, shoeId: string) {
       settingsId: settings.id,
     },
   });
+  return db.shoe.findUniqueOrThrow({ where: { id: shoeId } });
 }
 
+/** Deletes a draft listing: every draft pair listed with this one. */
 export async function deleteDraft(merchantId: string, shoeId: string) {
   const shoe = await ownShoe(merchantId, shoeId);
   if (shoe.status !== "DRAFT") throw new CatalogueError("Only drafts can be deleted");
-  await db.shoe.delete({ where: { id: shoeId } });
+  await db.shoe.deleteMany({
+    where: { merchantId, listingId: shoe.listingId, status: "DRAFT" },
+  });
+}
+
+/** Every pair of a merchant's listing (this one included), for the stock card. */
+export async function listingStock(merchantId: string, listingId: string) {
+  return db.shoe.findMany({
+    where: { merchantId, listingId },
+    select: {
+      id: true,
+      status: true,
+      size: true,
+      sizeSystem: true,
+      sizeUk: true,
+      sizeEu: true,
+      sizeUs: true,
+      sizeCm: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 export async function updatePayoutAccount(merchantId: string, payoutAccount: string) {
@@ -471,6 +572,47 @@ export async function browseFacets() {
       a.localeCompare(b),
     ),
   };
+}
+
+/**
+ * The sizes of a listing borrowers can rent, smallest first: for each, how many pairs can be
+ * booked and the pair to open (one available now before one being worn, then the least worn).
+ */
+export async function listingSizes(listingId: string) {
+  const pairs = await db.shoe.findMany({
+    where: { AND: [browsableWhere(), { listingId }] },
+    select: {
+      id: true,
+      status: true,
+      committedWear: true,
+      audience: true,
+      size: true,
+      sizeSystem: true,
+      sizeUk: true,
+      sizeEu: true,
+      sizeUs: true,
+      sizeCm: true,
+    },
+  });
+  const bySize = new Map<string, typeof pairs>();
+  for (const p of pairs) bySize.set(p.size, [...(bySize.get(p.size) ?? []), p]);
+  return [...bySize.values()]
+    .map((group) => {
+      const ranked = [...group].sort(
+        (a, b) =>
+          Number(b.status === "AVAILABLE") - Number(a.status === "AVAILABLE") ||
+          a.committedWear.comparedTo(b.committedWear),
+      );
+      return {
+        pick: ranked[0],
+        pairs: group.length,
+        available: group.filter((p) => p.status === "AVAILABLE").length,
+      };
+    })
+    .sort((a, b) => {
+      const n = (s: (typeof pairs)[number]) => Number(s[SIZE_COLUMN[s.sizeSystem]] ?? 0);
+      return n(a.pick) - n(b.pick);
+    });
 }
 
 /** A listing as borrowers see it. Drafts, retired and sold shoes are hidden. */

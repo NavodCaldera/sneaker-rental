@@ -27,6 +27,7 @@ You build booking and the wear ledger. Read `CLAUDE.md`, `docs/pricing-spec.md` 
 
 ## Must deliver
 
+0. **A pair is still the unit (product owner, 2026-10-13):** a listing can hold several pairs (by size, `Shoe.listingId`), but bookings, bundles, wear, the ledger, deposits, reservations and handoffs are always per pair (`Shoe` row). Never book or price a listing as a whole.
 1. **Wear ledger (pure, decimal.js):**
    - Calendar days in Asia/Colombo: `colomboDay`, `dayToDate` / `dateToDay` / `dayNumber`, `firstDayAfterDelivery` (D + 1), `receiverFirstDay` (max(D, giver's last day) + 1), `plannedLastDay`.
    - `wearAdded(holdings, itemId, through?)`: phase-based sum of 1/n per day across the borrower's holdings; a holding whose last day is before its first adds nothing. `wearEnd` caps at L. `chainWear(settledWear, added[], L)` chains a pair's open items.

@@ -4,18 +4,14 @@ import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { CurveChart } from "@/components/curve-chart";
 import { PricingMethodFields } from "@/components/pricing-method-fields";
-import { SizeFields } from "@/components/size-fields";
+import { StockFields } from "@/components/size-fields";
 import { StyleFields } from "@/components/style-fields";
 import { Alert, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
 import type { Audience, PricingMethod } from "@/generated/prisma/enums";
 import type { CurvePreview } from "@/server/catalogue/pricing";
 import { formatLKR } from "@/lib/format";
 import { SHOE_CONDITIONS } from "@/lib/shoe-condition";
-import {
-  type ActionState,
-  createShoeAction,
-  requestLifespanExtensionAction,
-} from "../../actions";
+import { type ActionState, createShoeAction, requestLifespanExtensionAction } from "../../actions";
 
 /* eslint-disable @next/next/no-img-element -- local object-URL previews */
 
@@ -78,7 +74,7 @@ export function NewShoeForm({
             <Input name="model" />
           </Field>
           <StyleFields errors={errors} onAudienceChange={setAudience} />
-          <SizeFields audience={audience} errors={errors} />
+          <StockFields audience={audience} errors={errors} />
           <div className="sm:col-span-2">
             <Field label="Description (optional)" name="description" error={errors.description}>
               <Textarea name="description" maxLength={1000} />

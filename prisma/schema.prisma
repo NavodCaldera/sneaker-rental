@@ -160,6 +160,10 @@ enum ShoeCondition {
 model Shoe {
   id                String        @id @default(cuid())
   merchantId        String
+  /// The listing this pair belongs to (product owner, 2026-10-13): a merchant lists a shoe
+  /// once with how many pairs they have in each size, and every pair becomes its own Shoe row
+  /// (its own size, wear, price and deposit). Pairs of one listing share everything else.
+  listingId         String        @default(uuid())
   /// Brand and model are optional (product owner, 2026-10-12): "" when the merchant left them
   /// empty; shown through shoeName() ("Unbranded shoes" when both are empty)
   brand             String        @default("")
@@ -229,6 +233,7 @@ model Shoe {
 
   @@index([status, size, brand])
   @@index([merchantId])
+  @@index([listingId])
 }
 
 enum PhotoKind {

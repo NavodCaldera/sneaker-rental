@@ -4,6 +4,7 @@ import { pricingMethodLabel } from "@/lib/pricing-method";
 import { conditionLabel } from "@/lib/shoe-condition";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ShoeStatus } from "@/generated/prisma/enums";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { ShoeSizeHover } from "@/components/size-bits";
@@ -13,7 +14,12 @@ import { formatDate, formatLKR, formatWear } from "@/lib/format";
 import { shoeSizeInfo } from "@/lib/shoe-size";
 import { styleLabel } from "@/lib/shoe-style";
 import { requireUser } from "@/server/auth/session";
-import { CatalogueError, getMerchantForUser, getMerchantShoe } from "@/server/catalogue";
+import {
+  CatalogueError,
+  getMerchantForUser,
+  getMerchantShoe,
+  listingStock,
+} from "@/server/catalogue";
 import { shoeCurvePreview, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings } from "@/server/settings";
 import { DraftActions } from "./draft-actions";
@@ -32,6 +38,7 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
     throw e;
   });
   const now = new Date();
+  const stock = await listingStock(merchant.id, shoe.listingId);
   const pricing = shoePricing(shoe);
   const preview = shoeCurvePreview(shoe);
   // A draft's method can still change; the hint quotes the floor new listings get.
@@ -57,6 +64,8 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
       />
 
       {shoe.status === "DRAFT" && <DraftActions shoeId={shoe.id} />}
+
+      <StockCard stock={stock} current={shoe.id} />
       {shoe.status === "DRAFT" && (
         <PricingMethodForm
           shoeId={shoe.id}
@@ -192,5 +201,64 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="text-subtle">{label}</div>
       <div className="font-medium">{value}</div>
     </div>
+  );
+}
+
+const STATUS_WORDS: Record<ShoeStatus, string> = {
+  DRAFT: "draft",
+  AVAILABLE: "available",
+  RESERVED: "booked",
+  OUT_FOR_DELIVERY: "on its way",
+  WITH_BORROWER: "with a borrower",
+  IN_HANDOFF: "in handoff",
+  CLEANING: "cleaning",
+  RETIRED: "retired",
+  SOLD: "sold",
+};
+
+/**
+ * The listing's stock (product owner, 2026-10-13): how many pairs it has of each size, and
+ * where each pair is. Each pair has its own page, wear and price.
+ */
+function StockCard({
+  stock,
+  current,
+}: {
+  stock: Awaited<ReturnType<typeof listingStock>>;
+  current: string;
+}) {
+  const bySize = new Map<string, typeof stock>();
+  for (const p of stock) bySize.set(p.size, [...(bySize.get(p.size) ?? []), p]);
+  const sizes = [...bySize.entries()].sort(
+    ([a], [b]) => Number(a.split(" ")[1]) - Number(b.split(" ")[1]),
+  );
+  return (
+    <Card>
+      <h2 className="font-medium">Pairs in this listing</h2>
+      <p className="mb-3 text-sm text-subtle">
+        {stock.length} {stock.length === 1 ? "pair" : "pairs"} in {sizes.length}{" "}
+        {sizes.length === 1 ? "size" : "sizes"}. Each pair is rented, worn and priced on its own.
+      </p>
+      <ul className="flex flex-col gap-2 text-sm">
+        {sizes.map(([size, pairs]) => (
+          <li key={size} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="w-24 font-semibold">
+              {size} × {pairs.length}
+            </span>
+            {pairs.map((p, i) =>
+              p.id === current ? (
+                <span key={p.id} aria-current="page" className="font-medium">
+                  Pair {i + 1} (this one): {STATUS_WORDS[p.status]}
+                </span>
+              ) : (
+                <Link key={p.id} href={`/merchant/shoes/${p.id}`} className="underline">
+                  Pair {i + 1}: {STATUS_WORDS[p.status]}
+                </Link>
+              ),
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

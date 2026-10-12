@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BackButton } from "@/components/back-button";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
@@ -14,7 +15,7 @@ import { conditionLabel } from "@/lib/shoe-condition";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import { getActiveSettings } from "@/server/settings";
 import { getCurrentUser } from "@/server/auth/session";
-import { getListing } from "@/server/catalogue";
+import { getListing, listingSizes } from "@/server/catalogue";
 import { releaseInfo, shoeCurvePreview, shoePricing } from "@/server/catalogue/pricing";
 import { getBundle } from "@/server/booking/bundle";
 import { RentPanel } from "./rent-panel";
@@ -34,6 +35,7 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
     getActiveSettings(),
   ]);
   if (!shoe) notFound();
+  const sizes = await listingSizes(shoe.listingId);
   const release = releaseInfo(shoe, active, colomboDay(new Date()));
   const pricing = shoePricing(shoe, release.discount);
   const discounted = release.discount.gt(0);
@@ -79,6 +81,7 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
               <ShoeStatusBadge status={shoe.status} />
             </div>
           </div>
+          <SizePicker sizes={sizes} current={shoe.id} currentSize={shoe.size} />
           <div>
             <span className="text-3xl font-semibold">{formatLKR(pricing.priceToday)}</span>
             <span className="text-subtle"> per day today</span>
@@ -125,5 +128,49 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
         </aside>
       </div>
     </main>
+  );
+}
+
+/**
+ * The listing's sizes (product owner, 2026-10-13): each with how many pairs are free now.
+ * Picking one opens a pair of that size: each pair has its own wear and price.
+ */
+function SizePicker({
+  sizes,
+  current,
+  currentSize,
+}: {
+  sizes: Awaited<ReturnType<typeof listingSizes>>;
+  current: string;
+  currentSize: string;
+}) {
+  if (sizes.length === 0) return null;
+  return (
+    <nav aria-label="Sizes" className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">Sizes</h2>
+      <ul className="flex flex-wrap gap-2">
+        {sizes.map(({ pick, available }) => {
+          const here = pick.size === currentSize;
+          const label = shoeSizeInfo(pick).primary;
+          // Every size listed has a pair to book: free now, or reserve next while it is out.
+          const note = available > 0 ? `${available} free` : "reserve next";
+          return (
+            <li key={pick.size}>
+              <Link
+                href={`/shoes/${here ? current : pick.id}`}
+                aria-current={here ? "true" : undefined}
+                aria-label={`${label}: ${note}`}
+                className={`flex flex-col items-center rounded-xl border px-3 py-1.5 text-sm transition ${
+                  here ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"
+                }`}
+              >
+                <span className="font-semibold">{label}</span>
+                <span className={`text-xs ${here ? "text-paper/80" : "text-subtle"}`}>{note}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

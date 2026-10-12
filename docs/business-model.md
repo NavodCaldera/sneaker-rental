@@ -115,7 +115,7 @@ Four journeys carry the business; every step records who held the shoe and when,
 
 **5.1 Merchant lists a shoe**
 1. Signs up with the business's one address and city (where drivers pick up and return its pairs; we say why we ask), verifies the business and adds a payout account.
-2. Adds a shoe: photos, value V, lifespan L, size, brand and model (optional), who it's for and one or more experiences, and its condition: brand new, or second-hand with or without upgrades. A second-hand pair also gives the wear-days it has been worn, and an upgraded one what was upgraded.
+2. Adds a shoe: photos, value V, lifespan L, how many pairs they have of each size (each pair is then rented and priced on its own), brand and model (optional), who it's for and one or more experiences, and its condition: brand new, or second-hand with or without upgrades. A second-hand pair also gives the wear-days it has been worn, and an upgraded one what was upgraded.
 3. Sees the computed price curve before publishing: starting price, end price and lifetime income.
 4. Publishes. The shoe is Available, priced at P(w) for its current wear.
 

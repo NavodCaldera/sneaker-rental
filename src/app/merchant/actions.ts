@@ -69,7 +69,7 @@ export async function publishShoeAction(shoeId: string, _prev: ActionState): Pro
     throw e;
   }
   revalidatePath(`/merchant/shoes/${shoeId}`);
-  return { ok: "Published. Your shoe is now available to borrowers." };
+  return { ok: "Published. Every pair of this listing is now available to borrowers." };
 }
 
 export async function updateShoeStyleAction(
@@ -148,4 +148,3 @@ export async function requestLifespanExtensionAction(): Promise<{ ok?: string; e
     return { error: e instanceof Error ? e.message : "Failed to send request" };
   }
 }
-

@@ -3,6 +3,9 @@ import { db } from "@/server/db";
 import {
   CatalogueError,
   browseFacets,
+  deleteDraft,
+  listingSizes,
+  listingStock,
   browseShoes,
   createShoe,
   formFields,
@@ -41,13 +44,16 @@ const input = shoeSchema(LIMITS).parse({
   brand: "Nike",
   model: "Pegasus 41",
   sizeSystem: "UK",
-  size: "9",
+  stock: [{ size: "9", quantity: "1" }],
   audience: "MEN",
   experiences: ["Morning Run"],
   value: "6000",
   lifespanDays: "365",
   condition: "NEW",
 });
+/** The form's input as one Shoe row (a UK 9 pair), for creating pairs directly. */
+const { stock: _stock, sizeSystem: _system, ...inputRow } = input;
+const ROW = { ...inputRow, ...shoeSizeFields("MEN", "UK", "9") };
 const secondHand = { ...input, condition: "SECOND_HAND" as const };
 
 describe("listing a shoe", () => {
@@ -278,8 +284,7 @@ describe("browsing and prices", () => {
     await db.merchant.update({ where: { id: unverified.merchant!.id }, data: { verified: false } });
     const { id: settingsId } = await getActiveSettings();
     const base = {
-      ...input,
-      ...shoeSizeFields("MEN", "UK", "9"),
+      ...ROW,
       description: null,
       settingsId,
     };
@@ -321,7 +326,7 @@ describe("browsing and prices", () => {
       audience: "WOMEN",
       experiences: ["Night Out"],
       sizeSystem: "EU",
-      size: "39",
+      stock: [{ size: "39", quantity: "1" }],
     });
     const shoe = await createShoe(user.merchant!.id, womens, allPhotos());
     expect(shoe.size).toBe("EU 39");
@@ -374,25 +379,85 @@ describe("browsing and prices", () => {
     ]);
   });
 
-  it("takes the label size as a system and a whole or half number", () => {
-    const sizeError = (v: Record<string, string>) =>
+  it("takes how many pairs of each size: whole or half sizes, each once, at least one pair", () => {
+    const stockError = (v: Record<string, unknown>) =>
       shoeSchema(LIMITS)
         .safeParse({ ...input, ...v })
         .error?.flatten().fieldErrors;
-    expect(sizeError({ size: "9.5" })).toBeUndefined();
-    expect(sizeError({ size: "UK 9" })?.size).toEqual([
+    const stock = (...lines: [string, string][]) => ({
+      stock: lines.map(([size, quantity]) => ({ size, quantity })),
+    });
+    expect(stockError(stock(["9.5", "2"], ["10", "1"]))).toBeUndefined();
+    expect(stockError(stock(["UK 9", "1"]))?.stock).toEqual([
       "Enter the number on the label, e.g. 9 or 9.5",
     ]);
-    expect(sizeError({ size: "9.3" })?.size).toBeDefined();
-    expect(sizeError({ size: "0" })?.size).toEqual(["Enter a size from 1 to 60"]);
-    expect(sizeError({ sizeSystem: "JP" })?.sizeSystem).toEqual(["Choose UK, EU or US"]);
+    expect(stockError(stock(["9.3", "1"]))?.stock).toBeDefined();
+    expect(stockError(stock(["0", "1"]))?.stock).toEqual(["Enter a size from 1 to 60"]);
+    expect(stockError(stock(["9", "0"]))?.stock).toEqual(["At least 1 pair of each size"]);
+    expect(stockError(stock(["9", "21"]))?.stock).toEqual(["At most 20 pairs of one size"]);
+    expect(stockError(stock(["9", "1"], ["9.0", "2"]))?.stock).toEqual(["List each size once"]);
+    expect(stockError({ stock: [] })?.stock).toEqual(["Add at least one size"]);
+    expect(stockError({ sizeSystem: "JP" })?.sizeSystem).toEqual(["Choose UK, EU or US"]);
+  });
+
+  it("lists how many pairs of each size: every pair is its own shoe in one listing", async () => {
+    const user = await makeUser("MERCHANT");
+    const merchantId = user.merchant!.id;
+    const stocked = shoeSchema(LIMITS).parse({
+      ...input,
+      stock: [
+        { size: "9", quantity: "2" },
+        { size: "10.5", quantity: "1" },
+      ],
+    });
+    const first = await createShoe(merchantId, stocked, allPhotos());
+    const pairs = await db.shoe.findMany({
+      where: { listingId: first.listingId },
+      include: { photos: true },
+      orderBy: { size: "asc" },
+    });
+    expect(pairs.map((p) => p.size)).toEqual(["UK 10.5", "UK 9", "UK 9"]);
+    expect(pairs.map((p) => p.status)).toEqual(["DRAFT", "DRAFT", "DRAFT"]);
+    // Each pair has its own five photo rows, on the same five files.
+    expect(pairs.every((p) => p.photos.length === 5)).toBe(true);
+    expect(new Set(pairs.flatMap((p) => p.photos.map((x) => x.storageKey))).size).toBe(5);
+    expect((await listingStock(merchantId, first.listingId)).length).toBe(3);
+
+    // The pricing method, publishing and the style apply to the whole listing.
+    await updatePricingMethod(merchantId, first.id, "EXPONENTIAL");
+    await publishShoe(merchantId, first.id);
+    await updateShoeStyle(
+      merchantId,
+      first.id,
+      styleSchema.parse({ audience: "WOMEN", experiences: ["Night Out"] }),
+    );
+    const after = await db.shoe.findMany({ where: { listingId: first.listingId } });
+    expect(after.every((p) => p.status === "AVAILABLE")).toBe(true);
+    expect(after.every((p) => p.pricingMethod === "EXPONENTIAL")).toBe(true);
+    expect(after.every((p) => p.audience === "WOMEN")).toBe(true);
+
+    // Borrowers see the listing's sizes, each with how many pairs are free.
+    const nine = after.find((p) => p.size === "UK 9" && p.id !== first.id)!;
+    await db.shoe.update({ where: { id: nine.id }, data: { status: "WITH_BORROWER" } });
+    const sizes = await listingSizes(first.listingId);
+    expect(sizes.map((x) => [x.pick.size, x.pairs, x.available])).toEqual([
+      ["UK 9", 2, 1],
+      ["UK 10.5", 1, 1],
+    ]);
+    // The pair to open for UK 9 is the free one.
+    expect(sizes[0].pick.status).toBe("AVAILABLE");
+
+    // A draft listing is deleted whole.
+    const draft = await createShoe(merchantId, stocked, allPhotos());
+    await deleteDraft(merchantId, draft.id);
+    expect(await db.shoe.count({ where: { listingId: draft.listingId } })).toBe(0);
   });
 
   it("shops by who it's for, then by experience; Unisex pairs show under Men and Women", async () => {
     const merchant = await makeUser("MERCHANT");
     const { id: settingsId } = await getActiveSettings();
     const base = {
-      ...input,
+      ...ROW,
       description: null,
       settingsId,
       merchantId: merchant.merchant!.id,

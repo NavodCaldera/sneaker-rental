@@ -1,22 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ConditionBar, DiscountBadge, PhotoImg } from "@/components/shoe-bits";
-import {
-  ShoeSizeHover,
-  SizeEquivalence,
-  SizeOptions,
-  sizeGuideHref,
-} from "@/components/size-bits";
+import { ShoeSizeHover, SizeEquivalence, SizeOptions, sizeGuideHref } from "@/components/size-bits";
 import { Badge, Button, EmptyState, Input, PageHeader, Select } from "@/components/ui";
 import { formatLKR, formatPercent } from "@/lib/format";
+import { D } from "@/lib/decimal";
+import { cardPair, groupByListing, sizeRange } from "@/lib/listing";
 import { conditionShort } from "@/lib/shoe-condition";
 import { parseSize, shoeSizeInfo, sizeSummary } from "@/lib/shoe-size";
-import {
-  ALL_EXPERIENCES,
-  EXPERIENCES,
-  SHOP_AUDIENCES,
-  parseShopAudience,
-} from "@/lib/shoe-style";
+import { ALL_EXPERIENCES, EXPERIENCES, SHOP_AUDIENCES, parseShopAudience } from "@/lib/shoe-style";
 import { colomboDay } from "@/lib/wear-ledger";
 import { browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
@@ -46,6 +38,20 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
   const today = colomboDay(new Date());
   // Cards show each pair's size in the system the borrower searched by, too.
   const sizeSystem = parseSize(filters.size)?.system;
+  // One card per listing (product owner, 2026-10-13): its best deal among the pairs that
+  // match, and the sizes they come in.
+  const listings = groupByListing(shoes).map((group) => {
+    const priced = group.map((pair) => {
+      const release = releaseInfo(pair, active, today);
+      return { pair, release, pricing: shoePricing(pair, release.discount) };
+    });
+    const best = cardPair(priced, (p) => ({
+      discount: p.release.discount,
+      price: new D(p.pricing.priceToday),
+    }));
+    const prices = new Set(priced.map((p) => p.pricing.priceToday));
+    return { ...best, sizes: group.map((p) => shoeSizeInfo(p).primary), from: prices.size > 1 };
+  });
 
   return (
     <main>
@@ -100,20 +106,19 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
       </form>
       {filters.size && <SizeEquivalence size={filters.size} />}
 
-      {shoes.length === 0 ? (
+      {listings.length === 0 ? (
         <EmptyState title="No pairs match">Try another size or brand.</EmptyState>
       ) : (
         <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {shoes.map((shoe) => {
-            const release = releaseInfo(shoe, active, today);
-            const pricing = shoePricing(shoe, release.discount);
+          {listings.map(({ pair: shoe, release, pricing, sizes, from }) => {
             const discounted = release.discount.gt(0);
+            const oneSize = new Set(sizes).size === 1;
             return (
               <li key={shoe.id}>
                 <Link
                   href={`/shoes/${shoe.id}`}
                   className="group flex flex-col gap-2"
-                  aria-label={`${shoeName(shoe)}, ${sizeSummary(shoe, sizeSystem)}`}
+                  aria-label={`${shoeName(shoe)}, ${oneSize ? sizeSummary(shoe, sizeSystem) : sizeRange(sizes)}`}
                 >
                   <div className="relative">
                     <PhotoImg
@@ -132,13 +137,18 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                   <div>
                     <div className="text-sm font-medium">{shoeName(shoe)}</div>
                     <div className="text-xs text-subtle flex items-center min-w-0">
-                      <ShoeSizeHover
-                        size={shoeSizeInfo(shoe).primary}
-                        details={shoeSizeInfo(shoe)}
-                      />
+                      {oneSize ? (
+                        <ShoeSizeHover
+                          size={shoeSizeInfo(shoe).primary}
+                          details={shoeSizeInfo(shoe)}
+                        />
+                      ) : (
+                        <span className="truncate">{sizeRange(sizes)}</span>
+                      )}
                     </div>
                   </div>
                   <div className="text-sm">
+                    {from && <span className="text-subtle">From </span>}
                     <span className="font-semibold">{formatLKR(pricing.priceToday)}</span>
                     {discounted && (
                       <s className="ml-1 text-xs text-subtle">
@@ -147,10 +157,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                     )}
                     <span className="text-subtle"> per day</span>
                   </div>
-                  <ConditionBar
-                    wear={shoe.committedWear.toString()}
-                    lifespan={shoe.lifespanDays}
-                  />
+                  <ConditionBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
                 </Link>
               </li>
             );

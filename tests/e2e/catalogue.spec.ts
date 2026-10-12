@@ -16,10 +16,15 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
   await page.getByLabel("Model").fill("Endorphin Speed 4");
   await page.getByLabel("To whom").selectOption("Men");
   await page.getByText("Morning Run", { exact: true }).click();
-  // Listed in the size on its label (EU); the form shows what borrowers see in the others.
+  // Listed in the sizes on its labels (EU), with how many pairs of each; the form shows what
+  // borrowers see in the other systems.
   await page.getByLabel("Size system").selectOption("EU");
-  await page.getByLabel("Size", { exact: true }).fill("46");
+  await page.getByLabel("Size 1", { exact: true }).fill("46");
+  await page.getByLabel("Pairs of size 1").fill("2");
   await expect(page.getByText("Borrowers also see UK 11 · US 11.5 · 29.5 cm")).toBeVisible();
+  await page.getByRole("button", { name: "Add another size" }).click();
+  await page.getByLabel("Size 2", { exact: true }).fill("45");
+  await expect(page.getByText("3 pairs in 2 sizes")).toBeVisible();
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
     await page.getByLabel(`${view} photo`, { exact: true }).setInputFiles({
       name: `${view}.png`,
@@ -40,8 +45,11 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page).toHaveURL(/\/merchant\/shoes\/\w+/);
   await expect(page.getByText("Draft", { exact: true })).toBeVisible();
+  await expect(page.getByText("3 pairs in 2 sizes. Each pair is rented")).toBeVisible();
   await page.getByRole("button", { name: "Publish" }).click();
   await expect(page.getByText("Available", { exact: true })).toBeVisible();
+  // Publishing makes every pair of the listing available.
+  await expect(page.getByText(/Pair 2: available/)).toBeVisible();
   await signOut(page);
 
   // The borrower finds it by their UK size, and sees what that is in EU.
@@ -57,6 +65,16 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
     size.getByText("EU 46 is on the label (men's sizes; cm is foot length)."),
   ).toBeVisible();
   await expect(size.getByRole("definition")).toHaveText(["11", "46", "11.5", "29.5"]);
+  // The listing's other size is one click away, with how many pairs are free.
+  const sizes = page.getByRole("navigation", { name: "Sizes" });
+  await expect(sizes.getByRole("link", { name: "UK 11: 2 free" })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  await sizes.getByRole("link", { name: "UK 10.5: 1 free" }).click();
+  await expect(
+    page.getByRole("region", { name: "Size", exact: true }).getByRole("definition"),
+  ).toHaveText(["10.5", "45", "11", "29"]);
 });
 
 test("a merchant picks exponential decay, can switch it as a draft, and it's fixed once published", async ({
@@ -66,7 +84,7 @@ test("a merchant picks exponential decay, can switch it as a draft, and it's fix
   await page.goto("/merchant/shoes/new");
   await page.getByLabel("Brand").fill("Hoka");
   await page.getByLabel("Model").fill("Clifton Decay");
-  await page.getByLabel("Size", { exact: true }).fill("10");
+  await page.getByLabel("Size 1", { exact: true }).fill("10");
   await page.getByLabel("To whom").selectOption("Men");
   await page.getByText("Morning Run", { exact: true }).click();
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
@@ -144,7 +162,7 @@ test("a pair with no brand or model, made for two experiences, shows under both"
   await page.getByText("Night Out", { exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Work Day" })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Night Out" })).toBeChecked();
-  await page.getByLabel("Size", { exact: true }).fill("5");
+  await page.getByLabel("Size 1", { exact: true }).fill("5");
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {
     await page.getByLabel(`${view} photo`, { exact: true }).setInputFiles({
       name: `${view}.png`,
@@ -176,7 +194,7 @@ test("a merchant lists an upgraded second-hand pair; borrowers see its condition
   await page.goto("/merchant/shoes/new");
   await page.getByLabel("Brand").fill("Adidas");
   await page.getByLabel("Model").fill("Ultraboost Restored");
-  await page.getByLabel("Size", { exact: true }).fill("8");
+  await page.getByLabel("Size 1", { exact: true }).fill("8");
   await page.getByLabel("To whom").selectOption("Men");
   await page.getByText("Morning Run", { exact: true }).click();
   for (const view of ["Front", "Side", "Sole", "Inside", "Box"]) {

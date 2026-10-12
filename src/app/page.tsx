@@ -10,6 +10,7 @@ import { CuratedPacksShowcase } from "@/components/curated-packs";
 import { D } from "@/lib/decimal";
 import { formatPercent, formatWear } from "@/lib/format";
 import { conditionShort } from "@/lib/shoe-condition";
+import { cardPair, groupByListing, sizeRange } from "@/lib/listing";
 import { shoeSizeInfo } from "@/lib/shoe-size";
 import { ALL_EXPERIENCES, EXPERIENCES, SHOP_AUDIENCES, parseShopAudience } from "@/lib/shoe-style";
 import { colomboDay } from "@/lib/wear-ledger";
@@ -55,19 +56,33 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   ]);
   const today = colomboDay(new Date());
 
+  // One card per listing (product owner, 2026-10-13): it shows the listing's best deal (the
+  // biggest discount, then the lowest price) and every size it has on offer.
   const cardsOf = (list: typeof shoes) =>
-    list.map((shoe) => {
-      const release = releaseInfo(shoe, active, today);
-      const pricing = shoePricing(shoe, release.discount);
+    groupByListing(list).map((group) => {
+      const priced = group.map((pair) => {
+        const release = releaseInfo(pair, active, today);
+        return { pair, release, pricing: shoePricing(pair, release.discount) };
+      });
+      const {
+        pair: shoe,
+        release,
+        pricing,
+      } = cardPair(priced, (p) => ({
+        discount: p.release.discount,
+        price: new D(p.pricing.priceToday),
+      }));
       const held = shoe.status === "WITH_BORROWER";
       const discounted = release.discount.gt(0);
+      const sizes = group.map((p) => shoeSizeInfo(p).primary);
+      const oneSize = new Set(sizes).size === 1;
       const sizeDetails = shoeSizeInfo(shoe);
       const card: ShoeCardData = {
         id: shoe.id,
         brand: shoe.brand,
         model: shoe.model,
-        size: sizeDetails.primary,
-        sizeDetails,
+        size: oneSize ? sizeDetails.primary : sizeRange(sizes),
+        sizeDetails: oneSize ? sizeDetails : undefined,
         photoId: shoe.photos[0]?.id,
         badge: discounted
           ? `${formatPercent(release.discount)} off`

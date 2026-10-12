@@ -12,8 +12,8 @@ export function DraftActions({ shoeId }: { shoeId: string }) {
   return (
     <Card className="flex flex-col gap-3">
       <p className="text-sm">
-        This shoe is a <strong>draft</strong>. Check the price curve below, then publish it to make
-        it available to borrowers.
+        This listing is a <strong>draft</strong>. Check the price curve below, then publish it to
+        make all its pairs available to borrowers.
       </p>
       {state.error && <Alert>{state.error}</Alert>}
       <div className="flex flex-wrap gap-2">

@@ -141,6 +141,11 @@ type SeedShoe = {
   description?: string;
   /** Price curve the merchant picked; S-curve unless set */
   pricingMethod?: PricingMethod;
+  /**
+   * How many pairs of each size the listing has (product owner, 2026-10-13), e.g.
+   * { "UK 8": 1, "UK 9": 2 }. Without it the listing is one pair of `size`.
+   */
+  stock?: Record<string, number>;
 };
 
 /** The first two are the acceptance-test shoes (business-model.md §9). */
@@ -202,6 +207,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       experiences: ["Studio & Gym"],
       value: "11900",
       lifespanDays: 300,
+
+      stock: { "EU 38": 2, "EU 39": 1, "EU 40": 1 },
     },
     {
       brand: "Nike",
@@ -260,6 +267,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       experiences: ["Night Out"],
       value: "11000",
       lifespanDays: 380,
+
+      stock: { "UK 8": 1, "UK 9": 2, "UK 10": 1 },
     },
     {
       brand: "Vans",
@@ -287,6 +296,8 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       experiences: ["Playtime"],
       value: "8500",
       lifespanDays: 200,
+
+      stock: { "UK 12": 1, "UK 13": 2 },
     },
     {
       brand: "Veja",
@@ -415,6 +426,64 @@ async function seedStylePacks() {
   console.log("Seeded the example style packs");
 }
 
+/**
+ * Adds the pairs a sample listing is missing for its `stock`: each a new available pair of the
+ * same listing (same shoe, settings and photo files), unworn beyond what was declared when it
+ * was listed. Returns how many it added. Pairs already there count, whatever their state.
+ */
+async function fillStock(firstId: string, stock: Record<string, number> | undefined) {
+  if (!stock) return 0;
+  const first = await db.shoe.findUniqueOrThrow({
+    where: { id: firstId },
+    include: { photos: { where: { kind: { in: [...PHOTO_KINDS] } } } },
+  });
+  const have = await db.shoe.groupBy({
+    by: ["size"],
+    where: { listingId: first.listingId },
+    _count: true,
+  });
+  let added = 0;
+  for (const [size, wanted] of Object.entries(stock)) {
+    const label = parseSize(size)!;
+    const missing = wanted - (have.find((h) => h.size === size)?._count ?? 0);
+    for (let i = 0; i < missing; i++) {
+      await db.shoe.create({
+        data: {
+          listingId: first.listingId,
+          merchantId: first.merchantId,
+          brand: first.brand,
+          model: first.model,
+          audience: first.audience,
+          experiences: first.experiences,
+          description: first.description,
+          value: first.value,
+          lifespanDays: first.lifespanDays,
+          condition: first.condition,
+          upgradeNotes: first.upgradeNotes,
+          initialWear: first.initialWear,
+          wear: first.initialWear,
+          committedWear: first.initialWear,
+          pricingMethod: first.pricingMethod,
+          settingsId: first.settingsId,
+          status: "AVAILABLE",
+          latestGrade: "A",
+          publishedAt: first.publishedAt ?? new Date(),
+          ...shoeSizeFields(first.audience, label.system as "UK" | "EU" | "US", label.value),
+          photos: {
+            create: first.photos.map((p) => ({
+              kind: p.kind,
+              storageKey: p.storageKey,
+              contentType: p.contentType,
+            })),
+          },
+        },
+      });
+      added++;
+    }
+  }
+  return added;
+}
+
 async function main() {
   if (!(await db.pricingSettings.findFirst())) {
     await db.pricingSettings.create({ data: DEFAULT_SETTINGS });
@@ -506,6 +575,7 @@ async function main() {
             data: { audience: s.audience, experiences: s.experiences },
           });
         }
+        added += await fillStock(existing.id, s.stock);
         continue;
       }
       added++;
@@ -523,9 +593,10 @@ async function main() {
         photos.push({ kind, storageKey, contentType: "image/svg+xml" });
       }
       const label = parseSize(s.size)!;
-      await db.shoe.create({
+      const { stock, ...fields } = s;
+      const first = await db.shoe.create({
         data: {
-          ...s,
+          ...fields,
           ...shoeSizeFields(s.audience, label.system as "UK" | "EU" | "US", label.value),
           merchantId: user.merchant.id,
           settingsId: settings.id,
@@ -535,8 +606,9 @@ async function main() {
           photos: { create: photos },
         },
       });
+      added += await fillStock(first.id, stock);
     }
-    if (added) console.log(`Seeded ${added} shoes for ${u.businessName}`);
+    if (added) console.log(`Seeded ${added} pairs for ${u.businessName}`);
   }
   // Backfill placeholder photos for any shoe seeded before photos existed.
   const bare = await db.shoe.findMany({ where: { photos: { none: {} } } });
