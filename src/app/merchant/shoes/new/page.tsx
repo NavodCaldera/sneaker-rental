@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import { PageHeader } from "@/components/ui";
 import { fullAddress } from "@/lib/address";
 import { toD } from "@/lib/decimal";
@@ -21,6 +22,7 @@ export default async function NewShoePage() {
   const limits = listingLimits(settings, merchant);
   return (
     <main>
+      <BackButton href="/merchant" to="my shoes" className="mb-4" />
       <PageHeader title="Add a shoe" />
       <NewShoeForm
         photoSlots={LISTING_PHOTOS}

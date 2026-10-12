@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import { notFound } from "next/navigation";
 import { ConditionForm } from "@/components/condition-form";
 import { Card, PageHeader } from "@/components/ui";
@@ -23,6 +24,7 @@ export default async function BorrowerConditionPage({
 
   return (
     <main className="max-w-2xl">
+      <BackButton href="/rentals" to="my rentals" className="mb-4" />
       <PageHeader
         title="Confirm condition"
         description={`${shoeName(item.shoe)} · ${item.shoe.size}`}

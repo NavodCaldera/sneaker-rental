@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import Link from "next/link";
 import { Card } from "@/components/ui";
 import { ForgotPasswordForm } from "./forgot-password-form";
@@ -8,6 +9,7 @@ export const metadata: Metadata = { title: "Forgot password" };
 export default function ForgotPasswordPage() {
   return (
     <main className="mx-auto w-full max-w-sm py-8">
+      <BackButton href="/sign-in" to="sign in" className="mb-4" />
       <h1 className="mb-2 text-2xl font-semibold tracking-tight">Forgot your password?</h1>
       <p className="mb-6 text-sm text-subtle">
         Enter the email you signed up with and we&apos;ll send you a link to choose a new one.

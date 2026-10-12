@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import { notFound } from "next/navigation";
 import { recordConditionAction } from "@/app/rentals/actions";
 import { ConditionForm } from "@/components/condition-form";
@@ -26,6 +27,7 @@ export default async function MerchantConditionPage({
 
   return (
     <main className="max-w-2xl">
+      <BackButton href="/merchant/returns" to="returns" className="mb-4" />
       <PageHeader
         title="Record condition"
         description={`${shoeName(item.shoe)} · returned by ${item.rental.borrower.name}`}

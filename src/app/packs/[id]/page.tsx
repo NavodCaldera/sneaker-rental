@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { addPackToBundleAction } from "@/app/packs/actions";
@@ -30,6 +31,7 @@ export default async function PackPage({ params }: PageProps<"/packs/[id]">) {
 
   return (
     <main className="flex flex-col gap-6">
+      <BackButton href="/" to="the home page" useHistory />
       {pack.status !== "PUBLISHED" && (
         <Alert tone="info">
           Preview: this pack is {PACK_STATUS[pack.status].label.toLowerCase()}, so borrowers

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
@@ -40,89 +41,89 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
   const [main, ...rest] = shoe.photos;
 
   return (
-    <main className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <div className="flex flex-col gap-4">
-        <PhotoImg id={main?.id} alt={shoeName(shoe)} className="aspect-[4/3] w-full rounded-xl" />
-        <div className="grid grid-cols-4 gap-3">
-          {rest.map((p) => (
-            <PhotoImg
-              key={p.id}
-              id={p.id}
-              alt={`${p.kind.toLowerCase()} view`}
-              className="aspect-square w-full rounded-lg"
-            />
-          ))}
-        </div>
-        <Card>
-          <h2 className="mb-1 font-medium">How the price changes</h2>
-          <p className="mb-3 text-sm text-subtle">
-            {pricingMethodLabel(shoe.pricingMethod)}, picked by the merchant: the price per day
-            falls as the pair wears. Rent is charged when you return the pair, at the price for its
-            wear, and the next borrower pays less.
-          </p>
-          <CurveChart points={preview.points} currentWear={shoe.committedWear.toString()} />
-        </Card>
-      </div>
-
-      <aside className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{shoeName(shoe)}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-subtle">
-            <ShoeSizeHover
-              size={shoeSizeInfo(shoe).primary}
-              details={shoeSizeInfo(shoe)}
-            />
-            <span>
-              · {styleLabel(shoe)} · {conditionLabel(shoe.condition)} ·{" "}
-              {shoe.merchant.businessName}
-            </span>
-            <ShoeStatusBadge status={shoe.status} />
+    <main className="flex flex-col gap-4">
+      <BackButton href="/browse" to="browse" useHistory />
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="flex flex-col gap-4">
+          <PhotoImg id={main?.id} alt={shoeName(shoe)} className="aspect-[4/3] w-full rounded-xl" />
+          <div className="grid grid-cols-4 gap-3">
+            {rest.map((p) => (
+              <PhotoImg
+                key={p.id}
+                id={p.id}
+                alt={`${p.kind.toLowerCase()} view`}
+                className="aspect-square w-full rounded-lg"
+              />
+            ))}
           </div>
+          <Card>
+            <h2 className="mb-1 font-medium">How the price changes</h2>
+            <p className="mb-3 text-sm text-subtle">
+              {pricingMethodLabel(shoe.pricingMethod)}, picked by the merchant: the price per day
+              falls as the pair wears. Rent is charged when you return the pair, at the price for
+              its wear, and the next borrower pays less.
+            </p>
+            <CurveChart points={preview.points} currentWear={shoe.committedWear.toString()} />
+          </Card>
         </div>
-        <div>
-          <span className="text-3xl font-semibold">{formatLKR(pricing.priceToday)}</span>
-          <span className="text-subtle"> per day today</span>
-          {discounted && (
-            <p className="mt-1 text-sm">
-              <s className="text-subtle">{formatLKR(pricing.priceBeforeDiscount)}</s>{" "}
-              <span className="font-medium text-good">
-                {formatPercent(release.discount)} off for your whole rental
-              </span>{" "}
-              if you book today
+
+        <aside className="flex flex-col gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">{shoeName(shoe)}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-subtle">
+              <ShoeSizeHover size={shoeSizeInfo(shoe).primary} details={shoeSizeInfo(shoe)} />
+              <span>
+                · {styleLabel(shoe)} · {conditionLabel(shoe.condition)} ·{" "}
+                {shoe.merchant.businessName}
+              </span>
+              <ShoeStatusBadge status={shoe.status} />
+            </div>
+          </div>
+          <div>
+            <span className="text-3xl font-semibold">{formatLKR(pricing.priceToday)}</span>
+            <span className="text-subtle"> per day today</span>
+            {discounted && (
+              <p className="mt-1 text-sm">
+                <s className="text-subtle">{formatLKR(pricing.priceBeforeDiscount)}</s>{" "}
+                <span className="font-medium text-good">
+                  {formatPercent(release.discount)} off for your whole rental
+                </span>{" "}
+                if you book today
+              </p>
+            )}
+            {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
+              <p className="mt-1 text-sm text-subtle">
+                {release.releaseDay < colomboDay(new Date())
+                  ? "Free now: the last borrower is keeping it for you. Book it and a driver brings it straight from them."
+                  : `Booked until ${formatDate(dayToDate(release.releaseDay))}. Reserve it now and it comes to you right after, priced at the wear it will have then.`}
+              </p>
+            )}
+          </div>
+          <div className="text-sm">
+            <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
+            <p className="mt-1 text-subtle">
+              {formatWear(shoe.committedWear.toString())} of {shoe.lifespanDays} days used
+              {shoe.status === "WITH_BORROWER" && " (counting the current booking)"} ·{" "}
+              {new D(pricing.lifeLeft).times(100).toFixed(0)}% of life left · grade{" "}
+              {shoe.latestGrade ?? "—"}
+            </p>
+          </div>
+          <ShoeSizePanel shoe={shoe} />
+          {shoe.upgradeNotes && (
+            <p className="text-sm">
+              <span className="font-medium">Upgrades:</span> {shoe.upgradeNotes}
             </p>
           )}
-          {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
-            <p className="mt-1 text-sm text-subtle">
-              {release.releaseDay < colomboDay(new Date())
-                ? "Free now: the last borrower is keeping it for you. Book it and a driver brings it straight from them."
-                : `Booked until ${formatDate(dayToDate(release.releaseDay))}. Reserve it now and it comes to you right after, priced at the wear it will have then.`}
-            </p>
-          )}
-        </div>
-        <div className="text-sm">
-          <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
-          <p className="mt-1 text-subtle">
-            {formatWear(shoe.committedWear.toString())} of {shoe.lifespanDays} days used
-            {shoe.status === "WITH_BORROWER" && " (counting the current booking)"} ·{" "}
-            {new D(pricing.lifeLeft).times(100).toFixed(0)}% of life left · grade{" "}
-            {shoe.latestGrade ?? "—"}
-          </p>
-        </div>
-        <ShoeSizePanel shoe={shoe} />
-        {shoe.upgradeNotes && (
-          <p className="text-sm">
-            <span className="font-medium">Upgrades:</span> {shoe.upgradeNotes}
-          </p>
-        )}
-        {shoe.description && <p className="text-sm">{shoe.description}</p>}
-        <RentPanel
-          shoeId={shoe.id}
-          status={shoe.status}
-          handoffTaken={shoe.rentalItems.length > 0}
-          signedInAs={user?.role ?? null}
-          inBundle={bundle.includes(shoe.id)}
-        />
-      </aside>
+          {shoe.description && <p className="text-sm">{shoe.description}</p>}
+          <RentPanel
+            shoeId={shoe.id}
+            status={shoe.status}
+            handoffTaken={shoe.rentalItems.length > 0}
+            signedInAs={user?.role ?? null}
+            inBundle={bundle.includes(shoe.id)}
+          />
+        </aside>
+      </div>
     </main>
   );
 }
