@@ -6,7 +6,7 @@ import { SignInForm } from "./sign-in-form";
 export const metadata: Metadata = { title: "Sign in" };
 
 export default async function SignInPage({ searchParams }: PageProps<"/sign-in">) {
-  const { reset } = await searchParams;
+  const { reset, next } = await searchParams;
   return (
     <main className="mx-auto w-full max-w-sm py-8">
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Sign in</h1>
@@ -16,7 +16,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
         </div>
       )}
       <Card>
-        <SignInForm />
+        <SignInForm next={typeof next === "string" ? next : undefined} />
       </Card>
       <p className="mt-4 text-sm text-subtle">
         New here?{" "}
