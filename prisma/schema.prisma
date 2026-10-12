@@ -55,6 +55,8 @@ model User {
   walletEntries    WalletEntry[]
   payments         Payment[]
   notifications    Notification[]
+  stylePacks       StylePack[]       @relation("StylePackCreatedBy")
+  packsReviewed    StylePack[]       @relation("StylePackReviewedBy")
 }
 
 model Session {
@@ -218,10 +220,11 @@ model Shoe {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  merchant         Merchant          @relation(fields: [merchantId], references: [id])
-  settings         PricingSettings   @relation(fields: [settingsId], references: [id])
+  merchant         Merchant            @relation(fields: [merchantId], references: [id])
+  settings         PricingSettings     @relation(fields: [settingsId], references: [id])
   photos           Photo[]
   rentalItems      RentalItem[]
+  packRoles        StylePackRoleShoe[]
   conditionReports ConditionReport[]
 
   @@index([status, size, brand])
@@ -689,6 +692,8 @@ enum NotificationKind {
   REFUND
   /// The term ended and a driver is on the way
   TERM_ENDED
+  /// An admin approved, rejected or unpublished a merchant's style pack
+  STYLE_PACK
 }
 
 /// In-app notice, also sent by email (an outbox: emailedAt is set once sent).
@@ -708,4 +713,74 @@ model Notification {
 
   @@index([userId, readAt])
   @@index([emailedAt])
+}
+
+/// Where a style pack is: merchants' packs need an admin's approval before borrowers see them
+/// (product owner, 2026-10-13); an admin's own packs publish directly.
+enum StylePackStatus {
+  /// Being written; only its maker and admins see it
+  DRAFT
+  /// A merchant asked for it to be published; waiting for an admin
+  SUBMITTED
+  /// On the home page and its own page (/packs/[id])
+  PUBLISHED
+  /// An admin turned it down (reviewNote says why); the merchant can edit and resubmit
+  REJECTED
+}
+
+/// A curated rotation of pairs ("The Marathon & Active Recovery"), made by a merchant or an
+/// admin. Each role is one pair in the rotation, with listed pairs to choose from. Packs carry
+/// no price of their own: every pair is rented at its own curve price (no pack discount).
+model StylePack {
+  id           String          @id @default(cuid())
+  title        String
+  /// One line under the title
+  subtitle     String          @default("")
+  /// "Rotation Advantage" box, e.g. "Hold 3 pairs · wear splits 3 ways"
+  highlight    String          @default("")
+  status       StylePackStatus @default(DRAFT)
+  /// Why an admin rejected or unpublished it
+  reviewNote   String?
+  createdById  String
+  reviewedById String?
+  submittedAt  DateTime?
+  publishedAt  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  createdBy  User            @relation("StylePackCreatedBy", fields: [createdById], references: [id])
+  reviewedBy User?           @relation("StylePackReviewedBy", fields: [reviewedById], references: [id])
+  roles      StylePackRole[]
+
+  @@index([status, publishedAt])
+  @@index([createdById])
+}
+
+/// One pair's place in a rotation ("Speed & Tempo Day"), in order.
+model StylePackRole {
+  id          String  @id @default(cuid())
+  packId      String
+  position    Int
+  name        String
+  description String  @default("")
+  /// An experience from src/lib/shoe-style.ts, or null
+  experience  String?
+
+  pack  StylePack           @relation(fields: [packId], references: [id], onDelete: Cascade)
+  shoes StylePackRoleShoe[]
+
+  @@unique([packId, position])
+}
+
+/// A listed pair that fills a role, in order. Any merchant's pairs can be used.
+model StylePackRoleShoe {
+  roleId   String
+  shoeId   String
+  position Int
+
+  role StylePackRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  shoe Shoe          @relation(fields: [shoeId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, shoeId])
+  @@index([shoeId])
 }

@@ -60,6 +60,8 @@ The merchant enters three things and the platform computes every price for the s
 
 For a 6,000 LKR shoe with L = 365 this gives K = 28.92 LKR per wear-day when new and 8.68 LKR at end of life.
 
+**Style packs (decided 2026-10-13).** Merchants and admins curate rotations of real listed pairs from any merchant (e.g. a running pack: daily trainer, tempo pair, recovery pair). A merchant's pack is published only after an admin approves it. Borrowers add a pack's pairs to their bundle; every pair is still rented at its own curve price, so a pack gives no discount and never changes a price.
+
 **Wording on the website (decided 2026-10-12).** This brief and the specs count wear in wear-days. The website says "per day" for prices and "days" for counts and lifespans ("LKR 28.92 per day", "120 of 365 days used").
 
 **The merchant picks the pricing method** (decided 2026-10-11). The curve above is the **S-curve (logistic decay)** and is the default. A merchant can instead price a listing on **exponential decay**, Q(w) = q^(w ÷ L): the same floor q, target R and end-of-life price share, but the price falls fastest when the pair is new (A = 0.5814 × L; the 6,000 LKR / 365-day shoe costs 33.93 LKR new and 10.18 LKR at end of life). They choose on the listing form with a live preview and can change it while the listing is a draft; it is fixed once published. Details: pricing-spec.md §2.

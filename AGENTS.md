@@ -17,7 +17,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   - *Weekend Stroll & Brunch* (effortless casual comfort, relaxed cafe terrace)
   - *Night Out & Big Occasions* (evening silhouettes, statement luxury)
   Occasion cards feature rich, authentic lifestyle photography with frosted glass icon pills and bold titles. Keep cards clean without cluttering taglines.
-- **Curated Rotations & Style Packs:** Present ready-made wardrobe rotations (*The Marathon & Active Recovery*, *The All-Week Urban Wardrobe*, *The 24/7 City Explorer*) demonstrating cohesive styling for the customer's lifestyle.
+- **Curated Rotations & Style Packs:** Merchants and admins create wardrobe rotations from real listed pairs (`/merchant/packs`, `/admin/packs`); a merchant's pack is published only after an admin approves it. Published packs (seeded examples: *The Marathon & Active Recovery*, *The All-Week Urban Wardrobe*, *The 24/7 City Explorer*) show on the home page and at `/packs/[id]`.
 
 ## 2. Wear-Sharing Engine & Unlimited Pairs
 - **Hold Any Number of Pairs:** Borrowers can hold and rent as many shoes as they desire simultaneously. There is no artificial cap (such as 4 pairs) restricting their active rotation.

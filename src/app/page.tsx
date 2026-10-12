@@ -17,6 +17,7 @@ import { getCurrentUser } from "@/server/auth/session";
 import { homeFor } from "@/server/auth/service";
 import { browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
+import { publishedPacks } from "@/server/packs";
 import { getActiveSettings } from "@/server/settings";
 import { homeRows } from "./home-rows";
 
@@ -45,11 +46,12 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       ? picked
       : undefined;
   const forParam = audience?.toLowerCase();
-  const [shoes, allShoes, facets, active] = await Promise.all([
+  const [shoes, allShoes, facets, active, packs] = await Promise.all([
     browseShoes({ audience, experience }),
     browseShoes({}),
     browseFacets(),
     getActiveSettings(),
+    publishedPacks(),
   ]);
   const today = colomboDay(new Date());
 
@@ -202,7 +204,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
       <OccasionDiscovery currentExperience={experience} audienceParam={forParam} />
 
-      <CuratedPacksShowcase />
+      <CuratedPacksShowcase packs={packs} />
 
       {rows.length === 0 ? (
         <p className="py-16 text-center text-subtle">

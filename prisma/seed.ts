@@ -300,6 +300,121 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
   ],
 };
 
+type SeedRole = { name: string; description: string; experience?: string; pairs: string[] };
+type SeedPack = { title: string; subtitle: string; highlight: string; roles: SeedRole[] };
+
+/** The example rotations, made by the admin and published (style packs, 2026-10-13). */
+const STYLE_PACKS: SeedPack[] = [
+  {
+    title: "The Marathon & Active Recovery",
+    subtitle: "Peak performance on tempo runs, cushioned support on recovery days.",
+    highlight: "Hold 3 pairs · wear splits 3 ways · about a third of the wear on each",
+    roles: [
+      {
+        name: "Daily Mileage Eater",
+        description: "Max-cushion road endurance for daily miles",
+        experience: "Morning Run",
+        pairs: ["Nike Pegasus 41", "Asics Gel-Kayano 31"],
+      },
+      {
+        name: "Speed & Tempo Day",
+        description: "Lightweight, propulsive ride for fast workouts",
+        experience: "Morning Run",
+        pairs: ["Adidas Ultraboost Light"],
+      },
+      {
+        name: "Active Recovery",
+        description: "Plush comfort for post-run errands and rest days",
+        experience: "Weekend Stroll",
+        pairs: ["New Balance 550"],
+      },
+    ],
+  },
+  {
+    title: "The All-Week Urban Wardrobe",
+    subtitle: "Polish by day, commute comfort in transit, casual weekend statements.",
+    highlight: "1 work shoe + 1 commuter + 1 weekend icon",
+    roles: [
+      {
+        name: "The Office Sharp",
+        description: "Clean, refined silhouette for meetings",
+        experience: "Work Day",
+        pairs: ["New Balance 550", "Adidas Samba OG"],
+      },
+      {
+        name: "The Transit Commuter",
+        description: "All-day walking support for the commute",
+        experience: "Work Day",
+        pairs: ["Veja V-10"],
+      },
+      {
+        name: "The Weekend Statement",
+        description: "Effortless street style for brunches and evenings",
+        experience: "Night Out",
+        pairs: ["Converse Chuck 70 Hi", "Vans Old Skool"],
+      },
+    ],
+  },
+  {
+    title: "The 24/7 City Explorer",
+    subtitle: "Timeless street pairs with athletic all-day comfort.",
+    highlight: "Alternate daily · each pair dries out and stays fresher",
+    roles: [
+      {
+        name: "The Low-Top Classic",
+        description: "Low-profile heritage pair that goes with anything",
+        experience: "Street Session",
+        pairs: ["Adidas Samba OG", "Puma Suede Classic"],
+      },
+      {
+        name: "The High-Mileage Mover",
+        description: "Flexible cushion for long weekend walks",
+        experience: "Weekend Stroll",
+        pairs: ["Nike Air Jordan 1 Mid", "Veja V-10"],
+      },
+    ],
+  },
+];
+
+/** Seeds the example packs once, from listed seed pairs (looked up by brand and model). */
+async function seedStylePacks() {
+  if ((await db.stylePack.count()) > 0) return;
+  const admin = await db.user.findUniqueOrThrow({ where: { email: "admin@sneakers.test" } });
+  const listed = await db.shoe.findMany({
+    where: { status: { notIn: ["DRAFT", "RETIRED", "SOLD"] } },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, brand: true, model: true },
+  });
+  const find = (name: string) => listed.find((s) => `${s.brand} ${s.model}` === name)?.id;
+  for (const pack of STYLE_PACKS) {
+    const roles = pack.roles
+      .map((r) => ({ ...r, ids: [...new Set(r.pairs.map(find).filter((id) => id !== undefined))] }))
+      .filter((r) => r.ids.length > 0);
+    if (roles.length === 0) continue;
+    await db.stylePack.create({
+      data: {
+        title: pack.title,
+        subtitle: pack.subtitle,
+        highlight: pack.highlight,
+        status: "PUBLISHED",
+        publishedAt: new Date(),
+        createdById: admin.id,
+        reviewedById: admin.id,
+        roles: {
+          create: roles.map((r, i) => ({
+            position: i,
+            name: r.name,
+            description: r.description,
+            experience: r.experience ?? null,
+            shoes: { create: r.ids.map((shoeId, j) => ({ shoeId, position: j })) },
+          })),
+        },
+      },
+    });
+  }
+  console.log("Seeded the example style packs");
+}
+
 async function main() {
   if (!(await db.pricingSettings.findFirst())) {
     await db.pricingSettings.create({ data: DEFAULT_SETTINGS });
@@ -438,6 +553,8 @@ async function main() {
     }
   }
   if (bare.length) console.log(`Added placeholder photos to ${bare.length} shoes`);
+
+  await seedStylePacks();
 
   console.log(`Seed complete. Dev password for all accounts: ${PASSWORD}`);
 }
