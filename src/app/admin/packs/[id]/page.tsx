@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import { notFound } from "next/navigation";
 import { StylePackEditor } from "@/components/style-pack-editor";
 import { StylePackStatusPanel } from "@/components/style-pack-status";
@@ -18,6 +19,7 @@ export default async function AdminPackPage({ params }: PageProps<"/admin/packs/
   const { pack, input } = found;
   return (
     <main className="flex flex-col gap-6">
+      <BackButton href="/admin/packs" to="style packs" />
       <PageHeader title={pack.title} />
       <StylePackStatusPanel
         packId={pack.id}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import { notFound } from "next/navigation";
 import { Card, PageHeader } from "@/components/ui";
 import { formatDate, formatLKR } from "@/lib/format";
@@ -25,6 +26,7 @@ export default async function NewDisputePage({ searchParams }: PageProps<"/dispu
 
   return (
     <main className="max-w-xl">
+      <BackButton href="/rentals" to="my rentals" className="mb-4" />
       <PageHeader
         title="Report a problem"
         description={`${shoeName(item.shoe)} · closed ${formatDate(item.closedAt)} · charged ${formatLKR(item.charge?.toString() ?? "0")}`}

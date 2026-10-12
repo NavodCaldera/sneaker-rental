@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import { pricingMethodLabel } from "@/lib/pricing-method";
 import { conditionLabel } from "@/lib/shoe-condition";
 import Link from "next/link";
@@ -43,14 +44,12 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
 
   return (
     <main className="flex flex-col gap-6">
+      <BackButton href="/merchant" to="my shoes" />
       <PageHeader
         title={shoeName(shoe)}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            <ShoeSizeHover
-              size={shoeSizeInfo(shoe).primary}
-              details={shoeSizeInfo(shoe)}
-            />
+            <ShoeSizeHover size={shoeSizeInfo(shoe).primary} details={shoeSizeInfo(shoe)} />
             <span>· {styleLabel(shoe)}</span>
             <ShoeStatusBadge status={shoe.status} />
           </span>

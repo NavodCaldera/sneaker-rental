@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackButton } from "@/components/back-button";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui";
 import {
@@ -25,6 +26,7 @@ export default async function SizeGuidePage({ searchParams }: PageProps<"/size-g
 
   return (
     <main className="max-w-3xl">
+      <BackButton href="/browse" to="browse" useHistory className="mb-4" />
       <PageHeader
         title="Size guide"
         description="Merchants list each pair in the size on its label: UK, EU or US. Every listing shows the same size in the other systems, and searching by any of them finds it."
