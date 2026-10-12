@@ -172,7 +172,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 8",
       audience: "UNISEX",
       experiences: ["Weekend Stroll", "Work Day"],
-      value: "28000",
+      value: "10500",
       lifespanDays: 400,
     },
     {
@@ -181,7 +181,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 10",
       audience: "MEN",
       experiences: ["Work Day", "Weekend Stroll"],
-      value: "32000",
+      value: "11200",
       lifespanDays: 450,
     },
     {
@@ -190,7 +190,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 9",
       audience: "WOMEN",
       experiences: ["Morning Run"],
-      value: "38000",
+      value: "11800",
       lifespanDays: 300,
     },
     {
@@ -200,7 +200,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "EU 38",
       audience: "WOMEN",
       experiences: ["Studio & Gym"],
-      value: "36000",
+      value: "11900",
       lifespanDays: 300,
     },
     {
@@ -209,7 +209,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 3",
       audience: "BOYS",
       experiences: ["School Day"],
-      value: "15000",
+      value: "7000",
       lifespanDays: 200,
     },
     {
@@ -229,7 +229,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 9",
       audience: "MEN",
       experiences: ["Game Day"],
-      value: "42000",
+      value: "12000",
       lifespanDays: 365,
     },
     {
@@ -238,7 +238,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 7",
       audience: "WOMEN",
       experiences: ["Brunch & Errands"],
-      value: "18000",
+      value: "8500",
       lifespanDays: 350,
       pricingMethod: "EXPONENTIAL",
       description: "Priced on exponential decay: dearest when new, then falls fastest at first.",
@@ -249,7 +249,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 8",
       audience: "UNISEX",
       experiences: ["Night Out"],
-      value: "16000",
+      value: "7500",
       lifespanDays: 300,
     },
     {
@@ -258,7 +258,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 10",
       audience: "MEN",
       experiences: ["Night Out"],
-      value: "35000",
+      value: "11000",
       lifespanDays: 380,
     },
     {
@@ -267,7 +267,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 9",
       audience: "MEN",
       experiences: ["Street Session"],
-      value: "14000",
+      value: "6800",
       lifespanDays: 250,
     },
     {
@@ -294,7 +294,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       size: "UK 5",
       audience: "WOMEN",
       experiences: ["Weekend Stroll"],
-      value: "30000",
+      value: "10200",
       lifespanDays: 365,
     },
   ],
