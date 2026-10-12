@@ -38,7 +38,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
           <Link href="/browse" className="underline">
             Browse shoes
           </Link>{" "}
-          and add up to {quote.maxPairs} pairs.
+          and add pairs to your rotation.
         </EmptyState>
       </main>
     );
@@ -49,7 +49,7 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
       <div>
         <PageHeader
           title="Your bundle"
-          description={`Hold up to ${quote.maxPairs} pairs at once. Each day's wear is split across the pairs you hold, so a full bundle costs about one pair's daily price.`}
+          description="Hold as many pairs as you want at once. Each day's wear is split across all pairs you hold, keeping your daily cost balanced."
         />
         <ul className="flex flex-col gap-3">
           {quote.lines.map((line) => (

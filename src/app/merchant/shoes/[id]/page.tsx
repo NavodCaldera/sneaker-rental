@@ -5,10 +5,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
+import { ShoeSizeHover } from "@/components/size-bits";
 import { Card, PageHeader } from "@/components/ui";
 import { toD } from "@/lib/decimal";
 import { formatDate, formatLKR, formatWear } from "@/lib/format";
-import { sizeSummary } from "@/lib/shoe-size";
+import { shoeSizeInfo } from "@/lib/shoe-size";
 import { styleLabel } from "@/lib/shoe-style";
 import { requireUser } from "@/server/auth/session";
 import { CatalogueError, getMerchantForUser, getMerchantShoe } from "@/server/catalogue";
@@ -46,7 +47,12 @@ export default async function MerchantShoePage({ params }: PageProps<"/merchant/
         title={shoeName(shoe)}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            {sizeSummary(shoe)} · {styleLabel(shoe)} <ShoeStatusBadge status={shoe.status} />
+            <ShoeSizeHover
+              size={shoeSizeInfo(shoe).primary}
+              details={shoeSizeInfo(shoe)}
+            />
+            <span>· {styleLabel(shoe)}</span>
+            <ShoeStatusBadge status={shoe.status} />
           </span>
         }
       />

@@ -113,12 +113,6 @@ export async function quoteBundle(
   });
   const totalPairs = held + shoes.length;
   const problems: string[] = [];
-  if (totalPairs > row.maxPairsPerBundle) {
-    problems.push(
-      `You can hold up to ${row.maxPairsPerBundle} pairs at once` +
-        (held ? ` (you already hold ${held})` : ""),
-    );
-  }
 
   const listed = shoeIds.flatMap((id) => shoes.filter((s) => s.id === id));
   const today = asOfToday(now);

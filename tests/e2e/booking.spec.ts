@@ -20,11 +20,11 @@ test("5.2 borrower builds a 4-pair bundle and checks out", async ({ page }) => {
   await expect(page.getByText(/Rent estimate for 14 days, locked now/)).toBeVisible();
   await expect(page.getByText("Deposit: pair values, locked while you rent")).toBeVisible();
 
-  // A fifth pair breaks the 4-pair cap.
+  // A fifth pair is allowed without any cap.
   await page.goto("/browse?for=men&experience=Morning+Run");
   await page.locator('main ul a[href^="/shoes/"]').first().click();
   await page.getByRole("button", { name: "Add to bundle" }).click();
-  await expect(page.getByText(/hold up to 4 pairs/i).first()).toBeVisible();
+  await expect(page.getByText("Daily cost (5 pairs held)")).toBeVisible();
   await page
     .getByRole("button", { name: /Remove/ })
     .last()

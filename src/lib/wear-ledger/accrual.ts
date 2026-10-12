@@ -88,7 +88,7 @@ export function runLedger(
   shoes: Map<string, LedgerShoe>,
   fromDay: Day,
   toDay: Day,
-  options: { maxPairs: number },
+  options: { maxPairs?: number } = {},
 ): { results: Map<string, ItemAccrual>; entries: LedgerEntry[] } {
   const results = new Map<string, ItemAccrual>();
   const entries: LedgerEntry[] = [];
@@ -114,7 +114,7 @@ export function runLedger(
     }
     for (const [borrower, held] of byBorrower) {
       const n = held.length;
-      if (n > options.maxPairs) {
+      if (options.maxPairs !== undefined && n > options.maxPairs) {
         throw new RangeError(`Borrower ${borrower} holds ${n} pairs on day ${day}`);
       }
       for (const it of held) {

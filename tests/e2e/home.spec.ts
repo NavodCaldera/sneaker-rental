@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("home page loads", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Shoe Rental/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Nova/);
 });
 
 test("home: who-it's-for tabs, experience chips, rows, and search leads to Browse", async ({
@@ -10,7 +10,8 @@ test("home: who-it's-for tabs, experience chips, rows, and search leads to Brows
 }) => {
   await page.goto("/");
   const justListed = page.getByRole("region", { name: "Just listed" });
-  await expect(justListed.getByText("per day").first()).toBeVisible();
+  await expect(justListed.getByText(/Condition \d+%/).first()).toBeVisible();
+  await expect(justListed.getByText("per day")).toHaveCount(0);
   // Before picking a tab there are no experience chips.
   await expect(page.getByRole("navigation", { name: /Experiences for/ })).toHaveCount(0);
 
@@ -33,6 +34,15 @@ test("home: who-it's-for tabs, experience chips, rows, and search leads to Brows
   const rows = page.getByRole("region", { name: "Just listed in Men · Morning Run" });
   await expect(rows.getByRole("link", { name: /Nike Pegasus 41/ }).first()).toBeVisible();
   await expect(rows.getByText("Men · Morning Run").first()).toBeVisible();
+
+  // Typing in "Brand or model" drops down matching brands and models; picking one searches.
+  const box = page.getByRole("search", { name: "Find shoes" }).getByLabel("Brand or model");
+  await box.fill("pegas");
+  const list = page.getByRole("listbox", { name: "Suggestions" });
+  await expect(list.getByRole("option", { name: /Nike Pegasus 41/ })).toBeVisible();
+  await box.fill("zzzz");
+  await expect(list).toHaveCount(0);
+  await box.fill("");
 
   // Searching opens Browse with the filters.
   const search = page.getByRole("search", { name: "Find shoes" });

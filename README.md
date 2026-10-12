@@ -1,4 +1,4 @@
-# Sneaker Rental Marketplace
+# Nova: Shoe Rental Marketplace
 
 Rent sneakers by the wear you actually use. Merchants list shoes, borrowers rent bundles of up to 4 pairs on a wear-based price curve, and ride-hailing drivers move the shoes.
 
@@ -71,4 +71,4 @@ These are still open (business-model.md §10). Each one is a setting or an adapt
 | Catch-up pricing φ                                                                | `/admin/settings` (off)                                                    |
 | Ride-hailing app and API                                                          | `src/server/logistics/provider.ts` (manual provider)                       |
 | Payment gateway; holding customer token balances (may need Central Bank approval) | `src/server/payments/gateway.ts` (mock)                                    |
-| Platform name                                                                     | Placeholder "Sneaker Rental"                                               |
+| Platform name                                                                     | Nova (decided 2026-10-12)                                                  |

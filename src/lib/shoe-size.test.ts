@@ -4,6 +4,7 @@ import {
   WOMEN_SIZES,
   parseSize,
   shoeSizeFields,
+  shoeSizeInfo,
   sizeEquivalents,
   sizeSummary,
   sortSizes,
@@ -62,6 +63,25 @@ describe("showing and searching sizes", () => {
       "UK 9 · EU 43",
     );
     expect(sizeSummary({ audience: "BOYS", ...shoeSizeFields("BOYS", "UK", "3") })).toBe("UK 3");
+  });
+
+  it("extracts UK size as primary display and Europe, US, cm conversions for hover", () => {
+    const menShoe = { audience: "MEN" as const, ...shoeSizeFields("MEN", "UK", "10") };
+    const menInfo = shoeSizeInfo(menShoe);
+    expect(menInfo.primary).toBe("UK 10");
+    expect(menInfo.uk).toBe("UK 10");
+    expect(menInfo.eu).toBe("EU 44.5");
+    expect(menInfo.us).toBe("US 10.5");
+    expect(menInfo.cm).toBe("28.5 cm");
+    expect(menInfo.hasConversions).toBe(true);
+
+    const womenShoe = { audience: "WOMEN" as const, ...shoeSizeFields("WOMEN", "EU", "39") };
+    const womenInfo = shoeSizeInfo(womenShoe);
+    expect(womenInfo.primary).toBe("UK 6");
+    expect(womenInfo.uk).toBe("UK 6");
+    expect(womenInfo.eu).toBe("EU 39");
+    expect(womenInfo.us).toBe("US 8.5");
+    expect(womenInfo.cm).toBe("24.5 cm");
   });
 
   it("reads the Size filter", () => {

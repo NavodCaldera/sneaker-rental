@@ -5,6 +5,7 @@ import {
   SIZE_KEY,
   type SearchSystem,
   type ShoeSize,
+  type ShoeSizeDisplayInfo,
   chartFor,
   formatSize,
   normalizeSize,
@@ -133,5 +134,72 @@ export function ShoeSizePanel({ shoe }: { shoe: ShoeSize }) {
         </Link>
       </p>
     </section>
+  );
+}
+
+/**
+ * Displays only the UK size by default (or listed size as fallback).
+ * On hover / focus, pops up a small box showing the size in Europe, US, and cm.
+ */
+export function ShoeSizeHover({
+  size,
+  details,
+}: {
+  size?: string;
+  details?: ShoeSizeDisplayInfo | null;
+}) {
+  const displayText = details?.primary ?? size ?? "—";
+  const hasConversions = details ? Boolean(details.eu || details.us || details.cm) : false;
+
+  if (!hasConversions || !details) {
+    return <span>{displayText}</span>;
+  }
+
+  const tooltipTitle = [
+    details.eu ? `Europe: ${details.eu}` : null,
+    details.us ? `US: ${details.us}` : null,
+    details.cm ? `Size in cm: ${details.cm}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <span
+      className="size-hover-container relative inline-flex items-center shrink-0"
+      title={tooltipTitle}
+    >
+      <span className="cursor-help font-medium underline decoration-dotted decoration-subtle underline-offset-2 transition-colors hover:text-ink">
+        {displayText}
+      </span>
+      <span
+        role="tooltip"
+        className="size-hover-box pointer-events-none absolute bottom-full left-0 z-40 mb-2 w-48 rounded-xl border border-line bg-paper/95 p-3 text-xs text-ink shadow-xl backdrop-blur-md after:absolute after:top-full after:left-0 after:right-0 after:h-2 after:content-['']"
+      >
+        <span className="flex flex-col gap-1.5">
+          {details.eu && (
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-subtle">Europe</span>
+              <span className="font-semibold">{details.eu}</span>
+            </span>
+          )}
+          {details.us && (
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-subtle">US</span>
+              <span className="font-semibold">{details.us}</span>
+            </span>
+          )}
+          {details.cm && (
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-subtle">Size in cm</span>
+              <span className="font-semibold">{details.cm}</span>
+            </span>
+          )}
+        </span>
+        <span
+          aria-hidden="true"
+          className="absolute -bottom-1 left-4 h-2 w-2 rotate-45 border-b border-r border-line bg-paper"
+        />
+      </span>
+    </span>
   );
 }

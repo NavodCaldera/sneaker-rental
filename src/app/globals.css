@@ -56,3 +56,21 @@ body {
   background: var(--paper);
   color: var(--ink);
 }
+
+/* Size hover tooltip - strictly on mouse hover only */
+.size-hover-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.size-hover-box {
+  display: none !important;
+  pointer-events: none;
+}
+
+.size-hover-container:hover > .size-hover-box {
+  display: flex !important;
+  pointer-events: auto;
+}
+

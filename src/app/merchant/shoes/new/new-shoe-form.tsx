@@ -8,10 +8,14 @@ import { SizeFields } from "@/components/size-fields";
 import { StyleFields } from "@/components/style-fields";
 import { Alert, Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
 import type { Audience, PricingMethod } from "@/generated/prisma/enums";
+import type { CurvePreview } from "@/server/catalogue/pricing";
 import { formatLKR } from "@/lib/format";
 import { SHOE_CONDITIONS } from "@/lib/shoe-condition";
-import type { CurvePreview } from "@/server/catalogue/pricing";
-import { type ActionState, createShoeAction } from "../../actions";
+import {
+  type ActionState,
+  createShoeAction,
+  requestLifespanExtensionAction,
+} from "../../actions";
 
 /* eslint-disable @next/next/no-img-element -- local object-URL previews */
 
@@ -43,6 +47,24 @@ export function NewShoeForm({
   const [method, setMethod] = useState<PricingMethod>("LOGISTIC");
   const preview = useCurvePreview(value, lifespan, method);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [requestingExtension, setRequestingExtension] = useState(false);
+  const [extensionRequested, setExtensionRequested] = useState<string | null>(null);
+
+  async function handleRequestExtension() {
+    setRequestingExtension(true);
+    try {
+      const res = await requestLifespanExtensionAction();
+      if (res.ok) {
+        setExtensionRequested(res.ok);
+      } else {
+        setExtensionRequested(res.error || "Failed to send request");
+      }
+    } catch {
+      setExtensionRequested("Failed to send request");
+    } finally {
+      setRequestingExtension(false);
+    }
+  }
 
   return (
     <form action={action} className="grid gap-6 lg:grid-cols-[1fr_minmax(0,420px)]">
@@ -112,13 +134,7 @@ export function NewShoeForm({
 
       <div className="flex flex-col gap-6">
         <Card className="flex flex-col gap-4">
-          <h2 className="font-medium">Pricing inputs</h2>
-          <Field
-            label="Declared value (LKR)"
-            name="value"
-            error={errors.value}
-            hint="What the pair is worth today"
-          >
+          <Field label="Price" name="value" error={errors.value}>
             <Input
               name="value"
               inputMode="decimal"
@@ -132,7 +148,25 @@ export function NewShoeForm({
             label="Expected lifespan (days)"
             name="lifespanDays"
             error={errors.lifespanDays}
-            hint={`${lifespanMin}–${lifespanMax} days (${monthsMin}–${monthsMax} months). Need longer? Ask us to extend your limit. Longer means a lower daily price and more rentals, but if the pair wears out early you lose the income it didn't collect.`}
+            hint={
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span>
+                  {lifespanMin}–{lifespanMax} days ({monthsMin}–{monthsMax} months).
+                </span>
+                {extensionRequested ? (
+                  <span className="font-medium text-good">{extensionRequested}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleRequestExtension}
+                    disabled={requestingExtension}
+                    className="font-medium underline hover:text-ink cursor-pointer disabled:opacity-50"
+                  >
+                    {requestingExtension ? "Sending request…" : "Need longer?"}
+                  </button>
+                )}
+              </span>
+            }
           >
             <Input
               name="lifespanDays"

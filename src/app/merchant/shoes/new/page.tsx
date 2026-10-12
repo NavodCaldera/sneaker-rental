@@ -21,10 +21,7 @@ export default async function NewShoePage() {
   const limits = listingLimits(settings, merchant);
   return (
     <main>
-      <PageHeader
-        title="Add a shoe"
-        description="Saved as a draft. You'll see its price curve before you publish."
-      />
+      <PageHeader title="Add a shoe" />
       <NewShoeForm
         photoSlots={LISTING_PHOTOS}
         lifespanMin={limits.minLifespanDays}

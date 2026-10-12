@@ -14,7 +14,7 @@ export function ShoeRow({
   children,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   /** "See all" destination */
   href: string;
   children: ReactNode;
@@ -59,7 +59,7 @@ export function ShoeRow({
               →
             </Link>
           </h2>
-          <p className="text-sm text-subtle">{subtitle}</p>
+          {subtitle && <p className="text-sm text-subtle">{subtitle}</p>}
         </div>
         <div className="hidden gap-2 sm:flex">
           <ArrowButton

@@ -36,7 +36,7 @@ const allPhotos = () => ({
   BOX: photo(),
 });
 
-const LIMITS = { minLifespanDays: 183, maxLifespanDays: 730 };
+const LIMITS = { minLifespanDays: 180, maxLifespanDays: 730 };
 const input = shoeSchema(LIMITS).parse({
   brand: "Nike",
   model: "Pegasus 41",
@@ -98,9 +98,9 @@ describe("listing a shoe", () => {
 
   it("validates lifespan bounds from settings, value format and wear used", () => {
     const schema = shoeSchema(LIMITS);
-    expect(schema.safeParse({ ...input, lifespanDays: "182" }).success).toBe(false);
+    expect(schema.safeParse({ ...input, lifespanDays: "179" }).success).toBe(false);
     expect(schema.safeParse({ ...input, lifespanDays: "731" }).success).toBe(false);
-    expect(schema.safeParse({ ...input, lifespanDays: "183" }).success).toBe(true);
+    expect(schema.safeParse({ ...input, lifespanDays: "180" }).success).toBe(true);
     expect(schema.safeParse({ ...input, lifespanDays: "730" }).success).toBe(true);
     expect(schema.safeParse({ ...input, value: "6,000" }).success).toBe(false);
     expect(schema.safeParse({ ...input, value: "0" }).success).toBe(false);
@@ -137,7 +137,7 @@ describe("listing a shoe", () => {
   it("lifespans are 6–24 months unless an admin extends the merchant's limit", async () => {
     const { merchant } = await makeUser("MERCHANT");
     const long = { ...input, lifespanDays: 1095 }; // 36 months
-    await expect(createShoe(merchant!.id, long, allPhotos())).rejects.toThrow(/183 and 730/);
+    await expect(createShoe(merchant!.id, long, allPhotos())).rejects.toThrow(/180 and 730/);
 
     await expect(setLifespanExtension(merchant!.id, 24)).rejects.toThrow(/more than 24 months/);
     await setLifespanExtension(merchant!.id, 36);
@@ -148,12 +148,12 @@ describe("listing a shoe", () => {
     expect(shoe.lifespanDays).toBe(1095);
     await expect(
       createShoe(merchant!.id, { ...input, lifespanDays: 1096 }, allPhotos()),
-    ).rejects.toThrow(/183 and 1095/);
+    ).rejects.toThrow(/180 and 1095/);
 
     // Removing the extension blocks new long listings; the listed shoe keeps its curve.
     await setLifespanExtension(merchant!.id, null);
-    await expect(createShoe(merchant!.id, long, allPhotos())).rejects.toThrow(/183 and 730/);
-    await expect(publishShoe(merchant!.id, shoe.id)).rejects.toThrow(/183 and 730/);
+    await expect(createShoe(merchant!.id, long, allPhotos())).rejects.toThrow(/180 and 730/);
+    await expect(publishShoe(merchant!.id, shoe.id)).rejects.toThrow(/180 and 730/);
     const stored = await db.shoe.findUniqueOrThrow({
       where: { id: shoe.id },
       include: { settings: true },
@@ -419,7 +419,7 @@ describe("browsing and prices", () => {
 
   it("a pair can be made for several experiences and shows under each", async () => {
     const user = await makeUser("MERCHANT");
-    const LIMITS = { minLifespanDays: 183, maxLifespanDays: 730 };
+    const LIMITS = { minLifespanDays: 180, maxLifespanDays: 730 };
     const several = shoeSchema(LIMITS).parse({
       ...input,
       // Duplicates are dropped.
@@ -447,7 +447,7 @@ describe("browsing and prices", () => {
 
   it("brand and model are optional; a pair with neither is listed as unbranded", async () => {
     const user = await makeUser("MERCHANT");
-    const LIMITS = { minLifespanDays: 183, maxLifespanDays: 730 };
+    const LIMITS = { minLifespanDays: 180, maxLifespanDays: 730 };
     const { brand: _b, model: _m, ...rest } = input;
     const parsed = shoeSchema(LIMITS).parse({ ...rest, brand: "  ", model: "" });
     expect([parsed.brand, parsed.model]).toEqual(["", ""]);
@@ -464,7 +464,7 @@ describe("browsing and prices", () => {
   });
 
   it("accepts only an experience the audience offers, and the merchant can change it", async () => {
-    const LIMITS = { minLifespanDays: 183, maxLifespanDays: 730 };
+    const LIMITS = { minLifespanDays: 180, maxLifespanDays: 730 };
     const raw = { ...input, lifespanDays: "365" };
     expect(shoeSchema(LIMITS).safeParse({ ...raw, audience: "BOYS" }).success).toBe(false);
     expect(

@@ -4,7 +4,7 @@ description: Owns the pricing engine in src/lib/pricing/: the wear-based price c
 tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
-You build and maintain the pricing engine for the Sneaker Rental Marketplace. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/business-model.md` §3, §4 and §9 before starting.
+You build and maintain the pricing engine for Nova, the shoe rental marketplace. Read `CLAUDE.md`, `docs/pricing-spec.md` and `docs/business-model.md` §3, §4 and §9 before starting.
 
 ## Source of truth
 

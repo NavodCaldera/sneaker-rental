@@ -219,7 +219,7 @@ describe("direct handoff chain (§5.3)", () => {
 });
 
 describe("rules", () => {
-  it("caps pairs held at once and rejects unavailable pairs", async () => {
+  it("has no cap on pairs held at once, and rejects unavailable pairs", async () => {
     const { merchantId, borrower } = await setup();
     const shoes = await Promise.all([1, 2, 3, 4, 5].map(() => makeShoe(merchantId)));
     await checkout(
@@ -227,13 +227,13 @@ describe("rules", () => {
       shoes.slice(0, 3).map((s) => s.id),
       { plannedDays: 7 },
     );
-    await expect(
-      checkout(
-        borrower.id,
-        shoes.slice(3).map((s) => s.id),
-        { plannedDays: 7 },
-      ),
-    ).rejects.toThrow(/up to 4 pairs/);
+    // Five pairs at once is fine: wear is split 1/n across them.
+    await checkout(
+      borrower.id,
+      shoes.slice(3).map((s) => s.id),
+      { plannedDays: 7 },
+    );
+    expect(await db.rentalItem.count({ where: { rental: { borrowerId: borrower.id } } })).toBe(5);
 
     const other = await makeUser("BORROWER");
     await expect(checkout(other.id, [shoes[0].id], { plannedDays: 7 })).rejects.toThrow(

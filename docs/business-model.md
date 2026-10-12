@@ -1,4 +1,4 @@
-# Sneaker Rental Marketplace — Business Model
+# Nova (shoe rental marketplace) — Business Model
 
 Source brief, Oct 10 2026, by Navod Caldera. Converted from the PDF; content kept as written. Section numbers are added so agents can cite them ("§5 rule 3").
 

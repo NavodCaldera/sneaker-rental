@@ -30,7 +30,7 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
   {
     title: "Listings: lifespan limits",
     fields: [
-      { name: "minLifespanDays", label: "Shortest lifespan (days)", hint: "183 = 6 months" },
+      { name: "minLifespanDays", label: "Shortest lifespan (days)", hint: "180 = ~6 months" },
       {
         name: "maxLifespanDays",
         label: "Longest lifespan (days)",

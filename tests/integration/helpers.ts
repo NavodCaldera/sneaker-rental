@@ -13,7 +13,7 @@ export const TEST_SETTINGS = {
   midpointRatio: "0.5479452054794521",
   baseSteepness: "0.03",
   refLife: 365,
-  minLifespanDays: 183,
+  minLifespanDays: 180,
   maxLifespanDays: 730,
   maxDiscount: "0.10",
   releaseLeadDays: 10,

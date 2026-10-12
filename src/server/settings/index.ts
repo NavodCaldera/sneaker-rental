@@ -70,7 +70,7 @@ export const settingsSchema = z
     holdCost: money,
     offerResponseHours: z.coerce.number().int().min(1).max(720),
     earlyReturnNoticeDays: z.coerce.number().int().min(0).max(90),
-    maxPairsPerBundle: z.coerce.number().int().min(1).max(10),
+    maxPairsPerBundle: z.coerce.number().int().min(1).max(1000),
     disputeWindowDays: z.coerce.number().int().min(0).max(30),
     freeReturnHours: z.coerce.number().int().min(0).max(168),
     catchUpEnabled: z.boolean(),

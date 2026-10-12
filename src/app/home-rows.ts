@@ -10,7 +10,7 @@ export type HomeItem<C> = {
   discount: D;
 };
 
-export type HomeRow<C> = { title: string; subtitle: string; items: HomeItem<C>[] };
+export type HomeRow<C> = { title: string; subtitle?: string; items: HomeItem<C>[] };
 
 export const ROW_SIZE = 12;
 
@@ -26,14 +26,13 @@ export function homeRows<C>(items: HomeItem<C>[], scope?: string): HomeRow<C>[] 
   const rows: HomeRow<C>[] = [
     {
       title: `Exceptional Value${where}`,
-      subtitle: "Discounted pairs, biggest discount first. The discount lasts your whole rental",
+      subtitle: "Unmatched Value, From Day One",
       items: items
         .filter((i) => i.discount.gt(0))
         .sort((a, b) => b.discount.comparedTo(a.discount) || a.price.comparedTo(b.price)),
     },
     {
       title: `Just listed${where}`,
-      subtitle: "Fresh pairs from our merchants, newest first",
       items: available,
     },
     {

@@ -44,9 +44,9 @@ export async function requestPasswordReset(
   const link = `${appUrl()}/reset-password?token=${token}`;
   await mailer().send({
     to: user.email,
-    subject: "Reset your Shoe Rental password",
+    subject: "Reset your Nova password",
     text:
-      `Hi ${user.name},\n\nSomeone asked to reset the password for your Shoe Rental account. ` +
+      `Hi ${user.name},\n\nSomeone asked to reset the password for your Nova account. ` +
       `Open this link within ${RESET_TTL_MINUTES} minutes to choose a new one:\n\n${link}\n\n` +
       `If it wasn't you, ignore this email: your password stays the same.`,
   });

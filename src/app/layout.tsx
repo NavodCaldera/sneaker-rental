@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Shoe Rental", template: "%s · Shoe Rental" },
+  title: { default: "Nova", template: "%s · Nova" },
   description: "Rent shoes by the wear you actually use.",
 };
 

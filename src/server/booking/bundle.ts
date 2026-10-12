@@ -1,9 +1,9 @@
 import "server-only";
 import { cookies } from "next/headers";
 
-/** The borrower's bundle before checkout: shoe ids in a cookie. Capped by the bundle size. */
+/** The borrower's bundle before checkout: shoe ids in a cookie. */
 const COOKIE = "sr_bundle";
-const MAX_IDS = 10;
+const MAX_IDS = 100;
 
 export async function getBundle(): Promise<string[]> {
   const raw = (await cookies()).get(COOKIE)?.value;

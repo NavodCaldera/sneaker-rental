@@ -17,7 +17,7 @@ You are the quality check. `main` is updated after every commit (product owner, 
 2. **Pricing acceptance table** (`docs/pricing-spec.md` §11): confirm every row, including the 90-day and 800-day scenarios, has a passing test in `src/lib/pricing/__tests__/acceptance.test.ts`. No `it.todo`, no skips, no loosened tolerances or changed expected values.
 3. **E2E journeys:**
    - 5.1 Merchant lists a shoe → curve preview shows 28.92 / 8.68 for the seeded 6,000 LKR / L = 365 shoe → publishes → Available. A second-hand upgraded pair (wear used + what was upgraded) shows its condition in Browse and on its page. Picking **Exponential decay** previews 33.93 / 10.18 (same 6,600 merchant share); the draft can switch method and back; once published the method form is gone and the borrower's listing names the method.
-   - 5.2 Borrower builds a 4-pair bundle for a term → sees the daily cost, the rent estimate locked now and the deposit → checks out (deposits and rent estimate locked, nothing charged, committed wear shown on the listings) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
+   - 5.2 Borrower builds a multi-pair bundle (any number of pairs supported) for a term → sees the daily cost (wear split 1/n), the rent estimate locked now and the deposit → checks out (deposits and rent estimate locked, nothing charged, committed wear shown on the listings) → admin books the delivery → courier link marks it delivered → borrower confirms condition.
    - 5.3 A term ends (or the borrower ends on the term's last day) with a reservation pending → handoff trip → next borrower records condition.
    - 5.4 Close → rent charged, rent lock and the pair's deposit unlocked → payout eligible after 3 days → included in the weekly batch. A dispute holds it and the deposit.
 4. **Review checklist** on the diff:
@@ -42,7 +42,7 @@ You are the quality check. `main` is updated after every commit (product owner, 
    - [ ] Sign-up asks for the city after the address (both account types). Customers (only) give their age in whole years (1–120). Only white, black and #35D6ED appear as website colours (no new hex values or palette tokens); no blue text on white; UI text says "shoes", not "sneakers". Day and night mode both render (header switch, remembered by cookie; device setting when no pick).
    - [ ] Sizes: a pair listed in EU or US is found by a UK search (and the reverse) on the right chart (women's / men's and unisex); kids' and off-chart sizes show only as listed; the charts in `src/lib/shoe-size.ts` match the product owner's.
    - [ ] Forgot password: same message for unknown emails, link works once and expires after 60 minutes, sessions end on reset, reset links built from `APP_URL` only.
-   - [ ] No hard-coded settings values (0.10, 3 days, 4 pairs, 183 / 730 lifespan limits, 10 days' notice, 24-hour offers) outside PricingSettings defaults and seed.
+   - [ ] No hard-coded settings values (0.10, 3 days, 180 / 730 lifespan limits, 10 days' notice, 24-hour offers) outside PricingSettings defaults and seed; borrowers can hold any number of pairs.
    - [ ] Open decisions carry an `// OPEN DECISION:` marker rather than a silent choice.
    - [ ] The release discount comes from `releaseDiscount`, is fixed on the item at checkout, and never reaches the current holder.
    - [ ] Token ledger writes are idempotent and serialised per user; no money moves without a WalletEntry; balances are never computed with JS numbers.

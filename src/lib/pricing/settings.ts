@@ -51,7 +51,7 @@ export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   midpointRatio: new D(200).div(365),
   baseSteepness: "0.03",
   refLife: 365,
-  minLife: 183, // 6 months
+  minLife: 180, // ~6 months
   maxLife: 730, // 24 months
   maxDiscount: "0.10",
   releaseLeadDays: 10,

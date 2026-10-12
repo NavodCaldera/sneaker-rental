@@ -30,7 +30,7 @@ export function StyleFields({
 
   return (
     <>
-      <Field label="Who it's for" name="audience" error={errors.audience}>
+      <Field label="To whom" name="audience" error={errors.audience}>
         <Select
           name="audience"
           value={audience}

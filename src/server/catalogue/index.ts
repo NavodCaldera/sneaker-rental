@@ -409,6 +409,46 @@ function sizeWhere(text: string | undefined): Prisma.ShoeWhereInput {
   return { [SIZE_COLUMN[size.system]]: size.value };
 }
 
+export type ShoeSuggestion = { kind: "Brand" | "Model"; label: string; q: string };
+
+/**
+ * Search-box suggestions for what a visitor has typed: brands and models of pairs on offer
+ * that contain the text, brands first. `q` is what Browse searches for when it's picked.
+ */
+export async function suggestShoes(text: string, limit = 8): Promise<ShoeSuggestion[]> {
+  const t = text.trim();
+  if (t.length < 1) return [];
+  const shoes = await db.shoe.findMany({
+    where: {
+      AND: [browsableWhere()],
+      OR: [
+        { brand: { contains: t, mode: "insensitive" } },
+        { model: { contains: t, mode: "insensitive" } },
+      ],
+    },
+    select: { brand: true, model: true },
+    distinct: ["brand", "model"],
+    take: 60,
+  });
+  const has = (v: string) => v.toLowerCase().includes(t.toLowerCase());
+  const brands = [...new Set(shoes.map((s) => s.brand).filter((b) => b && has(b)))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const models = shoes
+    // A model matches on its own name or its brand's, so "nik" lists Nike's models too.
+    .filter((s) => s.model && has([s.brand, s.model].join(" ")))
+    .map((s) => ({
+      kind: "Model" as const,
+      label: [s.brand, s.model].filter(Boolean).join(" "),
+      q: s.model,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  return [
+    ...brands.map((b) => ({ kind: "Brand" as const, label: b, q: b })),
+    ...models.filter((m, i) => models.findIndex((x) => x.label === m.label) === i),
+  ].slice(0, limit);
+}
+
 export async function browseFacets() {
   const shoes = await db.shoe.findMany({
     where: browsableWhere(),

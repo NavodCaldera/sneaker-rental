@@ -33,7 +33,7 @@ export function SizeFields({
   const others = (["UK", "EU", "US", "CM"] as const).filter((s) => s !== system);
 
   let hint: React.ReactNode = "The size printed on the label inside the shoe.";
-  if (!audience) hint = "Choose who it's for to see it in the other sizes.";
+  if (!audience) hint = "Choose to whom to see it in the other sizes.";
   else if (!chart) hint = "Kids' sizes are shown to borrowers as listed.";
   else if (row)
     hint = `Borrowers also see ${others.map((s) => formatSize(s, row[SIZE_KEY[s]])).join(" · ")} (${chart.name.toLowerCase()} chart).`;

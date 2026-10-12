@@ -271,7 +271,7 @@ model PricingSettings {
   refLife               Int      @default(365)
   /// Lifespan a merchant may declare, in wear-days: 6 to 24 months. An admin can grant a
   /// merchant a longer maximum (Merchant.maxLifespanDays).
-  minLifespanDays       Int      @default(183)
+  minLifespanDays       Int      @default(180)
   maxLifespanDays       Int      @default(730)
   /// Highest discount a borrower can get (the release discount's cap)
   maxDiscount           Decimal  @default(0.10) @db.Decimal(20, 16)

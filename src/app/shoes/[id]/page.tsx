@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
-import { ShoeSizePanel } from "@/components/size-bits";
+import { ShoeSizeHover, ShoeSizePanel } from "@/components/size-bits";
 import { Card } from "@/components/ui";
 import { D } from "@/lib/decimal";
 import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
 import { pricingMethodLabel } from "@/lib/pricing-method";
-import { sizeSummary } from "@/lib/shoe-size";
+import { shoeSizeInfo } from "@/lib/shoe-size";
 import { styleLabel } from "@/lib/shoe-style";
 import { conditionLabel } from "@/lib/shoe-condition";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
@@ -67,11 +67,17 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
       <aside className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{shoeName(shoe)}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-subtle">
-            {sizeSummary(shoe)} · {styleLabel(shoe)} · {conditionLabel(shoe.condition)} ·{" "}
-            {shoe.merchant.businessName}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-subtle">
+            <ShoeSizeHover
+              size={shoeSizeInfo(shoe).primary}
+              details={shoeSizeInfo(shoe)}
+            />
+            <span>
+              · {styleLabel(shoe)} · {conditionLabel(shoe.condition)} ·{" "}
+              {shoe.merchant.businessName}
+            </span>
             <ShoeStatusBadge status={shoe.status} />
-          </p>
+          </div>
         </div>
         <div>
           <span className="text-3xl font-semibold">{formatLKR(pricing.priceToday)}</span>

@@ -43,8 +43,7 @@ export async function SiteHeader() {
           href="/"
           className="flex items-center gap-2 text-xl font-bold tracking-tight text-ink"
         >
-          <span aria-hidden="true" className="inline-block size-6 rounded-lg bg-accent" /> Shoe
-          Rental
+          <span aria-hidden="true" className="inline-block size-6 rounded-lg bg-accent" /> Nova
         </Link>
         {user ? (
           <>

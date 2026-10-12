@@ -22,6 +22,8 @@ import {
 } from "@/server/catalogue";
 import { getActiveSettings } from "@/server/settings";
 import { PhotoError } from "@/server/storage";
+import { db } from "@/server/db";
+import { mailer } from "@/server/notify/mailer";
 
 export type ActionState = {
   error?: string;
@@ -126,3 +128,24 @@ export async function updatePayoutAction(
   revalidatePath("/merchant");
   return { ok: "Payout account saved." };
 }
+
+export async function requestLifespanExtensionAction(): Promise<{ ok?: string; error?: string }> {
+  try {
+    const user = await requireUser("MERCHANT");
+    const merchant = await getMerchantForUser(user.id);
+    const admins = await db.user.findMany({ where: { role: "ADMIN" } });
+
+    for (const admin of admins) {
+      await mailer().send({
+        to: admin.email,
+        subject: `Lifespan increment request from ${merchant.businessName}`,
+        text: `Merchant "${merchant.businessName}" (${user.email}) has requested a lifespan increment for listing shoes.\n\nPlease review and grant an extension at /admin/merchants.`,
+      });
+    }
+
+    return { ok: "Request sent to admin" };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to send request" };
+  }
+}
+

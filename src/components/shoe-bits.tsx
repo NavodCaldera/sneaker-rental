@@ -51,11 +51,62 @@ export function ShoeStatusBadge({ status }: { status: ShoeStatus }) {
   return <Badge tone={s.tone}>{s.label}</Badge>;
 }
 
+export function DiscountBadge({
+  discount,
+  className,
+}: {
+  discount: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`inline-flex h-6 w-20 items-center justify-center rounded-full bg-accent text-center text-xs font-semibold text-on-accent shadow-sm ${className ?? ""}`}
+    >
+      {discount}
+    </span>
+  );
+}
+
 export function WearBar({ wear, lifespan }: { wear: string; lifespan: number }) {
   const pct = Math.min(100, (Number(wear) / lifespan) * 100);
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
-      <div className="h-full rounded-full bg-ink/60" style={{ width: `${pct}%` }} />
+      <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/** Condition percentage (0–100) based on wear used and total lifespan */
+export function conditionPercent(wear: string | number, lifespan: number): number {
+  if (lifespan <= 0) return 100;
+  return Math.max(0, Math.min(100, Math.round((1 - Number(wear) / lifespan) * 100)));
+}
+
+/**
+ * The pair's condition as a percentage of its life left, text only (product owner,
+ * 2026-10-12: no bar).
+ */
+export function ConditionBar({
+  pct,
+  wear,
+  lifespan,
+  label = "Condition",
+}: {
+  pct?: number;
+  wear?: string | number;
+  lifespan?: number;
+  label?: string;
+}) {
+  const finalPct =
+    pct !== undefined
+      ? Math.max(0, Math.min(100, Math.round(pct)))
+      : wear !== undefined && lifespan !== undefined
+        ? conditionPercent(wear, lifespan)
+        : 100;
+
+  return (
+    <div className="truncate text-xs font-medium text-subtle">
+      {label} {finalPct}%
     </div>
   );
 }

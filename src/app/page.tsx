@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { type ShoeCardData, ShoeCard } from "@/components/shoe-card";
+import { conditionPercent } from "@/components/shoe-bits";
 import { ShoeRow, ShoeRowItem } from "@/components/shoe-row";
+import { SearchBox } from "@/components/search-box";
 import { SizeOptions } from "@/components/size-bits";
+import { OccasionDiscovery } from "@/components/occasion-discovery";
+import { CuratedPacksShowcase } from "@/components/curated-packs";
 import { D } from "@/lib/decimal";
-import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { formatPercent, formatWear } from "@/lib/format";
 import { conditionShort } from "@/lib/shoe-condition";
-import { sizeSummary } from "@/lib/shoe-size";
-import { EXPERIENCES, SHOP_AUDIENCES, parseShopAudience, styleLabel } from "@/lib/shoe-style";
-import { colomboDay, dayToDate } from "@/lib/wear-ledger";
+import { shoeSizeInfo } from "@/lib/shoe-size";
+import { ALL_EXPERIENCES, EXPERIENCES, SHOP_AUDIENCES, parseShopAudience } from "@/lib/shoe-style";
+import { colomboDay } from "@/lib/wear-ledger";
 import { getCurrentUser } from "@/server/auth/session";
 import { homeFor } from "@/server/auth/service";
 import { browseFacets, browseShoes } from "@/server/catalogue";
@@ -37,7 +41,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const audience = parseShopAudience(typeof sp.for === "string" ? sp.for : undefined);
   const picked = typeof sp.experience === "string" ? sp.experience : undefined;
   const experience =
-    audience && picked && EXPERIENCES[audience].includes(picked) ? picked : undefined;
+    picked && (audience ? EXPERIENCES[audience].includes(picked) : ALL_EXPERIENCES.includes(picked))
+      ? picked
+      : undefined;
   const forParam = audience?.toLowerCase();
   const [shoes, facets, active] = await Promise.all([
     browseShoes({ audience, experience }),
@@ -51,12 +57,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     const pricing = shoePricing(shoe, release.discount);
     const held = shoe.status === "WITH_BORROWER";
     const discounted = release.discount.gt(0);
+    const sizeDetails = shoeSizeInfo(shoe);
     const card: ShoeCardData = {
       id: shoe.id,
       brand: shoe.brand,
       model: shoe.model,
-      size: sizeSummary(shoe),
-      style: styleLabel(shoe),
+      size: sizeDetails.primary,
+      sizeDetails,
       photoId: shoe.photos[0]?.id,
       badge: discounted
         ? `${formatPercent(release.discount)} off`
@@ -65,15 +72,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           : shoe.condition !== "NEW"
             ? conditionShort(shoe.condition)
             : undefined,
-      price: formatLKR(pricing.priceToday),
-      priceBefore: discounted ? formatLKR(pricing.priceBeforeDiscount) : undefined,
       wear: `${formatWear(shoe.committedWear.toString())} of ${shoe.lifespanDays} days used`,
-      note:
-        held && release.releaseDay !== null
-          ? release.releaseDay < today
-            ? "free now"
-            : `free from ${formatDate(dayToDate(release.releaseDay + 1))}`
-          : undefined,
+      conditionPct: conditionPercent(shoe.committedWear.toString(), shoe.lifespanDays),
     };
     return {
       card,
@@ -85,7 +85,11 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   });
 
   const audienceName = SHOP_AUDIENCES.find((a) => a.value === audience)?.label;
-  const scope = audienceName && (experience ? `${audienceName} · ${experience}` : audienceName);
+  const scope = audienceName
+    ? experience
+      ? `${audienceName} · ${experience}`
+      : audienceName
+    : experience;
   const where = scope ? ` in ${scope}` : "";
   const seeAll = `/browse?${new URLSearchParams({
     ...(forParam && { for: forParam }),
@@ -95,7 +99,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   return (
     <main className="flex flex-col gap-10">
-      <h1 className="sr-only">Shoe Rental: rent shoes by the wear</h1>
+      <h1 className="sr-only">Nova: rent shoes by the day</h1>
 
       <div className="flex flex-col items-center gap-6">
         <nav aria-label="Who it's for" className="w-full overflow-x-auto [scrollbar-width:none]">
@@ -153,30 +157,23 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           action="/browse"
           role="search"
           aria-label="Find shoes"
-          className="flex w-full max-w-3xl items-center rounded-full border border-line bg-paper py-2 pl-2 pr-2 shadow-md"
+          className="relative flex w-full max-w-3xl items-center rounded-full border border-line bg-paper py-2 pl-2 pr-2 shadow-md"
         >
           {forParam && <input type="hidden" name="for" value={forParam} />}
           {experience && <input type="hidden" name="experience" value={experience} />}
-          <label className="flex min-w-0 flex-1 flex-col rounded-full px-5 py-1.5 hover:bg-muted">
+          <label className="flex min-w-0 flex-1 cursor-pointer flex-col justify-center rounded-full px-5 py-1.5 hover:bg-muted">
             <span className="text-xs font-semibold">Size</span>
             <select
               name="size"
               defaultValue=""
-              className="-ml-1 bg-transparent text-sm text-subtle outline-none"
+              className="-ml-1 w-full cursor-pointer bg-transparent text-sm text-subtle outline-none"
             >
               <option value="">Any size</option>
               <SizeOptions sizes={facets.sizes} />
             </select>
           </label>
           <span aria-hidden="true" className="h-8 w-px bg-line" />
-          <label className="flex min-w-0 flex-[2] flex-col rounded-full px-5 py-1.5 hover:bg-muted">
-            <span className="text-xs font-semibold">Brand or model</span>
-            <input
-              name="q"
-              placeholder="Search brands or models"
-              className="bg-transparent text-sm outline-none placeholder:text-subtle"
-            />
-          </label>
+          <SearchBox />
           <button
             type="submit"
             aria-label="Search"
@@ -197,13 +194,11 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             </svg>
           </button>
         </form>
-        <p className="-mt-2 text-xs text-subtle">
-          UK, EU, US or cm: search in the size you know.{" "}
-          <Link href="/size-guide" className="underline">
-            Size guide
-          </Link>
-        </p>
       </div>
+
+      <OccasionDiscovery currentExperience={experience} audienceParam={forParam} />
+
+      <CuratedPacksShowcase />
 
       {rows.length === 0 ? (
         <p className="py-16 text-center text-subtle">
@@ -235,9 +230,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </p>
         </div>
         <div>
-          <h2 className="mb-1 font-semibold">Up to four pairs at once</h2>
+          <h2 className="mb-1 font-semibold">Hold any number of pairs</h2>
           <p className="text-subtle">
-            Each day&apos;s wear is split across the pairs you hold, so four pairs cost about the
+            Each day&apos;s wear is split across all pairs you hold, so renting multiple pairs costs about the
             same as one.
           </p>
         </div>

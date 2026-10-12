@@ -11,7 +11,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 **Product decisions that override the reference (2026-10-11):**
 1. **Merchant first.** Rent goes to the merchant until they have received their target, (1 + μm) × V for a new pair; after that it goes to the platform (§7). The reference split every charge in the ratio μm : μp.
 2. **Waiting for the driver is free.** A borrower's last day is the day they end the rental (or their term's last day), not the day the pair reaches the next holder (§5).
-3. **Lifespan 6–24 months** (183–730 wear-days). An admin can grant a merchant a longer maximum on request (§1.1).
+3. **Lifespan about 6–24 months** (180–730 wear-days; the minimum was 183 until 2026-10-13). An admin can grant a merchant a longer maximum on request (§1.1).
 4. **Release discount up to 10%** for the next borrower of a pair, starting 10 days before the current holder's term ends (§8); the pair itself can be reserved from the holder's day 1 (decision 10). The brief (§7) advised idle discounts of at most 5%; the product owner chose 10%.
 5. **Tokens instead of card holds** (§6). Borrowers keep a token balance (1 token = 1 LKR) bought through the gateway. Each pair's merchant value is locked as its own deposit, at full value, for as long as the pair is out, and its rent estimate is locked beside it; only tokens above the locks can be withdrawn as money.
 6. **Fixed-term rentals, post-paid rent (locked at booking, charged at return)** (§6, §6a, §7). The borrower books a term (e.g. 90 days). Nothing is charged at booking: the pair's deposit (V) and the rent estimate for the term are locked, and both stay locked until the pair's item closes. Then the rent lock is released and the actual rent, from the wear the pair really got, is charged; only then does the merchant's share become payable. The pair's wear is committed at once: a new pair booked for 90 days shows 90/365 used, and is free again after the term. Day 1 is the day after delivery (the delivery day is free). Extending locks the extra estimate; on the day after the term ends a driver collects the pair, and waiting for the driver is free. (Decided 2026-10-11; replaces rent paid upfront.)
@@ -36,7 +36,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | `baseSteepness` | β at L = refLife | 0.03 | Steepness of the curve |
 | `refLife` | | 365 | Lifespan the curve shape was tuned for |
 | `maxPairsPerBundle` | | 4 | Pairs a borrower may hold at once |
-| `minLifespanDays` / `maxLifespanDays` (`minLife` / `maxLife`) | | 183 / 730 | Lifespan a merchant may declare: 6–24 months (1 month = 365/12 days, rounded up). `Merchant.maxLifespanDays` is a longer maximum an admin granted that merchant on request (`setLifespanExtension`, `/admin/merchants`). |
+| `minLifespanDays` / `maxLifespanDays` (`minLife` / `maxLife`) | | 180 / 730 | Lifespan a merchant may declare: about 6–24 months (1 month = 365/12 days, rounded up). `Merchant.maxLifespanDays` is a longer maximum an admin granted that merchant on request (`setLifespanExtension`, `/admin/merchants`). |
 | `maxDiscount` | | 0.10 | Highest discount a borrower can get (the release discount's cap) |
 | `releaseLeadDays` | | 10 | Days before a holder's planned last day that the pair is shown, discounted, to the next borrower |
 | `releaseDiscountStep` | | 0.005 | Release discount added per day from the start of that window |
@@ -380,7 +380,7 @@ All in `src/lib/pricing/__tests__/acceptance.test.ts`. Tolerance 1e-4 on 4-dp va
 | Past the lifespan (`chargePastLife` on) | P(w > L) = P(L) = K · q; 365 → 385 costs 20 × P(L); the 90-day problem's D pays 36.2029 + 2.5 × P(L) and ends at wear 367.5, A–C and E unchanged; the reference scenarios above run with it off |
 | Estimate vs final | Equal when the plan is kept; estimate leaves shoe state unchanged. Integration tests (`tests/integration/fixed-term.int.test.ts`) cover post-paid rent (locked at booking, charged at close, then paid out), committed wear, early-return notice and unlocking, bundle settling, reserving from day 1, offers of new dates (24 h; accept, decline → cancel + unlock + email, the pair kept with the holder until the next booking and handed over from them, expiry with the pair already waiting), extension, term end and the lifespan rule; `payments.int.test.ts` covers per-pair deposits. |
 | Remaining value at wear 100 / idle cost | 7,200 − 2,866.1143; 1.9726 a day; 5% on 30 days ≈ 22 idle days |
-| Guards | Double booking, more than 4 pairs, lifespan outside 183–730 at listing (unless extended), value ≤ 0, discount outside [0, 1) all throw |
+| Guards | Double booking, lifespan outside 180–730 at listing (unless extended), value ≤ 0, discount outside [0, 1) all throw |
 
 ### Scenario inputs
 

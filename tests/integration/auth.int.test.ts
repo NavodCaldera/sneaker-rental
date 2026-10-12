@@ -223,7 +223,7 @@ describe("forgot password", () => {
     const sent = await requestPasswordReset(" Forgot@B.lk ", now);
     expect(mail.sent).toHaveLength(1);
     expect(mail.sent[0].to).toBe("forgot@b.lk");
-    expect(mail.sent[0].subject).toBe("Reset your Shoe Rental password");
+    expect(mail.sent[0].subject).toBe("Reset your Nova password");
     expect(mail.sent[0].text).toContain(sent!.link);
     const token = tokenOf(sent!.link);
     // Only the hash is stored.

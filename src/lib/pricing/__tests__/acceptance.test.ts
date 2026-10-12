@@ -156,12 +156,12 @@ describe("single shoe", () => {
   });
 
   it("guards: lifespan outside 6–24 months at listing, value ≤ 0, discount outside [0, 1)", () => {
-    expect(() => validateListing(6000, 182, S)).toThrow(/between 183 and 730/);
+    expect(() => validateListing(6000, 179, S)).toThrow(/between 180 and 730/);
     expect(() => validateListing(6000, 731, S)).toThrow(/Lifespan/);
-    expect(() => validateListing(6000, 183, S)).not.toThrow();
+    expect(() => validateListing(6000, 180, S)).not.toThrow();
     expect(() => validateListing(6000, 730, S)).not.toThrow();
     // An admin-extended limit, and a shoe listed under one is still priced later.
-    expect(() => validateListing(6000, 1095, { minLife: 183, maxLife: 1095 })).not.toThrow();
+    expect(() => validateListing(6000, 1095, { minLife: 180, maxLife: 1095 })).not.toThrow();
     expect(curveParams(6000, 1095, S).K.gt(0)).toBe(true);
     expect(() => validateListing(0, 365, S)).toThrow(/value/);
     expect(() => curveParams(0, 365, S)).toThrow(/value/);

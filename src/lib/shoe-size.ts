@@ -157,6 +157,49 @@ export function sizeIn(shoe: ShoeSize, system: SearchSystem) {
   return v === null ? null : formatSize(system, normalizeSize(v.toString()));
 }
 
+export type ShoeSizeDisplayInfo = {
+  primary: string;
+  uk: string | null;
+  eu: string | null;
+  us: string | null;
+  cm: string | null;
+  hasConversions: boolean;
+};
+
+/**
+ * Size display details for cards and listings: shows only the UK size by default,
+ * with Europe (EU), US, and cm available for the hover popup.
+ */
+export function shoeSizeInfo(shoe: ShoeSize & { size?: string }): ShoeSizeDisplayInfo {
+  const uk =
+    shoe.sizeUk !== null && shoe.sizeUk !== undefined
+      ? `UK ${normalizeSize(shoe.sizeUk.toString())}`
+      : null;
+  const eu =
+    shoe.sizeEu !== null && shoe.sizeEu !== undefined
+      ? `EU ${normalizeSize(shoe.sizeEu.toString())}`
+      : null;
+  const us =
+    shoe.sizeUs !== null && shoe.sizeUs !== undefined
+      ? `US ${normalizeSize(shoe.sizeUs.toString())}`
+      : null;
+  const cm =
+    shoe.sizeCm !== null && shoe.sizeCm !== undefined
+      ? `${normalizeSize(shoe.sizeCm.toString())} cm`
+      : null;
+
+  const primary = uk ?? sizeIn(shoe, shoe.sizeSystem) ?? shoe.size ?? "—";
+
+  return {
+    primary,
+    uk,
+    eu,
+    us,
+    cm,
+    hasConversions: Boolean(eu || us || cm),
+  };
+}
+
 /**
  * The size on a card: as listed, then the same size in the borrower's system (the one they
  * searched by, else UK, or EU for a pair listed in UK), e.g. "EU 39 · UK 6".

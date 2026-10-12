@@ -1,19 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PhotoImg, WearBar } from "@/components/shoe-bits";
-import { SizeEquivalence, SizeOptions, sizeGuideHref } from "@/components/size-bits";
+import { ConditionBar, DiscountBadge, PhotoImg } from "@/components/shoe-bits";
+import {
+  ShoeSizeHover,
+  SizeEquivalence,
+  SizeOptions,
+  sizeGuideHref,
+} from "@/components/size-bits";
 import { Badge, Button, EmptyState, Input, PageHeader, Select } from "@/components/ui";
-import { formatDate, formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { formatLKR, formatPercent } from "@/lib/format";
 import { conditionShort } from "@/lib/shoe-condition";
-import { parseSize, sizeSummary } from "@/lib/shoe-size";
+import { parseSize, shoeSizeInfo, sizeSummary } from "@/lib/shoe-size";
 import {
   ALL_EXPERIENCES,
   EXPERIENCES,
   SHOP_AUDIENCES,
   parseShopAudience,
-  styleLabel,
 } from "@/lib/shoe-style";
-import { colomboDay, dayToDate } from "@/lib/wear-ledger";
+import { colomboDay } from "@/lib/wear-ledger";
 import { browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings } from "@/server/settings";
@@ -45,10 +49,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
 
   return (
     <main>
-      <PageHeader
-        title="Browse shoes"
-        description="Prices are per day and fall as a pair ages. Hold up to four pairs and the wear is split between them."
-      />
+      <PageHeader title="Elevate Your Everyday" />
       <form className="mb-6 flex flex-wrap items-end gap-2" role="search">
         <Input
           name="q"
@@ -124,14 +125,17 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                       {shoe.status === "WITH_BORROWER" && <Badge tone="info">Reserve next</Badge>}
                       {shoe.condition !== "NEW" && <Badge>{conditionShort(shoe.condition)}</Badge>}
                       {discounted && (
-                        <Badge tone="good">{formatPercent(release.discount)} off</Badge>
+                        <DiscountBadge discount={`${formatPercent(release.discount)} off`} />
                       )}
                     </span>
                   </div>
                   <div>
                     <div className="text-sm font-medium">{shoeName(shoe)}</div>
-                    <div className="text-xs text-subtle">
-                      {sizeSummary(shoe, sizeSystem)} · {styleLabel(shoe)}
+                    <div className="text-xs text-subtle flex items-center min-w-0">
+                      <ShoeSizeHover
+                        size={shoeSizeInfo(shoe).primary}
+                        details={shoeSizeInfo(shoe)}
+                      />
                     </div>
                   </div>
                   <div className="text-sm">
@@ -143,19 +147,10 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
                     )}
                     <span className="text-subtle"> per day</span>
                   </div>
-                  {shoe.status === "WITH_BORROWER" && release.releaseDay !== null && (
-                    <div className="text-xs text-subtle">
-                      {release.releaseDay < today
-                        ? "Free now"
-                        : `Free from ${formatDate(dayToDate(release.releaseDay))}`}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-xs text-subtle">
-                    <div className="w-16">
-                      <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
-                    </div>
-                    {formatWear(shoe.committedWear.toString())} / {shoe.lifespanDays} used
-                  </div>
+                  <ConditionBar
+                    wear={shoe.committedWear.toString()}
+                    lifespan={shoe.lifespanDays}
+                  />
                 </Link>
               </li>
             );
