@@ -31,9 +31,9 @@ test("home: who-it's-for tabs, experience chips, rows, and search leads to Brows
     .getByRole("link", { name: /Morning Run/ })
     .click();
   await expect(page).toHaveURL("/?for=men&experience=Morning+Run");
-  // Nothing in Men · Morning Run is discounted, so Exceptional Value shows the whole shop's.
-  const deals = page.getByRole("region", { name: "Exceptional Value" });
-  await expect(deals.getByText(/\d+(\.\d)?% off/).first()).toBeVisible();
+  // A freshly seeded database has no discounted pairs, so there is no Exceptional Value row
+  // (it and its whole-shop fallback are covered by the home-rows unit tests).
+  await expect(page.getByRole("region", { name: "Exceptional Value" })).toHaveCount(0);
 
   // Typing in "Brand or model" drops down matching brands and models; picking one searches.
   const box = page.getByRole("search", { name: "Find shoes" }).getByLabel("Brand or model");
