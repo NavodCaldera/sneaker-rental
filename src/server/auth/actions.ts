@@ -38,7 +38,14 @@ export async function signInAction(_prev: FormState, formData: FormData): Promis
     if (e instanceof AuthError) return { error: e.message };
     throw e;
   }
-  redirect(homeFor(role));
+  redirect(safeNext(formData.get("next")) ?? homeFor(role));
+}
+
+/** A same-site path to return to after sign-in ("/closet"), never another site. */
+function safeNext(v: FormDataEntryValue | null) {
+  if (typeof v !== "string" || !v.startsWith("/")) return null;
+  // "//host" and "/\host" would leave the site.
+  return v.startsWith("//") || v.startsWith("/\\") ? null : v;
 }
 
 export async function signOutAction() {

@@ -10,6 +10,7 @@ import type { Role } from "@/generated/prisma/client";
 const NAV: Record<Role, { href: string; label: string }[]> = {
   BORROWER: [
     { href: "/browse", label: "Browse" },
+    { href: "/closet", label: "My closet" },
     { href: "/bundle", label: "Bundle" },
     { href: "/rentals", label: "My rentals" },
     { href: "/wallet", label: "Wallet" },

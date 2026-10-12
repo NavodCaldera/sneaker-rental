@@ -6,11 +6,12 @@ import { PasswordInput } from "@/components/password-input";
 import { Alert, Button, Field, Input } from "@/components/ui";
 import { signInAction, type FormState } from "@/server/auth/actions";
 
-export function SignInForm() {
+export function SignInForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(signInAction, {});
   return (
     <form action={action} className="flex flex-col gap-4">
       {state.error && <Alert>{state.error}</Alert>}
+      {next && <input type="hidden" name="next" value={next} />}
       <Field label="Email" name="email">
         <Input name="email" type="email" autoComplete="email" required />
       </Field>
