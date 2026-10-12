@@ -222,36 +222,6 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </ShoeRow>
         ))
       )}
-
-      <section
-        aria-label="How it works"
-        className="grid gap-6 rounded-3xl bg-muted p-6 text-sm sm:grid-cols-3 sm:p-8"
-      >
-        <div>
-          <h2 className="mb-1 font-semibold">Pay for the wear, not the shoe</h2>
-          <p className="text-subtle">
-            New pairs cost more per day and worn pairs less, so the price falls as a pair ages.
-          </p>
-        </div>
-        <div>
-          <h2 className="mb-1 font-semibold">Hold any number of pairs</h2>
-          <p className="text-subtle">
-            Each day&apos;s wear is split across all pairs you hold, so renting multiple pairs costs
-            about the same as one.
-          </p>
-        </div>
-        <div>
-          <h2 className="mb-1 font-semibold">Delivered to your door</h2>
-          <p className="text-subtle">
-            When you&apos;re done it goes straight to the next borrower.{" "}
-            {!user && (
-              <Link href="/sign-up?role=MERCHANT" className="font-medium text-ink underline">
-                List your shoes
-              </Link>
-            )}
-          </p>
-        </div>
-      </section>
     </main>
   );
 }
