@@ -17,7 +17,8 @@ export const ROW_SIZE = 12;
 /**
  * The home page rows, in order, empty ones left out. Discounted pairs come first, as
  * "Exceptional Value", biggest discount first (then the lower price; product owner,
- * 2026-10-12), above Just listed. `items` must be newest first. `scope` names the
+ * 2026-10-12). Just listed, Best value today, Brand new pairs and Being worn now were removed
+ * from the home page at the product owner's request (2026-10-13). `items` must be newest first. `scope` names the
  * tab and experience picked, e.g. "Women · Night Out".
  */
 export function homeRows<C>(items: HomeItem<C>[], scope?: string): HomeRow<C>[] {
@@ -32,28 +33,9 @@ export function homeRows<C>(items: HomeItem<C>[], scope?: string): HomeRow<C>[] 
         .sort((a, b) => b.discount.comparedTo(a.discount) || a.price.comparedTo(b.price)),
     },
     {
-      title: `Just listed${where}`,
-      items: available,
-    },
-    {
-      title: `Best value today${where}`,
-      subtitle: "The lowest price per day right now",
-      items: [...available].sort((a, b) => a.price.comparedTo(b.price)),
-    },
-    {
-      title: "Brand new pairs",
-      subtitle: "Never worn: be the first",
-      items: available.filter((i) => i.condition === "NEW"),
-    },
-    {
       title: "Pre-loved and upgraded",
       subtitle: "Second-hand pairs start lower on the price curve",
       items: available.filter((i) => i.condition !== "NEW"),
-    },
-    {
-      title: "Being worn now: reserve next",
-      subtitle: "Book it today and it comes straight to you when the current term ends",
-      items: items.filter((i) => i.status === "WITH_BORROWER"),
     },
   ];
   return rows

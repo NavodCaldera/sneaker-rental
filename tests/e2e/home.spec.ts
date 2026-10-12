@@ -9,9 +9,9 @@ test("home: who-it's-for tabs, experience chips, rows, and search leads to Brows
   page,
 }) => {
   await page.goto("/");
-  const justListed = page.getByRole("region", { name: "Just listed" });
-  await expect(justListed.getByText(/Condition \d+%/).first()).toBeVisible();
-  await expect(justListed.getByText("per day")).toHaveCount(0);
+  // Just listed, Best value today, Brand new pairs and Being worn now are gone from home.
+  await expect(page.getByRole("region", { name: "Just listed" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Best value today" })).toHaveCount(0);
   // Before picking a tab there are no experience chips.
   await expect(page.getByRole("navigation", { name: /Experiences for/ })).toHaveCount(0);
 
@@ -31,9 +31,8 @@ test("home: who-it's-for tabs, experience chips, rows, and search leads to Brows
     .getByRole("link", { name: /Morning Run/ })
     .click();
   await expect(page).toHaveURL("/?for=men&experience=Morning+Run");
-  const rows = page.getByRole("region", { name: "Just listed in Men · Morning Run" });
-  await expect(rows.getByRole("link", { name: /Nike Pegasus 41/ }).first()).toBeVisible();
-  await expect(rows.getByText("Men · Morning Run").first()).toBeVisible();
+  // Only discounted pairs get a row; nothing here is discounted.
+  await expect(page.getByText("No discounted pairs in Men · Morning Run right now.")).toBeVisible();
 
   // Typing in "Brand or model" drops down matching brands and models; picking one searches.
   const box = page.getByRole("search", { name: "Find shoes" }).getByLabel("Brand or model");

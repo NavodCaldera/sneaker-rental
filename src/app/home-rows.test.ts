@@ -25,17 +25,14 @@ describe("home rows", () => {
     ]);
     expect(rows[0].title).toBe("Exceptional Value");
     expect(rows[0].items.map((i) => i.card)).toEqual(["d", "c", "e", "a"]);
-    expect(rows[1].title).toBe("Just listed");
+    // Just listed, Best value today, Brand new pairs and Being worn now are gone.
+    expect(rows.map((r) => r.title)).toEqual(["Exceptional Value"]);
   });
 
-  it("leaves Exceptional Value out when nothing is discounted, and names the style", () => {
+  it("leaves Exceptional Value out when nothing is discounted", () => {
     const rows = homeRows([item("a"), item("b", { condition: "SECOND_HAND" })], "Running");
-    expect(rows.map((r) => r.title)).toEqual([
-      "Just listed in Running",
-      "Best value today in Running",
-      "Brand new pairs",
-      "Pre-loved and upgraded",
-    ]);
+    expect(rows.map((r) => r.title)).toEqual(["Pre-loved and upgraded"]);
+    expect(homeRows([item("a")])).toEqual([]);
   });
 
   it("names the tab in Exceptional Value too", () => {

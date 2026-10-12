@@ -202,9 +202,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
       {rows.length === 0 ? (
         <p className="py-16 text-center text-subtle">
-          No pairs{where} yet.{" "}
-          <Link href="/" className="underline">
-            See everything
+          No discounted pairs{where} right now.{" "}
+          <Link href={seeAll} className="underline">
+            Browse all shoes
           </Link>
         </p>
       ) : (
