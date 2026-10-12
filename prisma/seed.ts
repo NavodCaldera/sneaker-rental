@@ -268,7 +268,7 @@ const shoesByMerchant: Record<string, SeedShoe[]> = {
       value: "11000",
       lifespanDays: 380,
 
-      stock: { "UK 8": 1, "UK 9": 2, "UK 10": 1 },
+      stock: { "UK 8": 1, "UK 10": 2, "UK 11": 1 },
     },
     {
       brand: "Vans",
