@@ -21,16 +21,26 @@ export const ROW_SIZE = 12;
  * from the home page at the product owner's request (2026-10-13). `items` must be newest first. `scope` names the
  * tab and experience picked, e.g. "Women · Night Out".
  */
-export function homeRows<C>(items: HomeItem<C>[], scope?: string): HomeRow<C>[] {
+export function homeRows<C>(
+  items: HomeItem<C>[],
+  scope?: string,
+  /** Every pair, ignoring the tab and experience picked: Exceptional Value falls back to it */
+  allItems: HomeItem<C>[] = items,
+): HomeRow<C>[] {
   const available = items.filter((i) => i.status === "AVAILABLE");
   const where = scope ? ` in ${scope}` : "";
+  const byDiscount = (list: HomeItem<C>[]) =>
+    list
+      .filter((i) => i.discount.gt(0))
+      .sort((a, b) => b.discount.comparedTo(a.discount) || a.price.comparedTo(b.price));
+  // Exceptional Value is always there: when nothing in the picked tab or experience is
+  // discounted, it shows the discounted pairs from the whole shop (product owner, 2026-10-13).
+  const here = byDiscount(items);
   const rows: HomeRow<C>[] = [
     {
-      title: `Exceptional Value${where}`,
+      title: here.length > 0 ? `Exceptional Value${where}` : "Exceptional Value",
       subtitle: "Unmatched Value, From Day One",
-      items: items
-        .filter((i) => i.discount.gt(0))
-        .sort((a, b) => b.discount.comparedTo(a.discount) || a.price.comparedTo(b.price)),
+      items: here.length > 0 ? here : byDiscount(allItems),
     },
     {
       title: "Pre-loved and upgraded",

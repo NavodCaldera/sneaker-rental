@@ -35,6 +35,17 @@ describe("home rows", () => {
     expect(homeRows([item("a")])).toEqual([]);
   });
 
+  it("falls back to the whole shop's discounted pairs when the picked tab has none", () => {
+    const all = [
+      item("a"),
+      item("b", { discount: new D("0.05") }),
+      item("c", { discount: new D("0.1") }),
+    ];
+    const rows = homeRows([item("a")], "Men · Morning Run", all);
+    expect(rows[0].title).toBe("Exceptional Value");
+    expect(rows[0].items.map((i) => i.card)).toEqual(["c", "b"]);
+  });
+
   it("names the tab in Exceptional Value too", () => {
     expect(homeRows([item("a", { discount: new D("0.05") })], "Women")[0].title).toBe(
       "Exceptional Value in Women",

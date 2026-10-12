@@ -45,44 +45,47 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       ? picked
       : undefined;
   const forParam = audience?.toLowerCase();
-  const [shoes, facets, active] = await Promise.all([
+  const [shoes, allShoes, facets, active] = await Promise.all([
     browseShoes({ audience, experience }),
+    browseShoes({}),
     browseFacets(),
     getActiveSettings(),
   ]);
   const today = colomboDay(new Date());
 
-  const cards = shoes.map((shoe) => {
-    const release = releaseInfo(shoe, active, today);
-    const pricing = shoePricing(shoe, release.discount);
-    const held = shoe.status === "WITH_BORROWER";
-    const discounted = release.discount.gt(0);
-    const sizeDetails = shoeSizeInfo(shoe);
-    const card: ShoeCardData = {
-      id: shoe.id,
-      brand: shoe.brand,
-      model: shoe.model,
-      size: sizeDetails.primary,
-      sizeDetails,
-      photoId: shoe.photos[0]?.id,
-      badge: discounted
-        ? `${formatPercent(release.discount)} off`
-        : held
-          ? "Reserve next"
-          : shoe.condition !== "NEW"
-            ? conditionShort(shoe.condition)
-            : undefined,
-      wear: `${formatWear(shoe.committedWear.toString())} of ${shoe.lifespanDays} days used`,
-      conditionPct: conditionPercent(shoe.committedWear.toString(), shoe.lifespanDays),
-    };
-    return {
-      card,
-      status: shoe.status,
-      condition: shoe.condition,
-      price: new D(pricing.priceToday),
-      discount: release.discount,
-    };
-  });
+  const cardsOf = (list: typeof shoes) =>
+    list.map((shoe) => {
+      const release = releaseInfo(shoe, active, today);
+      const pricing = shoePricing(shoe, release.discount);
+      const held = shoe.status === "WITH_BORROWER";
+      const discounted = release.discount.gt(0);
+      const sizeDetails = shoeSizeInfo(shoe);
+      const card: ShoeCardData = {
+        id: shoe.id,
+        brand: shoe.brand,
+        model: shoe.model,
+        size: sizeDetails.primary,
+        sizeDetails,
+        photoId: shoe.photos[0]?.id,
+        badge: discounted
+          ? `${formatPercent(release.discount)} off`
+          : held
+            ? "Reserve next"
+            : shoe.condition !== "NEW"
+              ? conditionShort(shoe.condition)
+              : undefined,
+        wear: `${formatWear(shoe.committedWear.toString())} of ${shoe.lifespanDays} days used`,
+        conditionPct: conditionPercent(shoe.committedWear.toString(), shoe.lifespanDays),
+      };
+      return {
+        card,
+        status: shoe.status,
+        condition: shoe.condition,
+        price: new D(pricing.priceToday),
+        discount: release.discount,
+      };
+    });
+  const cards = cardsOf(shoes);
 
   const audienceName = SHOP_AUDIENCES.find((a) => a.value === audience)?.label;
   const scope = audienceName
@@ -95,7 +98,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     ...(forParam && { for: forParam }),
     ...(experience && { experience }),
   })}`;
-  const rows = homeRows(cards, scope);
+  // Exceptional Value shows the whole shop's discounted pairs if this tab has none.
+  const rows = homeRows(cards, scope, cardsOf(allShoes));
 
   return (
     <main className="flex flex-col gap-10">
@@ -232,8 +236,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <div>
           <h2 className="mb-1 font-semibold">Hold any number of pairs</h2>
           <p className="text-subtle">
-            Each day&apos;s wear is split across all pairs you hold, so renting multiple pairs costs about the
-            same as one.
+            Each day&apos;s wear is split across all pairs you hold, so renting multiple pairs costs
+            about the same as one.
           </p>
         </div>
         <div>

@@ -31,8 +31,9 @@ test("home: who-it's-for tabs, experience chips, rows, and search leads to Brows
     .getByRole("link", { name: /Morning Run/ })
     .click();
   await expect(page).toHaveURL("/?for=men&experience=Morning+Run");
-  // Only discounted pairs get a row; nothing here is discounted.
-  await expect(page.getByText("No discounted pairs in Men · Morning Run right now.")).toBeVisible();
+  // Nothing in Men · Morning Run is discounted, so Exceptional Value shows the whole shop's.
+  const deals = page.getByRole("region", { name: "Exceptional Value" });
+  await expect(deals.getByText(/\d+(\.\d)?% off/).first()).toBeVisible();
 
   // Typing in "Brand or model" drops down matching brands and models; picking one searches.
   const box = page.getByRole("search", { name: "Find shoes" }).getByLabel("Brand or model");
