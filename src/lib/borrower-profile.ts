@@ -5,12 +5,19 @@ import type { SHOP_AUDIENCES } from "./shoe-style";
 /**
  * A customer's personal profile (product owner, 2026-10-13). Nova is a transformation economy:
  * each account belongs to one person, who tells us at sign-up their shoe size, gender, date of
- * birth and "Whom do you want to become?". They are then shown shoes in their size, for their
- * gender and age, with pairs made for who they want to become first. Shared by the server and
- * client forms. It never changes a price: prices come only from the pricing engine.
+ * birth and, in their own words, "Whom do you want to become?": the personality they want and
+ * how people should see them. They are then shown shoes in their size, for their gender and age,
+ * with pairs that suit who they want to become first. Shared by the server and client forms. It
+ * never changes a price: prices come only from the pricing engine.
  */
 
 export const BECOMING_QUESTION = "Whom do you want to become?";
+export const BECOMING_HINT =
+  "A few words about the personality you want to have and how people should see you.";
+/** The example we give (product owner, 2026-10-13). */
+export const BECOMING_EXAMPLE = "I want to build Sri Lanka's largest tech sensation";
+export const BECOMING_MIN = 10;
+export const BECOMING_MAX = 500;
 
 export const GENDERS: { value: Gender; label: string }[] = [
   { value: "MALE", label: "Male" },
@@ -19,58 +26,188 @@ export const GENDERS: { value: Gender; label: string }[] = [
 
 export type Persona = {
   key: string;
+  /** Internal name; customers don't see it */
   name: string;
-  line: string;
   /** The experiences (adult and kids') whose pairs suit this persona */
   experiences: string[];
+  /** Words in a customer's answer that point to this persona (lower case, whole words) */
+  words: string[];
 };
 
 /**
- * The answers to "Whom do you want to become?", in form order. Each maps onto the experience
- * names pairs are listed with (`EXPERIENCES` in `shoe-style.ts`), so every experience belongs to
- * at least one persona.
+ * What Nova reads in an answer to "Whom do you want to become?". Each persona maps onto the
+ * experience names pairs are listed with (`EXPERIENCES` in `shoe-style.ts`), so every experience
+ * belongs to at least one persona. "I want to build Sri Lanka's largest tech sensation" is The
+ * Professional (build, tech) and The Icon (sensation).
  */
 export const PERSONAS: Persona[] = [
   {
     key: "ATHLETE",
     name: "The Athlete",
-    line: "Faster and stronger, every morning",
     experiences: ["Morning Run", "Gym Session", "Studio & Gym", "Game Day", "Sports Day"],
+    words: [
+      "athlete",
+      "athletic",
+      "sport",
+      "sports",
+      "sporty",
+      "run",
+      "runner",
+      "running",
+      "marathon",
+      "fit",
+      "fitness",
+      "gym",
+      "train",
+      "training",
+      "strong",
+      "stronger",
+      "fast",
+      "faster",
+      "champion",
+      "cricket",
+      "football",
+      "rugby",
+      "tennis",
+      "healthy",
+      "active",
+      "energetic",
+    ],
   },
   {
     key: "PROFESSIONAL",
     name: "The Professional",
-    line: "Sharp, trusted and ready for the room",
     experiences: ["Work Day", "School Day"],
+    words: [
+      "professional",
+      "business",
+      "businessman",
+      "businesswoman",
+      "entrepreneur",
+      "founder",
+      "ceo",
+      "leader",
+      "lead",
+      "leading",
+      "manager",
+      "boss",
+      "executive",
+      "career",
+      "company",
+      "startup",
+      "tech",
+      "technology",
+      "engineer",
+      "developer",
+      "lawyer",
+      "doctor",
+      "banker",
+      "build",
+      "builder",
+      "office",
+      "corporate",
+      "trusted",
+      "sharp",
+      "smart",
+      "successful",
+      "student",
+      "scholar",
+      "teacher",
+    ],
   },
   {
     key: "EXPLORER",
     name: "The Explorer",
-    line: "New streets and new places every weekend",
     experiences: ["Weekend Stroll", "Brunch & Errands", "Weekend Fun", "Playtime"],
+    words: [
+      "explore",
+      "explorer",
+      "exploring",
+      "travel",
+      "traveller",
+      "traveler",
+      "travelling",
+      "adventure",
+      "adventurous",
+      "journey",
+      "outdoors",
+      "nature",
+      "wander",
+      "discover",
+      "free",
+      "relaxed",
+      "easygoing",
+      "calm",
+      "weekend",
+      "curious",
+    ],
   },
   {
     key: "CREATIVE",
     name: "The Creative",
-    line: "Your own style, on your own terms",
     experiences: ["Street Session", "Brunch & Errands", "Playtime"],
+    words: [
+      "creative",
+      "artist",
+      "artistic",
+      "art",
+      "design",
+      "designer",
+      "music",
+      "musician",
+      "singer",
+      "dancer",
+      "photographer",
+      "writer",
+      "fashion",
+      "stylish",
+      "style",
+      "unique",
+      "original",
+      "street",
+      "skater",
+      "creator",
+      "content",
+    ],
   },
   {
     key: "ICON",
     name: "The Icon",
-    line: "The one everyone remembers",
     experiences: ["Night Out", "Big Occasion", "Party Time"],
+    words: [
+      "icon",
+      "iconic",
+      "famous",
+      "fame",
+      "star",
+      "celebrity",
+      "sensation",
+      "influencer",
+      "legend",
+      "remembered",
+      "admired",
+      "glamorous",
+      "elegant",
+      "party",
+      "nightlife",
+      "bold",
+      "confident",
+      "charming",
+      "attractive",
+      "popular",
+    ],
   },
 ];
 
 export const PERSONA_KEYS = PERSONAS.map((p) => p.key);
 
-/** "The Athlete and The Icon", in form order; unknown keys are skipped. */
-export function personaNames(keys: readonly string[]) {
-  const names = PERSONAS.filter((p) => keys.includes(p.key)).map((p) => p.name);
-  return names.length <= 1
-    ? (names[0] ?? "")
-    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+/** The personas an answer points to, in `PERSONAS` order (none when no word matches). */
+export function personasFromStory(story: string) {
+  const words = new Set(story.toLowerCase().match(/[a-z]+/g) ?? []);
+  // "travels" and "designers" count as "travel" and "designer".
+  return PERSONAS.filter((p) => p.words.some((w) => words.has(w) || words.has(`${w}s`))).map(
+    (p) => p.key,
+  );
 }
 
 /** Every experience that suits any of the chosen personas. */
@@ -143,6 +280,7 @@ export type ProfileUser = {
   dateOfBirth: Date | null;
   gender: Gender | null;
   shoeSize: string | null;
+  becomingStory: string | null;
   becoming: string[];
 };
 

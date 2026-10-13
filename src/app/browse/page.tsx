@@ -14,7 +14,7 @@ import { browseFacets, browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings } from "@/server/settings";
 import { shoeName } from "@/lib/shoe-name";
-import { personaNames, rankForPersona, shoppingProfile } from "@/lib/borrower-profile";
+import { rankForPersona, shoppingProfile } from "@/lib/borrower-profile";
 import { audienceLabel } from "@/lib/shoe-style";
 import { colomboToday } from "@/server/auth/service";
 import { getCurrentUser } from "@/server/auth/session";
@@ -75,9 +75,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
       {personal && (
         <p className="-mt-2 mb-4 text-sm text-subtle">
           Shoes in your size, {profile.size} · {audienceLabel(profile.audience)}
-          {profile.becoming.length > 0 && (
-            <>, made for {personaNames(profile.becoming)} first</>
-          )}.{" "}
+          {profile.becoming.length > 0 && <>, picked for who you want to become first</>}.{" "}
           <Link href="/browse?all=1" className="font-medium text-ink underline">
             Show all shoes
           </Link>

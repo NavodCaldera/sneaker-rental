@@ -23,7 +23,7 @@ const PROFILE = {
   gender: "MALE",
   shoeSizeSystem: "UK",
   shoeSizeValue: "9",
-  becoming: ["ATHLETE"],
+  becomingStory: "A runner who wins races",
 };
 
 describe("sign-up and sign-in", () => {
@@ -107,7 +107,7 @@ describe("sign-up and sign-in", () => {
       dateOfBirth: ["Enter your date of birth"],
       gender: ["Choose your gender"],
       shoeSizeValue: ["Enter your shoe size"],
-      becoming: ["Choose at least one"],
+      becomingStory: ["Tell us who you want to become"],
     });
     expect(fieldErrors({ ...PROFILE, dateOfBirth: "2001-02-30" })?.dateOfBirth).toEqual([
       "Enter a real date",
@@ -122,8 +122,11 @@ describe("sign-up and sign-in", () => {
     expect(fieldErrors({ ...PROFILE, shoeSizeValue: "nine" })?.shoeSizeValue).toEqual([
       "Enter a size such as 9 or 8.5",
     ]);
-    expect(fieldErrors({ ...PROFILE, becoming: ["WIZARD"] })?.becoming).toEqual([
-      "Choose from the list",
+    expect(fieldErrors({ ...PROFILE, becomingStory: " Me " })?.becomingStory).toEqual([
+      "Write at least 10 characters",
+    ]);
+    expect(fieldErrors({ ...PROFILE, becomingStory: "x".repeat(501) })?.becomingStory).toEqual([
+      "Keep it under 500 characters",
     ]);
     expect(fieldErrors(PROFILE)).toBeUndefined();
 
@@ -133,33 +136,35 @@ describe("sign-up and sign-in", () => {
         ...PROFILE,
         shoeSizeSystem: "EU",
         shoeSizeValue: "42.0",
-        becoming: ["ICON", "ATHLETE", "ICON"],
+        becomingStory: "  I want to build   Sri Lanka's largest tech sensation  ",
       }),
     );
     expect(user).toMatchObject({
       gender: "MALE",
       shoeSize: "EU 42",
-      // Stored once each, in the order of the question's answers.
-      becoming: ["ATHLETE", "ICON"],
+      // Their own words, tidied, and what Nova reads in them.
+      becomingStory: "I want to build Sri Lanka's largest tech sensation",
+      becoming: ["PROFESSIONAL", "ICON"],
     });
     expect(user.dateOfBirth?.toISOString().slice(0, 10)).toBe("1993-07-02");
     const token = (await startSession(user.id)).token;
     expect(await userForToken(token)).toMatchObject({ shoeSize: "EU 42", gender: "MALE" });
 
     // Changed on the account page; a bad answer changes nothing.
-    expect(await updateProfile(user.id, { ...PROFILE, becoming: [] })).toEqual({
-      errors: { becoming: "Choose at least one" },
+    expect(await updateProfile(user.id, { ...PROFILE, becomingStory: "" })).toEqual({
+      errors: { becomingStory: "Tell us who you want to become" },
     });
     await updateProfile(user.id, {
       dateOfBirth: "2016-05-01",
       gender: "FEMALE",
       shoeSizeSystem: "UK",
       shoeSizeValue: "13",
-      becoming: ["EXPLORER"],
+      becomingStory: "An explorer of every park in Colombo",
     });
     expect(await db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
       gender: "FEMALE",
       shoeSize: "UK 13",
+      becomingStory: "An explorer of every park in Colombo",
       becoming: ["EXPLORER"],
     });
 
@@ -177,6 +182,7 @@ describe("sign-up and sign-in", () => {
       dateOfBirth: null,
       gender: null,
       shoeSize: null,
+      becomingStory: null,
       becoming: [],
     });
     expect(

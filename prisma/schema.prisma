@@ -43,8 +43,12 @@ model User {
   gender       Gender?
   /// Their shoe size as on a label, e.g. "UK 9" or "EU 39"; Browse and the Closet start there
   shoeSize     String?
-  /// "Whom do you want to become?": persona keys from `src/lib/borrower-profile.ts`
-  /// (ATHLETE, PROFESSIONAL, ...), one or more; pairs made for their experiences come first
+  /// "Whom do you want to become?" in their own words: the personality they want and how
+  /// people should see them (10–500 characters)
+  becomingStory String?
+  /// The personas Nova reads in that answer (`personasFromStory` in
+  /// `src/lib/borrower-profile.ts`: ATHLETE, PROFESSIONAL, ...), maybe none; pairs made for
+  /// their experiences come first
   becoming     String[]  @default([])
   passwordHash String
   verified     Boolean  @default(false)

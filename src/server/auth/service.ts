@@ -2,7 +2,15 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { addressSchema, citySchema } from "@/lib/address";
-import { MAX_AGE, PERSONA_KEYS, ageOn, isoDate, profileShoeSize } from "@/lib/borrower-profile";
+import {
+  BECOMING_MAX,
+  BECOMING_MIN,
+  MAX_AGE,
+  ageOn,
+  isoDate,
+  personasFromStory,
+  profileShoeSize,
+} from "@/lib/borrower-profile";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import type { Gender, Role, User } from "@/generated/prisma/client";
 import { db } from "../db";
@@ -24,7 +32,7 @@ export const signUpSchema = z
     gender: z.string().optional().or(z.literal("")),
     shoeSizeSystem: z.string().optional().or(z.literal("")),
     shoeSizeValue: z.string().optional().or(z.literal("")),
-    becoming: z.array(z.string()).optional(),
+    becomingStory: z.string().optional().or(z.literal("")),
     password: z.string().min(8, "Use at least 8 characters"),
     businessName: z.string().trim().optional().or(z.literal("")),
   })
@@ -46,13 +54,14 @@ export type ProfileFields = {
   gender?: string;
   shoeSizeSystem?: string;
   shoeSizeValue?: string;
-  becoming?: string[];
+  becomingStory?: string;
 };
 
 export type Profile = {
   dateOfBirth: Date;
   gender: Gender;
   shoeSize: string;
+  becomingStory: string;
   becoming: string[];
 };
 
@@ -63,7 +72,8 @@ export function colomboToday(now = new Date()) {
 
 /**
  * Checks a customer's profile: date of birth, gender, shoe size and "Whom do you want to
- * become?" (one or more personas). Returns the values to store, or one message per field.
+ * become?" in their own words (and reads the personas in it). Returns the values to store, or
+ * one message per field.
  */
 export function readProfile(
   f: ProfileFields,
@@ -85,16 +95,26 @@ export function readProfile(
   if (!f.shoeSizeValue?.trim()) errors.shoeSizeValue = "Enter your shoe size";
   else if (!shoeSize) errors.shoeSizeValue = "Enter a size such as 9 or 8.5";
 
-  const becoming = [...new Set(f.becoming ?? [])];
-  if (becoming.length === 0) errors.becoming = "Choose at least one";
-  else if (becoming.some((k) => !PERSONA_KEYS.includes(k)))
-    errors.becoming = "Choose from the list";
+  // One line or a short paragraph; runs of spaces and blank lines are tidied.
+  const becomingStory = (f.becomingStory ?? "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (!becomingStory) errors.becomingStory = "Tell us who you want to become";
+  else if (becomingStory.length < BECOMING_MIN)
+    errors.becomingStory = `Write at least ${BECOMING_MIN} characters`;
+  else if (becomingStory.length > BECOMING_MAX)
+    errors.becomingStory = `Keep it under ${BECOMING_MAX} characters`;
 
   if (Object.keys(errors).length > 0) return { errors };
-  // Stored in form order.
-  const ordered = PERSONA_KEYS.filter((k) => becoming.includes(k));
   return {
-    profile: { dateOfBirth: date!, gender: gender!, shoeSize: shoeSize!, becoming: ordered },
+    profile: {
+      dateOfBirth: date!,
+      gender: gender!,
+      shoeSize: shoeSize!,
+      becomingStory,
+      becoming: personasFromStory(becomingStory),
+    },
   };
 }
 
@@ -194,6 +214,7 @@ export type SessionUser = Pick<
   | "dateOfBirth"
   | "gender"
   | "shoeSize"
+  | "becomingStory"
   | "becoming"
 >;
 
@@ -215,6 +236,7 @@ export async function userForToken(token: string, now = new Date()): Promise<Ses
     dateOfBirth: u.dateOfBirth,
     gender: u.gender,
     shoeSize: u.shoeSize,
+    becomingStory: u.becomingStory,
     becoming: u.becoming,
   };
 }
