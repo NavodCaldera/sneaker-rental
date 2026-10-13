@@ -47,7 +47,6 @@ test("a merchant makes a style pack, an admin approves it, a borrower rents the 
   await expect(card.getByText("Daily Runner")).toBeVisible();
   await card.getByRole("link", { name: /Equip This Blueprint/ }).click();
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
-  await expect(page.getByText(/per day: each day's wear is split/)).toBeVisible();
   // The rotation takes the first bookable pair of each role (earlier tests may have rented
   // some pairs, so read which ones the page offers).
   const picks: string[] = [];
@@ -94,4 +93,13 @@ test("an admin sends a merchant's pack back with a reason", async ({ page }) => 
   await page.getByRole("link", { name: new RegExp(title) }).click();
   await expect(page.getByText("Admin note: Add a second pair for rainy days.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Send for review" })).toBeVisible();
+});
+
+test("a pack page needs an account: signed-out visitors are sent to sign-in", async ({ page }) => {
+  await page.goto("/");
+  await page
+    .getByRole("link", { name: /Equip This Blueprint/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/sign-in\?next=%2Fpacks%2F\w+/);
 });

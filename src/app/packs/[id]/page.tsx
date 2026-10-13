@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { BackButton } from "@/components/back-button";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { addPackToBundleAction } from "@/app/packs/actions";
 import { addToBundleAction } from "@/app/rentals/actions";
 import { PhotoImg } from "@/components/shoe-bits";
@@ -22,7 +22,10 @@ export const metadata: Metadata = { title: "Style pack" };
  */
 export default async function PackPage({ params }: PageProps<"/packs/[id]">) {
   const { id } = await params;
+  // Pack pages need an account (product owner, 2026-10-14): signed out, sign in first and come
+  // back here.
   const user = await getCurrentUser();
+  if (!user) redirect(`/sign-in?next=${encodeURIComponent(`/packs/${id}`)}`);
   const pack = await packForViewer(id, user);
   if (!pack) notFound();
   const borrower = user?.role === "BORROWER";
@@ -42,22 +45,11 @@ export default async function PackPage({ params }: PageProps<"/packs/[id]">) {
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{pack.title}</h1>
       </header>
 
-      {(borrower ? anyBookable : !user) && (
+      {borrower && anyBookable && (
         <Card className="flex flex-wrap items-center justify-between gap-4">
-          {borrower ? (
-            anyBookable && (
-              <form action={addPackToBundleAction.bind(null, pack.id)}>
-                <Button>Add the rotation to my bundle</Button>
-              </form>
-            )
-          ) : !user ? (
-            <p className="text-sm">
-              <Link href="/sign-in" className="underline">
-                Sign in
-              </Link>{" "}
-              to rent this rotation.
-            </p>
-          ) : null}
+          <form action={addPackToBundleAction.bind(null, pack.id)}>
+            <Button>Add the rotation to my bundle</Button>
+          </form>
         </Card>
       )}
 
