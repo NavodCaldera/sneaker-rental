@@ -21,11 +21,11 @@ test("closet: one size, choose a pair per slot, sign in keeps the plan, adds to 
 
   // Signed out: nothing is shown until who it's for and a size are picked.
   await page.goto("/closet");
-  await expect(page.getByRole("heading", { level: 1, name: "Your Nova Closet" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Equip Your Evolution" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Rotation summary" })).toHaveCount(0);
   await page.getByLabel("Who it's for").selectOption("men");
   await page.getByLabel("Size").selectOption("UK 9");
-  await page.getByRole("button", { name: "Show pairs that fit" }).click();
+  await page.getByRole("button", { name: "Calibrate My Rotation" }).click();
   await expect(page).toHaveURL(/\/closet\?for=men&size=UK\+9/);
 
   // Only pairs in that size are offered.

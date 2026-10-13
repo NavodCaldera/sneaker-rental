@@ -26,8 +26,9 @@ import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings } from "@/server/settings";
 
 export const metadata: Metadata = {
-  title: "Your Nova Closet",
-  description: "Plan a rotation of pairs for your week and add it to your bundle.",
+  title: "Equip Your Evolution | Nova",
+  description:
+    "Curate an agile rotation calibrated for every arena of your climb. Multi-pair luxury with zero capital drag.",
 };
 
 function one(v: string | string[] | undefined) {
@@ -53,10 +54,11 @@ export default async function ClosetPage({ searchParams }: PageProps<"/closet">)
   return (
     <main className="flex flex-col gap-6">
       <header className="max-w-2xl">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Your Nova Closet</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Equip Your Evolution</h1>
         <p className="mt-2 text-sm text-subtle">
-          Pick a pair for each part of your week. You wear one pair a day, so the wear is shared
-          across all of them, and the whole rotation costs about the same per day as one pair.
+          Your ambition doesn&apos;t fit into a single pair. Curate an agile rotation calibrated for
+          every arena of your climb. Wear is divided dynamically across all pairs held—giving you an
+          entire multi-pair luxury wardrobe for virtually the daily cost of a single shoe.
         </p>
       </header>
 
@@ -101,7 +103,7 @@ export default async function ClosetPage({ searchParams }: PageProps<"/closet">)
             </Select>
           </div>
           <Button type="submit" variant={ready ? "secondary" : "primary"}>
-            {ready ? "Update" : "Show pairs that fit"}
+            {ready ? "Update" : "Calibrate My Rotation"}
           </Button>
           <Link href={sizeGuideHref(sizeOk ? size : undefined)} className="py-2 text-sm underline">
             Size guide
@@ -113,7 +115,8 @@ export default async function ClosetPage({ searchParams }: PageProps<"/closet">)
         <Planner audience={audience} size={size} draft={draft} role={user?.role ?? null} />
       ) : (
         <p className="text-sm text-subtle">
-          Choose who the rotation is for and your size, and we&apos;ll show only pairs that fit.
+          Set your demographic and size to unlock battle-tested pairs ready to power your daily
+          ascent.
         </p>
       )}
     </main>
