@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { PackCarousel } from "@/components/pack-carousel";
-import { formatLKR } from "@/lib/format";
 import { rotationBadge } from "@/lib/style-pack";
 import type { PackView } from "@/server/packs";
 
@@ -35,22 +34,6 @@ export function CuratedPacksShowcase({ packs }: { packs: PackView[] }) {
               <h3 className="mt-4 text-lg font-bold text-ink">{pack.title}</h3>
               {pack.subtitle && (
                 <p className="mt-1 line-clamp-2 text-xs text-subtle">{pack.subtitle}</p>
-              )}
-
-              {(pack.highlight || pack.rotationDailyCost) && (
-                <div className="mt-4 rounded-xl bg-muted p-3 text-xs text-ink/80">
-                  {pack.highlight && (
-                    <p>
-                      <span className="font-semibold text-ink">Rotation Advantage: </span>
-                      {pack.highlight}
-                    </p>
-                  )}
-                  {pack.rotationDailyCost && (
-                    <p className={pack.highlight ? "mt-1" : undefined}>
-                      About {formatLKR(pack.rotationDailyCost)} per day held together
-                    </p>
-                  )}
-                </div>
               )}
 
               <div className="mt-5 flex flex-col gap-3">

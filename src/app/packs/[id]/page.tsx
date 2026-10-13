@@ -46,37 +46,24 @@ export default async function PackPage({ params }: PageProps<"/packs/[id]">) {
         {pack.subtitle && <p className="max-w-2xl text-subtle">{pack.subtitle}</p>}
       </header>
 
-      <Card className="flex flex-wrap items-center justify-between gap-4">
-        <div className="text-sm">
-          {pack.highlight && (
-            <p>
-              <span className="font-semibold">Rotation advantage: </span>
-              {pack.highlight}
+      {(borrower ? anyBookable : !user) && (
+        <Card className="flex flex-wrap items-center justify-between gap-4">
+          {borrower ? (
+            anyBookable && (
+              <form action={addPackToBundleAction.bind(null, pack.id)}>
+                <Button>Add the rotation to my bundle</Button>
+              </form>
+            )
+          ) : !user ? (
+            <p className="text-sm">
+              <Link href="/sign-in" className="underline">
+                Sign in
+              </Link>{" "}
+              to rent this rotation.
             </p>
-          )}
-          {pack.rotationDailyCost && (
-            <p className="text-subtle">
-              Held together, one pair per role costs about{" "}
-              <span className="font-semibold text-ink">{formatLKR(pack.rotationDailyCost)}</span>{" "}
-              per day: each day&apos;s wear is split across the pairs you hold.
-            </p>
-          )}
-        </div>
-        {borrower ? (
-          anyBookable && (
-            <form action={addPackToBundleAction.bind(null, pack.id)}>
-              <Button>Add the rotation to my bundle</Button>
-            </form>
-          )
-        ) : !user ? (
-          <p className="text-sm">
-            <Link href="/sign-in" className="underline">
-              Sign in
-            </Link>{" "}
-            to rent this rotation.
-          </p>
-        ) : null}
-      </Card>
+          ) : null}
+        </Card>
+      )}
 
       <ol className="flex flex-col gap-6">
         {pack.roles.map((role, i) => (
