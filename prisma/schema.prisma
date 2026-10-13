@@ -34,9 +34,18 @@ model User {
   address      String?
   /// The town or city of that address, asked for separately at sign-up (both roles)
   city         String?
-  /// Customers' age in years, asked at sign-up (null for merchants and admins). It is the age
-  /// they gave when the account was created (`createdAt`).
-  age          Int?
+  /// Customers' personal profile, asked at sign-up (product owner, 2026-10-13: Nova is a
+  /// transformation economy, each account belongs to one person). Null for merchants and
+  /// admins, and for customers who signed up before it was asked until they fill it in.
+  /// Date of birth (a calendar date): with gender, it picks the shoes they're shown (under 13:
+  /// Boys or Girls; otherwise Men or Women).
+  dateOfBirth  DateTime? @db.Date
+  gender       Gender?
+  /// Their shoe size as on a label, e.g. "UK 9" or "EU 39"; Browse and the Closet start there
+  shoeSize     String?
+  /// "Whom do you want to become?": persona keys from `src/lib/borrower-profile.ts`
+  /// (ATHLETE, PROFESSIONAL, ...), one or more; pairs made for their experiences come first
+  becoming     String[]  @default([])
   passwordHash String
   verified     Boolean  @default(false)
   /// Locked after a lost shoe (§6)
@@ -122,6 +131,12 @@ enum Grade {
 }
 
 /// Who a pair is for. Unisex pairs show under Men and under Women.
+/// A customer's gender, asked at sign-up; with their age it picks Men/Women or Boys/Girls
+enum Gender {
+  MALE
+  FEMALE
+}
+
 enum Audience {
   MEN
   WOMEN

@@ -10,7 +10,10 @@ import { signInAs, signOut } from "./session";
 export type FormState = { error?: string; fieldErrors?: Record<string, string[] | undefined> };
 
 export async function signUpAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const parsed = signUpSchema.safeParse(Object.fromEntries(formData));
+  const parsed = signUpSchema.safeParse({
+    ...Object.fromEntries(formData),
+    becoming: formData.getAll("becoming"),
+  });
   if (!parsed.success) {
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }

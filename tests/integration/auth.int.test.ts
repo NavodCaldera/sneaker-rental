@@ -9,12 +9,22 @@ import {
   signUpSchema,
   startSession,
   updateAddress,
+  updateProfile,
   userForToken,
 } from "@/server/auth/service";
 import { getActiveSettings, toPricingSettings, updateSettings } from "@/server/settings";
 import { makeUser, resetDb } from "./helpers";
 
 beforeEach(resetDb);
+
+/** A customer's sign-up profile, as the form sends it. */
+const PROFILE = {
+  dateOfBirth: "1993-07-02",
+  gender: "MALE",
+  shoeSizeSystem: "UK",
+  shoeSizeValue: "9",
+  becoming: ["ATHLETE"],
+};
 
 describe("sign-up and sign-in", () => {
   it("registers a merchant with a merchant profile, and signs in", async () => {
@@ -66,7 +76,7 @@ describe("sign-up and sign-in", () => {
         role: "BORROWER",
         address: "  21/3 Hill Street ",
         city: " Dehiwala ",
-        age: "33",
+        ...PROFILE,
       }),
     );
     expect([user.address, user.city]).toEqual(["21/3 Hill Street", "Dehiwala"]);
@@ -82,40 +92,96 @@ describe("sign-up and sign-in", () => {
     });
   });
 
-  it("asks customers, not merchants, for their age", async () => {
+  it("asks customers, not merchants, for their profile, and lets them change it", async () => {
     const customer = {
       role: "BORROWER",
       name: "A B",
-      email: "age@b.lk",
+      email: "me@b.lk",
       password: "12345678",
       address: "12 Galle Road",
       city: "Colombo 03",
     };
-    const ageError = (age?: string) =>
-      signUpSchema.safeParse({ ...customer, age }).error?.flatten().fieldErrors.age;
-    expect(ageError()).toEqual(["Enter your age"]);
-    expect(ageError("twenty")).toEqual(["Enter your age in whole years"]);
-    expect(ageError("25.5")).toEqual(["Enter your age in whole years"]);
-    expect(ageError("0")).toEqual(["Enter an age from 1 to 120"]);
-    expect(ageError("121")).toEqual(["Enter an age from 1 to 120"]);
-    expect(ageError(" 26 ")).toBeUndefined();
+    const fieldErrors = (profile: object) =>
+      signUpSchema.safeParse({ ...customer, ...profile }).error?.flatten().fieldErrors;
+    expect(fieldErrors({})).toMatchObject({
+      dateOfBirth: ["Enter your date of birth"],
+      gender: ["Choose your gender"],
+      shoeSizeValue: ["Enter your shoe size"],
+      becoming: ["Choose at least one"],
+    });
+    expect(fieldErrors({ ...PROFILE, dateOfBirth: "2001-02-30" })?.dateOfBirth).toEqual([
+      "Enter a real date",
+    ]);
+    expect(fieldErrors({ ...PROFILE, dateOfBirth: "2999-01-01" })?.dateOfBirth).toEqual([
+      "Your date of birth can't be in the future",
+    ]);
+    expect(fieldErrors({ ...PROFILE, dateOfBirth: "1850-01-01" })?.dateOfBirth).toEqual([
+      "Check the year you were born",
+    ]);
+    expect(fieldErrors({ ...PROFILE, gender: "OTHER" })?.gender).toEqual(["Choose your gender"]);
+    expect(fieldErrors({ ...PROFILE, shoeSizeValue: "nine" })?.shoeSizeValue).toEqual([
+      "Enter a size such as 9 or 8.5",
+    ]);
+    expect(fieldErrors({ ...PROFILE, becoming: ["WIZARD"] })?.becoming).toEqual([
+      "Choose from the list",
+    ]);
+    expect(fieldErrors(PROFILE)).toBeUndefined();
 
-    const user = await registerUser(signUpSchema.parse({ ...customer, age: "26" }));
-    expect(user.age).toBe(26);
+    const user = await registerUser(
+      signUpSchema.parse({
+        ...customer,
+        ...PROFILE,
+        shoeSizeSystem: "EU",
+        shoeSizeValue: "42.0",
+        becoming: ["ICON", "ATHLETE", "ICON"],
+      }),
+    );
+    expect(user).toMatchObject({
+      gender: "MALE",
+      shoeSize: "EU 42",
+      // Stored once each, in the order of the question's answers.
+      becoming: ["ATHLETE", "ICON"],
+    });
+    expect(user.dateOfBirth?.toISOString().slice(0, 10)).toBe("1993-07-02");
     const token = (await startSession(user.id)).token;
-    expect((await userForToken(token))?.age).toBe(26);
+    expect(await userForToken(token)).toMatchObject({ shoeSize: "EU 42", gender: "MALE" });
 
-    // Merchants aren't asked; an age sent anyway isn't stored.
+    // Changed on the account page; a bad answer changes nothing.
+    expect(await updateProfile(user.id, { ...PROFILE, becoming: [] })).toEqual({
+      errors: { becoming: "Choose at least one" },
+    });
+    await updateProfile(user.id, {
+      dateOfBirth: "2016-05-01",
+      gender: "FEMALE",
+      shoeSizeSystem: "UK",
+      shoeSizeValue: "13",
+      becoming: ["EXPLORER"],
+    });
+    expect(await db.user.findUniqueOrThrow({ where: { id: user.id } })).toMatchObject({
+      gender: "FEMALE",
+      shoeSize: "UK 13",
+      becoming: ["EXPLORER"],
+    });
+
+    // Merchants aren't asked; a profile sent anyway isn't stored.
     const merchant = await registerUser(
       signUpSchema.parse({
         ...customer,
+        ...PROFILE,
         role: "MERCHANT",
         email: "shop@b.lk",
         businessName: "Shop",
-        age: "26",
       }),
     );
-    expect(merchant.age).toBeNull();
+    expect(merchant).toMatchObject({
+      dateOfBirth: null,
+      gender: null,
+      shoeSize: null,
+      becoming: [],
+    });
+    expect(
+      signUpSchema.safeParse({ ...customer, role: "MERCHANT", businessName: "Shop" }).success,
+    ).toBe(true);
   });
 
   it("requires a business name for merchants and rejects public admin sign-up", () => {
@@ -141,7 +207,7 @@ describe("sign-up and sign-in", () => {
       password: "password123",
       address: "No. 8, Flower Road",
       city: "Colombo 07",
-      age: "28",
+      ...PROFILE,
     });
     const user = await registerUser(input);
     await expect(registerUser(input)).rejects.toThrow(AuthError);

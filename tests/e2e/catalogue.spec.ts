@@ -54,6 +54,8 @@ test("5.1 merchant lists a shoe, previews its curve and publishes it", async ({ 
 
   // The borrower finds it by their UK size, and sees what that is in EU.
   await signIn(page, ACCOUNTS.borrower);
+  // Browse starts from the customer's own profile; this search is for everyone.
+  await page.getByLabel("Who it's for").selectOption("");
   await page.getByLabel("Size", { exact: true }).selectOption("UK 11");
   await page.getByRole("button", { name: "Filter" }).click();
   await expect(page.getByRole("heading", { name: "UK 11 is the same as" })).toBeVisible();

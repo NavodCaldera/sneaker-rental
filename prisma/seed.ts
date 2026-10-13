@@ -6,6 +6,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   type Audience,
+  type Gender,
   type PricingMethod,
   PrismaClient,
   type Role,
@@ -74,6 +75,11 @@ function placeholderPhoto(brand: string, model: string, kind: string, colour: st
 </svg>`;
 }
 
+/** A sample profile as stored (DATE columns take UTC midnight). */
+function profileData(p: (typeof users)[number]["profile"]) {
+  return p ? { ...p, dateOfBirth: new Date(`${p.dateOfBirth}T00:00:00Z`) } : {};
+}
+
 const users: {
   email: string;
   name: string;
@@ -82,8 +88,8 @@ const users: {
   /** The account's one address and its city (customers and merchants) */
   address?: string;
   city?: string;
-  /** Customers only, in whole years */
-  age?: number;
+  /** Customers only: their profile (date of birth, gender, shoe size, who they want to become) */
+  profile?: { dateOfBirth: string; gender: Gender; shoeSize: string; becoming: string[] };
 }[] = [
   { email: "admin@sneakers.test", name: "Admin", role: "ADMIN" },
   {
@@ -108,7 +114,12 @@ const users: {
     role: "BORROWER",
     address: "No. 8, Flower Road",
     city: "Colombo 07",
-    age: 28,
+    profile: {
+      dateOfBirth: "1998-03-14",
+      gender: "FEMALE",
+      shoeSize: "UK 5",
+      becoming: ["ATHLETE", "EXPLORER"],
+    },
   },
   {
     email: "ravi@sneakers.test",
@@ -116,7 +127,12 @@ const users: {
     role: "BORROWER",
     address: "21/3 Hill Street",
     city: "Dehiwala",
-    age: 33,
+    profile: {
+      dateOfBirth: "1993-07-02",
+      gender: "MALE",
+      shoeSize: "UK 9",
+      becoming: ["ATHLETE", "ICON"],
+    },
   },
   {
     email: "nimal@sneakers.test",
@@ -124,7 +140,12 @@ const users: {
     role: "BORROWER",
     address: "17 Temple Road",
     city: "Nugegoda",
-    age: 25,
+    profile: {
+      dateOfBirth: "2001-11-20",
+      gender: "MALE",
+      shoeSize: "UK 10",
+      becoming: ["PROFESSIONAL", "CREATIVE"],
+    },
   },
 ];
 
@@ -509,7 +530,7 @@ async function main() {
         phone: "+94 77 000 0000",
         address: u.address ?? null,
         city: u.city ?? null,
-        age: u.age ?? null,
+        ...profileData(u.profile),
         merchant: u.businessName
           ? {
               create: {
@@ -523,9 +544,9 @@ async function main() {
       include: { merchant: true },
     });
 
-    // Sample customers seeded before ages existed get theirs.
-    if (u.age && user.age === null) {
-      await db.user.update({ where: { id: user.id }, data: { age: u.age } });
+    // Sample customers seeded before profiles existed get theirs.
+    if (u.profile && user.dateOfBirth === null) {
+      await db.user.update({ where: { id: user.id }, data: profileData(u.profile) });
     }
     // Sample accounts seeded before addresses (or cities) existed get theirs; an account
     // that already has a city is left alone.
