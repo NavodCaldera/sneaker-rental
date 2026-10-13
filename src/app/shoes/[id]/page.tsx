@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { BackButton } from "@/components/back-button";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CurveChart } from "@/components/curve-chart";
 import { PhotoImg, ShoeStatusBadge, WearBar } from "@/components/shoe-bits";
 import { ShoeSizeHover, ShoeSizePanel } from "@/components/size-bits";
@@ -42,6 +42,9 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
     getBundle(),
     getActiveSettings(),
   ]);
+  // Shoe pages need an account (product owner, 2026-10-14): signed out, sign in first and come
+  // back here.
+  if (!user) redirect(`/sign-in?next=${encodeURIComponent(`/shoes/${id}`)}`);
   if (!shoe) notFound();
   const sizes = await listingSizes(shoe.listingId);
   const release = releaseInfo(shoe, active, colomboDay(new Date()));
@@ -60,7 +63,11 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
       <BackButton href="/browse" to="browse" useHistory />
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-6">
-          <PhotoImg id={main?.id} alt={shoeName(shoe)} className="aspect-[4/3] w-full rounded-2xl shadow-sm" />
+          <PhotoImg
+            id={main?.id}
+            alt={shoeName(shoe)}
+            className="aspect-[4/3] w-full rounded-2xl shadow-sm"
+          />
           <div className="grid grid-cols-4 gap-3">
             {rest.map((p) => (
               <PhotoImg

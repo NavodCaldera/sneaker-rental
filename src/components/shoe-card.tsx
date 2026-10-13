@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { ConditionBar, DiscountBadge, PhotoImg } from "./shoe-bits";
-import { ShoeSizeHover } from "./size-bits";
 import { shoeName } from "@/lib/shoe-name";
 import type { ShoeSizeDisplayInfo } from "@/lib/shoe-size";
 
@@ -20,8 +19,8 @@ export type ShoeCardData = {
 };
 
 /**
- * A marketplace card: rounded square photo with one pill, then only the name, the size and
- * the condition bar (product owner, 2026-10-12). Price, experiences and dates are on the
+ * A marketplace card: rounded square photo with one pill, then only the name and the
+ * condition bar (product owner, 2026-10-12; the size line removed 2026-10-14). Price, experiences and dates are on the
  * listing page.
  */
 export function ShoeCard({ shoe }: { shoe: ShoeCardData }) {
@@ -49,9 +48,6 @@ export function ShoeCard({ shoe }: { shoe: ShoeCardData }) {
       </div>
       <div className="min-w-0 px-0.5 text-sm leading-snug">
         <div className="truncate font-semibold">{name}</div>
-        <div className="flex min-w-0 items-center text-subtle">
-          <ShoeSizeHover size={shoe.size} details={shoe.sizeDetails} />
-        </div>
         <div className="mt-1.5">
           {shoe.conditionPct !== undefined ? (
             <ConditionBar pct={shoe.conditionPct} wear={shoe.wear} />

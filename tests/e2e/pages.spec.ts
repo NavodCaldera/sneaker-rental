@@ -26,14 +26,15 @@ for (const [role, email] of [
   });
 }
 
-test("Back returns to the filtered browse page, or to browse when the listing was opened directly", async ({
+test("Back returns to the browse page, or to browse when the listing was opened directly", async ({
   page,
 }) => {
-  await page.goto("/browse?size=UK+5");
+  await signIn(page, ACCOUNTS.borrower);
+  await page.goto("/browse?brand=Adidas");
   await page.locator('main a[href^="/shoes/"]').first().click();
   await expect(page).toHaveURL(/\/shoes\/\w+$/);
   await page.getByRole("link", { name: "Back", exact: true }).click();
-  await expect(page).toHaveURL("/browse?size=UK+5");
+  await expect(page).toHaveURL("/browse?brand=Adidas");
 
   const href = await page.locator('main a[href^="/shoes/"]').first().getAttribute("href");
   await page.goto(href!);
