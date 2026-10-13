@@ -120,7 +120,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     ...(forParam && { for: forParam }),
     ...(experience && { experience }),
   })}`;
-  // Exceptional Value shows the whole shop's discounted pairs if this tab has none.
+  // Accelerate Your Stride shows the whole shop's discounted pairs if this tab has none.
   const rows = homeRows(cards, scope, cardsOf(allShoes));
 
   const stylistShoes: StylistShoeItem[] = allShoes.map((shoe) => {

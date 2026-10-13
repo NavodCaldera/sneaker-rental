@@ -35,7 +35,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 3. Brand Voice & Customer-Centric Copy
 - **Browse Header:** "Elevate Your Everyday" (concise, inspiring; avoid long technical subtitles).
-- **Discount Messaging:** "Unmatched Value, From Day One" (formerly "Exceptional Value").
+- **Discount Messaging:** the first home row is titled "Accelerate Your Stride" (formerly "Exceptional Value"), with no subtitle.
 - **Customer Terminology:** Always write "per day" (prices) and "days" (counts, lifespans). Never show internal terms like "wear-day" to users. UI text refers to "shoes", never "sneakers".
 - **Card Minimalism:** Browse and listing cards show only essential attributes: Photo, Model Name (or brand + model via `shoeName()`), one Size, Rent Price per day, and Condition. Avoid cluttering cards with availability flags or extra tags.
 - **Uniform Badge Sizing:** Badges (such as `DiscountBadge`) use uniform sizing (`80px` × `24px`, `w-20 h-6`) with centered text.

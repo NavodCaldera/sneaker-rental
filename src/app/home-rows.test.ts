@@ -23,13 +23,13 @@ describe("home rows", () => {
       item("d", { discount: new D("0.1"), price: new D(10) }),
       item("e", { discount: new D("0.05"), status: "WITH_BORROWER" }),
     ]);
-    expect(rows[0].title).toBe("Exceptional Value");
+    expect(rows[0].title).toBe("Accelerate Your Stride");
     expect(rows[0].items.map((i) => i.card)).toEqual(["d", "c", "e", "a"]);
     // Just listed, Best value today, Brand new pairs and Being worn now are gone.
-    expect(rows.map((r) => r.title)).toEqual(["Exceptional Value"]);
+    expect(rows.map((r) => r.title)).toEqual(["Accelerate Your Stride"]);
   });
 
-  it("leaves Exceptional Value out when nothing is discounted", () => {
+  it("leaves Accelerate Your Stride out when nothing is discounted", () => {
     const rows = homeRows([item("a"), item("b", { condition: "SECOND_HAND" })], "Running");
     expect(rows.map((r) => r.title)).toEqual(["Pre-loved and upgraded"]);
     expect(homeRows([item("a")])).toEqual([]);
@@ -42,13 +42,13 @@ describe("home rows", () => {
       item("c", { discount: new D("0.1") }),
     ];
     const rows = homeRows([item("a")], "Men · Morning Run", all);
-    expect(rows[0].title).toBe("Exceptional Value");
+    expect(rows[0].title).toBe("Accelerate Your Stride");
     expect(rows[0].items.map((i) => i.card)).toEqual(["c", "b"]);
   });
 
-  it("names the tab in Exceptional Value too", () => {
+  it("names the tab in Accelerate Your Stride too", () => {
     expect(homeRows([item("a", { discount: new D("0.05") })], "Women")[0].title).toBe(
-      "Exceptional Value in Women",
+      "Accelerate Your Stride in Women",
     );
   });
 
