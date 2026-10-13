@@ -8,7 +8,7 @@ import { PhotoImg } from "@/components/shoe-bits";
 import { Alert, Badge, Button, Card } from "@/components/ui";
 import { toD } from "@/lib/decimal";
 import { formatLKR } from "@/lib/format";
-import { PACK_STATUS, rotationBadge } from "@/lib/style-pack";
+import { PACK_STATUS } from "@/lib/style-pack";
 import { getCurrentUser } from "@/server/auth/session";
 import { getBundle } from "@/server/booking/bundle";
 import { packForViewer } from "@/server/packs";
@@ -39,9 +39,6 @@ export default async function PackPage({ params }: PageProps<"/packs/[id]">) {
         </Alert>
       )}
       <header className="flex flex-col gap-2">
-        <span className="self-start rounded-full bg-ink px-3 py-1 text-xs font-semibold text-paper">
-          {rotationBadge(pack.roles.length)}
-        </span>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{pack.title}</h1>
       </header>
 

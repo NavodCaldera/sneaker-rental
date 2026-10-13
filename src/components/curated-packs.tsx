@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { PackCarousel } from "@/components/pack-carousel";
-import { rotationBadge } from "@/lib/style-pack";
 import type { PackView } from "@/server/packs";
 
 /**
@@ -25,13 +24,7 @@ export function CuratedPacksShowcase({ packs }: { packs: PackView[] }) {
             className="flex flex-col justify-between rounded-3xl border border-line bg-paper p-6 shadow-sm transition-all hover:border-ink/30 hover:shadow-md"
           >
             <div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="rounded-full bg-ink px-3 py-1 text-xs font-semibold text-paper">
-                  {rotationBadge(pack.roles.length)}
-                </span>
-              </div>
-
-              <h3 className="mt-4 text-lg font-bold text-ink">{pack.title}</h3>
+              <h3 className="text-lg font-bold text-ink">{pack.title}</h3>
 
               <div className="mt-5 flex flex-col gap-3">
                 <div className="text-xs font-semibold uppercase tracking-wider text-subtle">
