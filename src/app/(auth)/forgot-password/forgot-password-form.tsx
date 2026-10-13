@@ -34,7 +34,7 @@ export function ForgotPasswordForm() {
       <Field label="Email" name="email">
         <Input name="email" type="email" autoComplete="email" required />
       </Field>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="max-sm:min-h-11">
         {pending ? "Sending…" : "Send reset link"}
       </Button>
     </form>

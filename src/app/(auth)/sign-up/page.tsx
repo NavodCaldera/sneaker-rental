@@ -11,9 +11,9 @@ export default async function SignUpPage({ searchParams }: PageProps<"/sign-up">
   const { role } = await searchParams;
   const settings = await getActiveSettings();
   return (
-    <main className="mx-auto w-full max-w-md py-8">
+    <main className="mx-auto w-full max-w-md py-4 sm:py-8">
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Create an account</h1>
-      <Card>
+      <Card className="max-sm:border-0 max-sm:bg-transparent max-sm:p-0">
         <SignUpForm
           defaultRole={role === "MERCHANT" ? "MERCHANT" : "BORROWER"}
           today={colomboToday()}

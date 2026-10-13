@@ -62,6 +62,11 @@ You build the user interface. Read `CLAUDE.md` and `docs/business-model.md` §1,
 - A grep for arithmetic on price/wear fields in `src/app` and `src/components` turns up nothing.
 
 
+
+## Mobile forms
+
+- **Mobile forms (product owner, 2026-10-13):** sign-in, sign-up, forgot and reset password are mobile responsive. On phones (below `sm`) the form fills the width with no card border or padding (`Card` with `max-sm:border-0 max-sm:bg-transparent max-sm:p-0`), less top space, 44px submit buttons and a 44px Customer/Merchant switch. Every `Input`, `Select` and `Textarea` (`src/components/ui.tsx`) uses 16px text and 44px height on phones, because iOS Safari zooms into fields with smaller text; from `sm` up they stay 14px and 40px. Never set a form field's text below 16px on phones, and check new forms at 320px and 390px for sideways scrolling.
+
 ## Birthday month
 
 - **Birthday month (product owner, 2026-10-13; pricing-spec.md §8a):** in the calendar month of a customer's birthday no rent is charged for the wear on those days, for up to `birthdayFreePairs` (4) pairs held at once (the first ones they started; a fifth pays until one goes). The wear still counts; only the rent is waived. The ledger finds the days and wear (`birthdayWindows`, `birthdayFreeRanges`, `wearOverRanges`; `birthdayFreeWear` in `src/server/booking/plan.ts`) and the engine prices them (`incomeBetween(…, free)` → `freeCost`), in the plan (`plannedBirthdayFree`) and at close (`RentalItem.birthdayFree`). Applied after any discount, so nothing stacks. OPEN DECISION: platform-funded like the release discount (merchant target unchanged, merchant still paid first; waived rent goes to `lostToDiscounts`). The date of birth field says why we ask: "We value your celebrations: in your birthday month, rent is on us for up to 4 pairs. Under 13s are shown kids' shoes. Your date of birth stays private." (`birthdayReason`); the bundle, My rentals and (during the month) the account page show the saving. The "For example" line under "Whom do you want to become?" was removed (the example stays as the box's placeholder).

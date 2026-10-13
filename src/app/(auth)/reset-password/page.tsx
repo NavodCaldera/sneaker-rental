@@ -12,10 +12,10 @@ export default async function ResetPasswordPage({ searchParams }: PageProps<"/re
   const value = typeof token === "string" ? token : "";
   const works = await resetLinkWorks(value);
   return (
-    <main className="mx-auto w-full max-w-sm py-8">
+    <main className="mx-auto w-full max-w-sm py-4 sm:py-8">
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Choose a new password</h1>
       {works ? (
-        <Card>
+        <Card className="max-sm:border-0 max-sm:bg-transparent max-sm:p-0">
           <ResetPasswordForm token={value} />
         </Card>
       ) : (

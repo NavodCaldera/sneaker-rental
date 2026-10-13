@@ -35,7 +35,7 @@ export function SignUpForm({
           <label
             key={value}
             className={cx(
-              "cursor-pointer rounded-lg border px-3 py-2 text-sm",
+              "cursor-pointer rounded-lg border px-3 py-3 text-sm sm:py-2",
               role === value ? "border-ink bg-muted font-medium" : "border-line",
             )}
           >
@@ -97,7 +97,7 @@ export function SignUpForm({
       <Field label="Password" name="password" error={errors.password} hint="At least 8 characters">
         <PasswordInput name="password" autoComplete="new-password" required minLength={8} />
       </Field>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="max-sm:min-h-11">
         {pending ? "Creating account…" : "Create account"}
       </Button>
     </form>

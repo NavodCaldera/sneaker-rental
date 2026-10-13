@@ -50,8 +50,7 @@ export function ProfileFields({
         <p className="text-xs text-subtle">{BECOMING_HINT}</p>
         <Textarea
           name="becomingStory"
-          rows={8}
-          className="max-sm:min-h-56"
+          rows={4}
           required
           minLength={BECOMING_MIN}
           maxLength={BECOMING_MAX}

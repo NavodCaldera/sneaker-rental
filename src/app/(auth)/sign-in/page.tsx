@@ -8,14 +8,14 @@ export const metadata: Metadata = { title: "Sign in" };
 export default async function SignInPage({ searchParams }: PageProps<"/sign-in">) {
   const { reset, next } = await searchParams;
   return (
-    <main className="mx-auto w-full max-w-sm py-8">
+    <main className="mx-auto w-full max-w-sm py-4 sm:py-8">
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Sign in</h1>
       {reset === "done" && (
         <div className="mb-4">
           <Alert tone="good">Your password has been changed. Sign in with your new password.</Alert>
         </div>
       )}
-      <Card>
+      <Card className="max-sm:border-0 max-sm:bg-transparent max-sm:p-0">
         <SignInForm next={typeof next === "string" ? next : undefined} />
       </Card>
       <p className="mt-4 text-sm text-subtle">

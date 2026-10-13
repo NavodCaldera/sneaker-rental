@@ -2,6 +2,12 @@ import type { ComponentProps, ReactNode } from "react";
 
 /** Small set of shared UI primitives. Keep styling here so pages stay consistent. */
 
+/**
+ * Form fields use 16px text and 44px height on phones (below `sm`): iOS Safari zooms the page
+ * into any field with smaller text, and 44px is a comfortable tap target. From `sm` up they
+ * are 14px and 40px as before.
+ */
+
 export function cx(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(" ");
 }
@@ -79,7 +85,7 @@ export function Input({ className, ...props }: ComponentProps<"input">) {
     <input
       id={props.id ?? props.name}
       className={cx(
-        "min-h-10 rounded-lg border border-line bg-paper px-3 text-sm outline-none focus:border-ink focus:ring-2 focus:ring-ink/10",
+        "min-h-11 rounded-lg border border-line bg-paper px-3 text-base outline-none focus:border-ink focus:ring-2 focus:ring-ink/10 sm:min-h-10 sm:text-sm",
         className,
       )}
       {...props}
@@ -92,7 +98,7 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
     <select
       id={props.id ?? props.name}
       className={cx(
-        "min-h-10 rounded-lg border border-line bg-paper px-3 text-sm outline-none focus:border-ink",
+        "min-h-11 rounded-lg border border-line bg-paper px-3 text-base outline-none focus:border-ink sm:min-h-10 sm:text-sm",
         className,
       )}
       {...props}
@@ -105,7 +111,7 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
     <textarea
       id={props.id ?? props.name}
       className={cx(
-        "min-h-20 rounded-lg border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink",
+        "min-h-20 rounded-lg border border-line bg-paper px-3 py-2 text-base outline-none focus:border-ink sm:text-sm",
         className,
       )}
       {...props}
