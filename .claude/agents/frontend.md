@@ -60,3 +60,7 @@ You build the user interface. Read `CLAUDE.md` and `docs/business-model.md` §1,
 - Every page in the four MVP journeys (§5.1–5.4) renders and completes against the seeded database.
 - Lint and typecheck pass, and Playwright smoke tests for each journey pass (with qa-review).
 - A grep for arithmetic on price/wear fields in `src/app` and `src/components` turns up nothing.
+
+## Git
+
+- **Every addition goes into `main` (product owner, 2026-10-11, restated 2026-10-13): no branch is ever left ahead of `main`.** After each commit (feature, fix, docs or rules), merge it into local `main` (`--no-ff` for a branch) and `git push origin main` in the same turn, after `npm run check` and `npm run test:int` (and `npm run e2e` when port 3100 is free). Work isn't done while it sits only on a branch, a worktree or an open PR. When another session's uncommitted edits in the shared checkout block the merge, set them aside (`git stash push --include-untracked`), merge and push, then put them back (`git stash apply`, resolving any overlap so both sides' work is kept, and drop the stash only once it's back), instead of waiting. Before finishing, `git branch -a --no-merged main` must list nothing but backup snapshots (e.g. `wip-uncommitted-*`, which are never merged).
