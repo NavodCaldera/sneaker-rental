@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  BECOMING_EXAMPLE,
+  BECOMING_PLACEHOLDER,
   BECOMING_HINT,
   birthdayReason,
   BECOMING_MAX,
@@ -50,12 +50,13 @@ export function ProfileFields({
         <p className="text-xs text-subtle">{BECOMING_HINT}</p>
         <Textarea
           name="becomingStory"
-          rows={4}
+          rows={8}
+          className="max-sm:min-h-56"
           required
           minLength={BECOMING_MIN}
           maxLength={BECOMING_MAX}
           defaultValue={current?.becomingStory ?? ""}
-          placeholder={`${BECOMING_EXAMPLE}. People see me as sharp, calm and always ready.`}
+          placeholder={BECOMING_PLACEHOLDER}
         />
         <FieldError error={errors.becomingStory} />
       </div>

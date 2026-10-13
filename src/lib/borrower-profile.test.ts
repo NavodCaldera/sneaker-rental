@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   PERSONAS,
+  BECOMING_IDEAS,
+  PERSONA_KEYS,
   ageOn,
   birthdayReason,
   inBirthdayMonth,
@@ -78,6 +80,9 @@ describe("customer profile", () => {
     expect(personasFromStory("She travels and designs")).toEqual(["EXPLORER", "CREATIVE"]);
     // Whole words only ("article" isn't "art"), and nothing when no word matches.
     expect(personasFromStory("Someone who reads every article")).toEqual([]);
+    // Every personality idea in the box points somewhere, and together they cover every persona.
+    for (const idea of BECOMING_IDEAS) expect(personasFromStory(idea)).not.toEqual([]);
+    expect(personasFromStory(BECOMING_IDEAS.join(". "))).toEqual(PERSONA_KEYS);
     for (const p of PERSONAS) expect(p.words.length).toBeGreaterThan(0);
   });
 
