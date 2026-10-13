@@ -27,7 +27,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
       >
         <PasswordInput name="password" autoComplete="new-password" minLength={8} required />
       </Field>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="max-sm:min-h-11">
         {pending ? "Saving…" : "Save new password"}
       </Button>
     </form>

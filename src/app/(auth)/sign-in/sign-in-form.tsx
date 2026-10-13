@@ -21,7 +21,7 @@ export function SignInForm({ next }: { next?: string }) {
       <Link href="/forgot-password" className="-mt-2 self-end text-sm underline">
         Forgot password?
       </Link>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="max-sm:min-h-11">
         {pending ? "Signing in…" : "Sign in"}
       </Button>
     </form>
