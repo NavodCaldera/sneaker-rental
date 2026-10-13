@@ -424,6 +424,28 @@ const STYLE_PACKS: SeedPack[] = [
       },
     ],
   },
+  {
+    title: "The Milestone & Spotlight Echelon",
+    subtitle: "Engineered for defining breakthroughs, keynote stages, and celebratory triumphs.",
+    highlight:
+      "Spotlight Poise: Command attention and celebrate major milestones with statement silhouettes, leaving yesterday's comfort behind.",
+    roles: [
+      {
+        name: "The Stage Icon",
+        description:
+          "Unapologetic presence under the lights. A commanding silhouette that sets a modern cultural standard when all eyes are on you.",
+        experience: "Night Out",
+        pairs: ["Nike Dunk Low", "Nike Air Jordan 1 Mid"],
+      },
+      {
+        name: "Evening Gravitas",
+        description:
+          "Refined celebratory polish. Sharp, elevated distinction for high-stakes receptions, investor dinners, and milestone toasts.",
+        experience: "Night Out",
+        pairs: ["Converse Chuck 70 Hi"],
+      },
+    ],
+  },
 ];
 
 /** Seeds the example packs once, from listed seed pairs (looked up by brand and model). */
@@ -462,7 +484,7 @@ async function refreshStylePackCopy() {
 }
 
 async function seedStylePacks() {
-  if ((await db.stylePack.count()) > 0) return refreshStylePackCopy();
+  if ((await db.stylePack.count()) > 0) await refreshStylePackCopy();
   const admin = await db.user.findUniqueOrThrow({ where: { email: "admin@sneakers.test" } });
   const listed = await db.shoe.findMany({
     where: { status: { notIn: ["DRAFT", "RETIRED", "SOLD"] } },
@@ -470,7 +492,13 @@ async function seedStylePacks() {
     select: { id: true, brand: true, model: true },
   });
   const find = (name: string) => listed.find((s) => `${s.brand} ${s.model}` === name)?.id;
+  const have = new Set(
+    (await db.stylePack.findMany({ select: { title: true } })).map((p) => p.title),
+  );
+  let created = 0;
   for (const pack of STYLE_PACKS) {
+    if (have.has(pack.title)) continue;
+    created++;
     const roles = pack.roles
       .map((r) => ({ ...r, ids: [...new Set(r.pairs.map(find).filter((id) => id !== undefined))] }))
       .filter((r) => r.ids.length > 0);
@@ -496,7 +524,7 @@ async function seedStylePacks() {
       },
     });
   }
-  console.log("Seeded the example style packs");
+  if (created > 0) console.log(`Seeded ${created} example style pack(s)`);
 }
 
 /**
