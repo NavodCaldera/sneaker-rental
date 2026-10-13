@@ -75,7 +75,7 @@ test("a new customer tells us who they want to become and is shown shoes for the
   // Why we ask for the date of birth, to build trust.
   await expect(
     page.getByText(
-      "We value your celebrations: in your birthday month, rent is on us for up to 4 pairs.",
+      "We value your celebrations. On your birthday month total rent is free upto maximum 4 pairs",
       { exact: false },
     ),
   ).toBeVisible();

@@ -104,12 +104,9 @@ describe("customer profile", () => {
 
   it("says why we ask for the date of birth, and knows the birthday month", () => {
     expect(birthdayReason(4)).toBe(
-      "We value your celebrations: in your birthday month, rent is on us for up to 4 pairs. " +
-        "Under 13s are shown kids' shoes. Your date of birth stays private.",
+      "We value your celebrations. On your birthday month total rent is free upto maximum 4 pairs",
     );
-    expect(birthdayReason(0)).toBe(
-      "Under 13s are shown kids' shoes. Your date of birth stays private.",
-    );
+    expect(birthdayReason(0)).toBe("");
     expect(inBirthdayMonth("1993-10-02", "2026-10-31")).toBe(true);
     expect(inBirthdayMonth("1993-10-02", "2026-11-01")).toBe(false);
   });

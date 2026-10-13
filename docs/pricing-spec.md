@@ -346,7 +346,7 @@ income       = gross − d × gross − freeCost                                
 - It applies to the rent estimate at booking and on every replan (`planItems` with the borrowers' dates of birth; `ItemPlan.birthdayFree`, stored rounded as `RentalItem.plannedBirthdayFree`) and to the charge at close (`RentalItem.birthdayFree`, unrounded). Customers see it on the bundle ("Birthday month: rent on us, already taken off"), on My rentals and, during the month, on their account page.
 - It is applied after any discount (`(1 − d)`), so it never stacks with one: a waived day costs nothing either way.
 - OPEN DECISION: funded by the platform like the release discount. The merchant's target is unchanged and the merchant is still paid first from later rentals; the waived rent is added to `Shoe.lostToDiscounts`. `birthdayFreePairs` is an operational setting (active version; 0 turns it off).
-- Customers are told why we ask for the date of birth at sign-up: "We value your celebrations: in your birthday month, rent is on us for up to 4 pairs. Under 13s are shown kids' shoes. Your date of birth stays private." (`birthdayReason`).
+- Customers are told why we ask for the date of birth at sign-up: "We value your celebrations. On your birthday month total rent is free upto maximum 4 pairs" (`birthdayReason`).
 
 ---
 

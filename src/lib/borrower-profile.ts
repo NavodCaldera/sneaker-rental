@@ -38,16 +38,15 @@ export const BECOMING_MIN = 10;
 export const BECOMING_MAX = 500;
 
 /**
- * Why we ask for the date of birth (product owner, 2026-10-13): to celebrate with them (no rent
- * in their birthday month for up to `freePairs` pairs) and to show under-13s kids' shoes.
+ * Why we ask for the date of birth (product owner, 2026-10-13, reworded the same day): to
+ * celebrate with them, no rent in their birthday month for up to `freePairs` pairs. Nothing is
+ * said when the setting is 0.
  */
 export function birthdayReason(freePairs: number) {
   const pairs = freePairs === 1 ? "pair" : "pairs";
-  const gift =
-    freePairs > 0
-      ? `We value your celebrations: in your birthday month, rent is on us for up to ${freePairs} ${pairs}. `
-      : "";
-  return `${gift}Under 13s are shown kids' shoes. Your date of birth stays private.`;
+  return freePairs > 0
+    ? `We value your celebrations. On your birthday month total rent is free upto maximum ${freePairs} ${pairs}`
+    : "";
 }
 
 /** True when `today` ("YYYY-MM-DD") is in the calendar month of the date of birth. */
