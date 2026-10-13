@@ -26,18 +26,6 @@ test("home: occasion discovery leads to sign-in, then Browse", async ({ page }) 
   await page.getByRole("link", { name: /Endurance & Relentless Grit/ }).click();
   await expect(page).toHaveURL(/\/sign-in\?next=%2Fbrowse%3Fexperience%3DMorning(\+|%20)Run/);
 });
-  await expect(tabs).toBeVisible();
-
-  // Clicking Men narrows to Men for that occasion.
-  await tabs.getByRole("link", { name: "Men", exact: true }).click();
-  await expect(page).toHaveURL(/for=men/);
-  await expect(page).toHaveURL(/experience=Morning(\+|%20)Run/);
-
-  // Clicking All clears the demographic restriction.
-  await tabs.getByRole("link", { name: "All", exact: true }).click();
-  await expect(page).not.toHaveURL(/for=men/);
-  await expect(page).toHaveURL(/experience=Morning(\+|%20)Run/);
-});
 
 test("home: occasion concierge search bar opens personal stylist chat", async ({ page }) => {
   await page.goto("/");
