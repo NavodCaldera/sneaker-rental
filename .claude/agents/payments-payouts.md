@@ -49,3 +49,7 @@ You build payments and payouts. Read `CLAUDE.md`, `docs/pricing-spec.md` (§6 "B
 - The deposit test passes: two pairs keep 6,000 each locked (plus their rent estimates) through a delivered trip (no tokens charged for it) and the loss of the other pair; only free tokens can be withdrawn.
 - An extension with a short balance is refused and changes nothing; with enough, its extra estimate is locked and nothing charged.
 - The payout batch pays an item closed 4 days ago, skips one closed 2 days ago and one with an open dispute; shares sum to the rent charged at close to the cent (one CHARGE per item, nothing left locked).
+
+## Git
+
+- **Every addition goes into `main` (product owner, 2026-10-11, restated 2026-10-13): no branch is ever left ahead of `main`.** After each commit (feature, fix, docs or rules), merge it into local `main` (`--no-ff` for a branch) and `git push origin main` in the same turn, after `npm run check` and `npm run test:int` (and `npm run e2e` when port 3100 is free). Work isn't done while it sits only on a branch, a worktree or an open PR. When another session's uncommitted edits in the shared checkout block the merge, set them aside (`git stash push --include-untracked`), merge and push, then put them back (`git stash apply`, resolving any overlap so both sides' work is kept, and drop the stash only once it's back), instead of waiting. Before finishing, `git branch -a --no-merged main` must list nothing but backup snapshots (e.g. `wip-uncommitted-*`, which are never merged).

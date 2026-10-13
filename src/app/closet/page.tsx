@@ -17,6 +17,8 @@ import { shoeName } from "@/lib/shoe-name";
 import { parseSize, sizeSummary } from "@/lib/shoe-size";
 import { SHOP_AUDIENCES, parseShopAudience } from "@/lib/shoe-style";
 import { colomboDay } from "@/lib/wear-ledger";
+import { shoppingProfile } from "@/lib/borrower-profile";
+import { colomboToday } from "@/server/auth/service";
 import { getCurrentUser } from "@/server/auth/session";
 import { getBundle } from "@/server/booking/bundle";
 import { browseFacets, browseShoes } from "@/server/catalogue";
@@ -35,14 +37,18 @@ function one(v: string | string[] | undefined) {
 export default async function ClosetPage({ searchParams }: PageProps<"/closet">) {
   const sp = await searchParams;
   const draft = parseClosetDraft((await cookies()).get(CLOSET_COOKIE)?.value);
-  // The URL wins; with nothing in it, pick up the plan the visitor was working on.
+  const [user, facets] = await Promise.all([getCurrentUser(), browseFacets()]);
+  // The URL wins; with nothing in it, pick up the plan the visitor was working on, else a
+  // customer's own size and who they are (their profile, product owner 2026-10-13).
+  const profile = user?.role === "BORROWER" ? shoppingProfile(user, colomboToday()) : null;
   const fromUrl = one(sp.for) !== undefined || one(sp.size) !== undefined;
-  const audience = parseShopAudience(fromUrl ? one(sp.for) : draft?.for);
-  const size = (fromUrl ? one(sp.size) : draft?.size) ?? "";
+  const start = fromUrl
+    ? { for: one(sp.for), size: one(sp.size) }
+    : (draft ?? (profile && { for: profile.audience.toLowerCase(), size: profile.size }));
+  const audience = parseShopAudience(start?.for);
+  const size = start?.size ?? "";
   const sizeOk = parseSize(size) !== null;
   const ready = audience !== undefined && sizeOk;
-
-  const [user, facets] = await Promise.all([getCurrentUser(), browseFacets()]);
 
   return (
     <main className="flex flex-col gap-6">
@@ -55,7 +61,11 @@ export default async function ClosetPage({ searchParams }: PageProps<"/closet">)
       </header>
 
       <Card>
-        <form className="flex flex-wrap items-end gap-3" aria-label="Fit">
+        <form
+          key={`${audience}|${size}`}
+          className="flex flex-wrap items-end gap-3"
+          aria-label="Fit"
+        >
           <div className="flex flex-col gap-1">
             <label htmlFor="closet-for" className="text-sm font-medium">
               Who it&apos;s for
@@ -85,6 +95,9 @@ export default async function ClosetPage({ searchParams }: PageProps<"/closet">)
                 Choose…
               </option>
               <SizeOptions sizes={facets.sizes} />
+              {sizeOk && !Object.values(facets.sizes).flat().includes(size) && (
+                <option>{size}</option>
+              )}
             </Select>
           </div>
           <Button type="submit" variant={ready ? "secondary" : "primary"}>

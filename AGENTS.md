@@ -35,3 +35,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Contrast Rules:** Black text on cyan accent (`text-on-accent`). Never cyan text on white.
 - **Day and Night Mode:** All colors use `light-dark()` tokens in `globals.css` with persistent theme switching.
 - **Photography:** Always use authentic, high-resolution lifestyle photography (no generic placeholders).
+
+## 5. Transformation Economy & Personal Profile
+- **Each account is one person (product owner, 2026-10-13):** customers answer **"Whom do you want to become?"** at sign-up (The Athlete, The Professional, The Explorer, The Creative, The Icon; one or more, `PERSONAS` in `src/lib/borrower-profile.ts`), plus their gender, date of birth and shoe size. They can change it on `/account`.
+- **Shoes for the person:** Browse and the Closet start in their size, for them (Men or Women; Boys or Girls under 13), with pairs made for who they want to become first. "Show all shoes" lifts it. The profile never changes a price.

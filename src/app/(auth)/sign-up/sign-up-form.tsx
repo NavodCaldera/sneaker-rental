@@ -1,12 +1,20 @@
 "use client";
 
 import { PasswordInput } from "@/components/password-input";
+import { ProfileFields } from "@/components/profile-fields";
 import { useActionState, useState } from "react";
 import { Alert, Button, Field, Input, Textarea, cx } from "@/components/ui";
 import { ADDRESS_LABEL, ADDRESS_REASON } from "@/lib/address";
 import { signUpAction, type FormState } from "@/server/auth/actions";
 
-export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWER" }) {
+export function SignUpForm({
+  defaultRole,
+  today,
+}: {
+  defaultRole: "MERCHANT" | "BORROWER";
+  /** Today in Colombo, "YYYY-MM-DD" */
+  today: string;
+}) {
   const [state, action, pending] = useActionState<FormState, FormData>(signUpAction, {});
   const [role, setRole] = useState(defaultRole);
   const errors = state.fieldErrors ?? {};
@@ -52,20 +60,7 @@ export function SignUpForm({ defaultRole }: { defaultRole: "MERCHANT" | "BORROWE
       <Field label="Email" name="email" error={errors.email}>
         <Input name="email" type="email" autoComplete="email" required />
       </Field>
-      {role === "BORROWER" && (
-        <Field label="Age" name="age" error={errors.age}>
-          <Input
-            name="age"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={120}
-            step={1}
-            required
-            className="w-28"
-          />
-        </Field>
-      )}
+      {role === "BORROWER" && <ProfileFields today={today} errors={errors} />}
       <Field label="Phone" name="phone" error={errors.phone}>
         <Input name="phone" type="tel" autoComplete="tel" placeholder="+94 77 123 4567" />
       </Field>

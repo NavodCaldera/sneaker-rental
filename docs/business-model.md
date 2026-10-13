@@ -8,6 +8,8 @@ The platform is an asset-light marketplace that lets people rent sneakers by the
 
 **One-line pitch:** wear more sneakers than you own, and pay only for the wear you put on them.
 
+**Transformation economy (product owner, 2026-10-13):** each account belongs to one person, who tells us at sign-up whom they want to become, plus their gender, date of birth and shoe size. Nova then shows them the shoes that fit them and the person they want to become: the shoes are the means, the customer's change is what we sell.
+
 **What makes it different:** every shoe is priced on a wear-based curve. A new pair costs more per day than a worn one, and the price falls as the shoe ages, so every pair has a fair price at every point in its life. A borrower holding four pairs pays for roughly one day of wear per day, because wear is split across the pairs they hold.
 
 | Stakeholder | Role in one line |
@@ -120,7 +122,7 @@ Four journeys carry the business; every step records who held the shoe and when,
 4. Publishes. The shoe is Available, priced at P(w) for its current wear.
 
 **5.2 Borrower rents**
-0. Signs up as a customer with their age and one address and city, where pairs are delivered and collected (we say why we ask). It can be changed later; there is no address to type at checkout.
+0. Signs up as a customer, answering "Whom do you want to become?" (The Athlete, The Professional, The Explorer, The Creative, The Icon; one or more) and giving their gender, date of birth and shoe size, then one address and city. Browse and the Closet start from that profile: pairs in their size, for them (kids' pairs under 13), with pairs for who they want to become first; the profile never changes a price. Address and city are where pairs are delivered and collected (we say why we ask). It can be changed later; there is no address to type at checkout.
 1. Browses by size (in UK, EU, US or cm, whichever they know; a size guide says what it is in the others), brand and style; each listing shows today's price per wear-day and the shoe's wear so far.
 2. Adds one to four pairs to a bundle and sees the daily cost of the whole bundle.
 3. Checks out: card pre-authorised for the estimate plus the deposit hold; a delivery is booked with a ride-hailing app.
