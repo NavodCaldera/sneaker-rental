@@ -90,7 +90,7 @@ test("a new customer tells us who they want to become and is shown shoes for the
     page.getByText("Shoes in your size, UK 9 · Men, made for The Athlete and The Icon first."),
   ).toBeVisible();
   await expect(page.getByLabel("Size", { exact: true })).toHaveValue("UK 9");
-  await expect(page.getByLabel("Who it's for")).toHaveValue("men");
+  await expect(page.getByRole("combobox", { name: "Who it's for" })).toHaveValue("men");
   await page.getByRole("link", { name: "Show all shoes" }).click();
   await expect(page).toHaveURL("/browse?all=1");
   await expect(page.getByLabel("Size", { exact: true })).toHaveValue("");
