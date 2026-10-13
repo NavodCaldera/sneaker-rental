@@ -253,16 +253,9 @@ test("an unverified merchant can't publish until an admin verifies them", async 
   await expect(card.getByText("Verified")).toBeVisible();
 });
 
-test("signed-out visitors can browse and view a listing", async ({ page }) => {
-  await page.goto("/browse");
-  await page.getByLabel("Search").fill("Pegasus");
-  await page.getByRole("button", { name: "Filter" }).click();
-  await page
-    .getByRole("link", { name: /Nike Pegasus 41/ })
-    .first()
-    .click();
-  await expect(page.getByText("per day today")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Sign in" }).last()).toBeVisible();
+test("Browse needs an account: signed-out visitors are sent to sign-in", async ({ page }) => {
+  await page.goto("/browse?experience=Morning+Run");
+  await expect(page).toHaveURL(/\/sign-in\?next=%2Fbrowse%3Fexperience%3DMorning(\+|%20)Run/);
 });
 
 test("a size search says what the size is in the other systems", async ({ page }) => {

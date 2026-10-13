@@ -97,11 +97,11 @@ test("a new customer tells us who they want to become and is shown shoes for the
   await expect(
     page.getByText("Shoes in your size, UK 9 · Men, picked for who you want to become first."),
   ).toBeVisible();
-  await expect(page.getByLabel("Size", { exact: true })).toHaveValue("UK 9");
-  await expect(page.getByRole("combobox", { name: "Who it's for" })).toHaveValue("men");
-  await page.getByRole("link", { name: "Show all shoes" }).click();
-  await expect(page).toHaveURL("/browse?all=1");
-  await expect(page.getByLabel("Size", { exact: true })).toHaveValue("");
+  // No size or gender picker: it is the customer's own, changed on their account page.
+  await expect(page.getByLabel("Size", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Who it's for" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Who it's for" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Change your size in your profile" })).toBeVisible();
 
   // The Closet uses the same size, with no form to fill in.
   await page.goto("/closet");

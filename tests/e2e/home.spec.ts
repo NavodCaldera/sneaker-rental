@@ -5,7 +5,7 @@ test("home page loads", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Nova/);
 });
 
-test("home: occasion discovery leads to browse with who-it's-for filtering", async ({ page }) => {
+test("home: occasion discovery leads to sign-in, then Browse", async ({ page }) => {
   await page.goto("/");
   // Just listed, Best value today, Brand new pairs and Being worn now are gone from home.
   await expect(page.getByRole("region", { name: "Just listed" })).toHaveCount(0);
@@ -22,12 +22,10 @@ test("home: occasion discovery leads to browse with who-it's-for filtering", asy
     page.getByRole("region", { name: "Curated transformation blueprints" }),
   ).toBeVisible();
 
-  // Clicking an occasion card navigates to the dedicated browse page with that experience.
+  // Browse needs an account: signed out, an occasion card leads to sign-in and back to Browse.
   await page.getByRole("link", { name: /Endurance & Relentless Grit/ }).click();
-  await expect(page).toHaveURL(/\/browse\?experience=Morning(\+|%20)Run/);
-
-  // On the browse page, Who it's for tabs are ready for filtering.
-  const tabs = page.getByRole("navigation", { name: "Who it's for" });
+  await expect(page).toHaveURL(/\/sign-in\?next=%2Fbrowse%3Fexperience%3DMorning(\+|%20)Run/);
+});
   await expect(tabs).toBeVisible();
 
   // Clicking Men narrows to Men for that occasion.

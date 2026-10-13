@@ -16,8 +16,9 @@ import { cardPair, groupByListing, sizeRange } from "@/lib/listing";
 import { shoeSizeInfo } from "@/lib/shoe-size";
 import { ALL_EXPERIENCES, EXPERIENCES, SHOP_AUDIENCES, parseShopAudience } from "@/lib/shoe-style";
 import { colomboDay } from "@/lib/wear-ledger";
+import { shoppingProfile } from "@/lib/borrower-profile";
 import { getCurrentUser } from "@/server/auth/session";
-import { homeFor } from "@/server/auth/service";
+import { colomboToday, homeFor } from "@/server/auth/service";
 import { browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { publishedPacks } from "@/server/packs";
@@ -46,17 +47,23 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const jar = await cookies();
   const showIntro = !user && !jar.has(RETURNING_COOKIE) && !jar.has(INTRO_SEEN_COOKIE);
 
+  // A signed-in customer with a profile is never asked who it's for or a size (product owner,
+  // 2026-10-14): the rows show pairs in their size, for them.
+  const profile = user ? shoppingProfile(user, colomboToday()) : null;
+
   const sp = await searchParams;
-  const audience = parseShopAudience(typeof sp.for === "string" ? sp.for : undefined);
+  const audience = profile
+    ? profile.audience
+    : parseShopAudience(typeof sp.for === "string" ? sp.for : undefined);
   const picked = typeof sp.experience === "string" ? sp.experience : undefined;
   const experience =
     picked && (audience ? EXPERIENCES[audience].includes(picked) : ALL_EXPERIENCES.includes(picked))
       ? picked
       : undefined;
-  const forParam = audience?.toLowerCase();
+  const forParam = profile ? undefined : audience?.toLowerCase();
   const [shoes, allShoes, active, packs, stylist] = await Promise.all([
-    browseShoes({ audience, experience }),
-    browseShoes({}),
+    browseShoes({ audience, experience, size: profile?.size }),
+    browseShoes({ size: profile?.size }),
     getActiveSettings(),
     publishedPacks(),
     stylistShoes(),
@@ -112,11 +119,14 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const cards = cardsOf(shoes);
 
   const audienceName = SHOP_AUDIENCES.find((a) => a.value === audience)?.label;
-  const scope = audienceName
+  // A customer's own audience isn't named in the row titles: they didn't pick it.
+  const scope = profile
     ? experience
-      ? `${audienceName} · ${experience}`
-      : audienceName
-    : experience;
+    : audienceName
+      ? experience
+        ? `${audienceName} · ${experience}`
+        : audienceName
+      : experience;
   const where = scope ? ` in ${scope}` : "";
   const seeAll = `/browse?${new URLSearchParams({
     ...(forParam && { for: forParam }),
@@ -150,7 +160,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
                           : "border-line text-ink hover:border-ink"
                       }`}
                     >
-                      {x ?? `All ${audienceName}`}
+                      {x ?? (profile ? "All" : `All ${audienceName}`)}
                     </Link>
                   </li>
                 );
