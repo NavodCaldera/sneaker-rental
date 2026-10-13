@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PERSONAS,
   ageOn,
-  personaNames,
+  personasFromStory,
   profileAudience,
   profileShoeSize,
   rankForPersona,
@@ -59,9 +59,23 @@ describe("customer profile", () => {
     expect(order(["ATHLETE", "PROFESSIONAL"])).toEqual(["a", "c", "d", "b"]);
     expect(order([])).toEqual(["a", "b", "c", "d"]);
     expect(suitsPersona(["Party Time"], ["ICON"])).toBe(true);
-    expect(personaNames(["ICON", "ATHLETE", "EXPLORER"])).toBe(
-      "The Athlete, The Explorer and The Icon",
-    );
+  });
+
+  it("reads who they want to become from their own words", () => {
+    // The example on the form.
+    expect(personasFromStory("I want to build Sri Lanka's largest tech sensation")).toEqual([
+      "PROFESSIONAL",
+      "ICON",
+    ]);
+    expect(personasFromStory("A MARATHON runner who loves to Travel.")).toEqual([
+      "ATHLETE",
+      "EXPLORER",
+    ]);
+    expect(personasFromStory("A designer people remember")).toEqual(["CREATIVE"]);
+    expect(personasFromStory("She travels and designs")).toEqual(["EXPLORER", "CREATIVE"]);
+    // Whole words only ("article" isn't "art"), and nothing when no word matches.
+    expect(personasFromStory("Someone who reads every article")).toEqual([]);
+    for (const p of PERSONAS) expect(p.words.length).toBeGreaterThan(0);
   });
 
   it("starts shopping from a complete profile only", () => {
@@ -69,6 +83,7 @@ describe("customer profile", () => {
       dateOfBirth: new Date("1998-03-14T00:00:00Z"),
       gender: "FEMALE" as const,
       shoeSize: "UK 5",
+      becomingStory: "Someone who travels the island",
       becoming: ["EXPLORER"],
     };
     expect(shoppingProfile(user, "2026-10-13")).toEqual({

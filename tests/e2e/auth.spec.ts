@@ -72,9 +72,12 @@ test("a new customer tells us who they want to become and is shown shoes for the
   await page.getByText("Customer", { exact: true }).click();
   await page.getByLabel("Full name").fill("Test Customer");
   await page.getByLabel("Email").fill(`customer-${Date.now()}@test.local`);
-  await expect(page.getByText("Whom do you want to become?")).toBeVisible();
-  await page.getByLabel("The Athlete").check();
-  await page.getByLabel("The Icon").check();
+  await expect(
+    page.getByText(/For example: .I want to build Sri Lanka's largest tech sensation/),
+  ).toBeVisible();
+  await page
+    .getByLabel("Whom do you want to become?")
+    .fill("I want to build Sri Lanka's largest tech sensation. People see me as calm and sharp.");
   await page.getByText("Male", { exact: true }).click();
   await page.getByLabel("Date of birth").fill("1993-07-02");
   await page.getByLabel("Size system").selectOption("UK");
@@ -87,7 +90,7 @@ test("a new customer tells us who they want to become and is shown shoes for the
 
   // Browse starts in their size, for them, with pairs for who they want to become first.
   await expect(
-    page.getByText("Shoes in your size, UK 9 · Men, made for The Athlete and The Icon first."),
+    page.getByText("Shoes in your size, UK 9 · Men, picked for who you want to become first."),
   ).toBeVisible();
   await expect(page.getByLabel("Size", { exact: true })).toHaveValue("UK 9");
   await expect(page.getByRole("combobox", { name: "Who it's for" })).toHaveValue("men");
@@ -103,7 +106,9 @@ test("a new customer tells us who they want to become and is shown shoes for the
   // The account page shows the profile and changes it.
   await page.goto("/account");
   await expect(page.getByText(/^Age \d+$/)).toBeVisible();
-  await expect(page.getByLabel("The Athlete")).toBeChecked();
+  await expect(page.getByLabel("Whom do you want to become?")).toHaveValue(
+    "I want to build Sri Lanka's largest tech sensation. People see me as calm and sharp.",
+  );
   await expect(page.getByLabel("Shoe size")).toHaveValue("9");
   await page.getByLabel("Shoe size").fill("10");
   await page.getByRole("button", { name: "Save profile" }).click();

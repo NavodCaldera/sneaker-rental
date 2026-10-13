@@ -37,5 +37,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Photography:** Always use authentic, high-resolution lifestyle photography (no generic placeholders).
 
 ## 5. Transformation Economy & Personal Profile
-- **Each account is one person (product owner, 2026-10-13):** customers answer **"Whom do you want to become?"** at sign-up (The Athlete, The Professional, The Explorer, The Creative, The Icon; one or more, `PERSONAS` in `src/lib/borrower-profile.ts`), plus their gender, date of birth and shoe size. They can change it on `/account`.
+- **Each account is one person (product owner, 2026-10-13):** customers answer **"Whom do you want to become?"** at sign-up in their own words, in a description box: the personality they want to have and how people should see them (our example: *"I want to build Sri Lanka's largest tech sensation"*). Nova reads personas from the words (`personasFromStory` in `src/lib/borrower-profile.ts`). They also give their gender, date of birth and shoe size. They can change it on `/account`.
 - **Shoes for the person:** Browse and the Closet start in their size, for them (Men or Women; Boys or Girls under 13), with pairs made for who they want to become first. "Show all shoes" lifts it. The profile never changes a price.

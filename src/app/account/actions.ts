@@ -44,7 +44,7 @@ export async function updateProfileAction(
     gender: String(formData.get("gender") ?? ""),
     shoeSizeSystem: String(formData.get("shoeSizeSystem") ?? ""),
     shoeSizeValue: String(formData.get("shoeSizeValue") ?? ""),
-    becoming: formData.getAll("becoming").map(String),
+    becomingStory: String(formData.get("becomingStory") ?? ""),
   });
   if (result.errors) {
     return {

@@ -1,14 +1,17 @@
 import Link from "next/link";
 import {
+  BECOMING_EXAMPLE,
+  BECOMING_HINT,
+  BECOMING_MAX,
+  BECOMING_MIN,
   BECOMING_QUESTION,
   GENDERS,
-  PERSONAS,
   isoDate,
   splitShoeSize,
   type ProfileUser,
 } from "@/lib/borrower-profile";
 import { LISTING_SIZE_SYSTEMS } from "@/lib/shoe-size";
-import { Field, Input, Select, cx } from "./ui";
+import { Field, Input, Select, Textarea } from "./ui";
 
 const pill =
   "cursor-pointer rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-ink has-[:checked]:bg-muted has-[:checked]:font-medium has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink/20";
@@ -22,8 +25,8 @@ function FieldError({ error }: { error?: string[] }) {
 }
 
 /**
- * A customer's profile (product owner, 2026-10-13): "Whom do you want to become?", gender, date
- * of birth and shoe size. Asked at sign-up and changed on the account page; Browse and the
+ * A customer's profile (product owner, 2026-10-13): "Whom do you want to become?" in their own
+ * words, gender, date of birth and shoe size. Asked at sign-up and changed on the account page; Browse and the
  * Closet then show pairs in their size, for them, with pairs for who they want to become first.
  */
 export function ProfileFields({
@@ -39,30 +42,23 @@ export function ProfileFields({
   const size = splitShoeSize(current?.shoeSize);
   return (
     <>
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-base font-semibold tracking-tight">{BECOMING_QUESTION}</legend>
-        <p className="-mt-1 text-xs text-subtle">
-          Pick one or more. We&apos;ll show you the shoes made for it first.
-        </p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {PERSONAS.map((p) => (
-            <label key={p.key} className={cx(pill, "flex flex-col gap-0.5")}>
-              <span className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="becoming"
-                  value={p.key}
-                  defaultChecked={current?.becoming.includes(p.key)}
-                  className="accent-ink"
-                />
-                <span className="font-medium">{p.name}</span>
-              </span>
-              <span className="pl-6 text-xs text-subtle">{p.line}</span>
-            </label>
-          ))}
-        </div>
-        <FieldError error={errors.becoming} />
-      </fieldset>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="becomingStory" className="text-base font-semibold tracking-tight">
+          {BECOMING_QUESTION}
+        </label>
+        <p className="text-xs text-subtle">{BECOMING_HINT}</p>
+        <Textarea
+          name="becomingStory"
+          rows={4}
+          required
+          minLength={BECOMING_MIN}
+          maxLength={BECOMING_MAX}
+          defaultValue={current?.becomingStory ?? ""}
+          placeholder={`${BECOMING_EXAMPLE}. People see me as sharp, calm and always ready.`}
+        />
+        <p className="text-xs text-subtle">For example: &ldquo;{BECOMING_EXAMPLE}&rdquo;</p>
+        <FieldError error={errors.becomingStory} />
+      </div>
 
       <fieldset className="flex flex-col gap-1.5">
         <legend className="mb-1 text-sm font-medium">Gender</legend>

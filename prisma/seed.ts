@@ -11,6 +11,7 @@ import {
   PrismaClient,
   type Role,
 } from "../src/generated/prisma/client";
+import { personasFromStory } from "../src/lib/borrower-profile";
 import { parseSize, shoeSizeFields } from "../src/lib/shoe-size";
 import { hashPassword } from "../src/server/auth/password";
 import { LocalDiskStorage, storageDir } from "../src/server/storage/local";
@@ -77,7 +78,13 @@ function placeholderPhoto(brand: string, model: string, kind: string, colour: st
 
 /** A sample profile as stored (DATE columns take UTC midnight). */
 function profileData(p: (typeof users)[number]["profile"]) {
-  return p ? { ...p, dateOfBirth: new Date(`${p.dateOfBirth}T00:00:00Z`) } : {};
+  return p
+    ? {
+        ...p,
+        dateOfBirth: new Date(`${p.dateOfBirth}T00:00:00Z`),
+        becoming: personasFromStory(p.becomingStory),
+      }
+    : {};
 }
 
 const users: {
@@ -89,7 +96,7 @@ const users: {
   address?: string;
   city?: string;
   /** Customers only: their profile (date of birth, gender, shoe size, who they want to become) */
-  profile?: { dateOfBirth: string; gender: Gender; shoeSize: string; becoming: string[] };
+  profile?: { dateOfBirth: string; gender: Gender; shoeSize: string; becomingStory: string };
 }[] = [
   { email: "admin@sneakers.test", name: "Admin", role: "ADMIN" },
   {
@@ -118,7 +125,8 @@ const users: {
       dateOfBirth: "1998-03-14",
       gender: "FEMALE",
       shoeSize: "UK 5",
-      becoming: ["ATHLETE", "EXPLORER"],
+      becomingStory:
+        "A marathon runner who travels the island on weekends. People see me as calm, fit and always up for an adventure.",
     },
   },
   {
@@ -131,7 +139,8 @@ const users: {
       dateOfBirth: "1993-07-02",
       gender: "MALE",
       shoeSize: "UK 9",
-      becoming: ["ATHLETE", "ICON"],
+      becomingStory:
+        "I want to build Sri Lanka's largest tech sensation, and still play cricket every Sunday. Confident and fast.",
     },
   },
   {
@@ -144,7 +153,8 @@ const users: {
       dateOfBirth: "2001-11-20",
       gender: "MALE",
       shoeSize: "UK 10",
-      becoming: ["PROFESSIONAL", "CREATIVE"],
+      becomingStory:
+        "A designer with my own studio: trusted by clients, with a style people remember from the street to the office.",
     },
   },
 ];
@@ -544,8 +554,8 @@ async function main() {
       include: { merchant: true },
     });
 
-    // Sample customers seeded before profiles existed get theirs.
-    if (u.profile && user.dateOfBirth === null) {
+    // Sample customers seeded before profiles (or their own words) existed get theirs.
+    if (u.profile && (user.dateOfBirth === null || user.becomingStory === null)) {
       await db.user.update({ where: { id: user.id }, data: profileData(u.profile) });
     }
     // Sample accounts seeded before addresses (or cities) existed get theirs; an account
