@@ -8,6 +8,11 @@ export type OccasionMoment = {
   imageSrc: string;
 };
 
+/**
+ * The home page's Moments & Occasions cards (titles set by the product owner, see CLAUDE.md).
+ * Each card opens Browse filtered by `experience`, which is also the Closet slot name, so its
+ * title contains that experience's name.
+ */
 export const OCCASIONS: OccasionMoment[] = [
   {
     id: "morning-run",
@@ -20,17 +25,17 @@ export const OCCASIONS: OccasionMoment[] = [
   },
   {
     id: "work-day",
-    name: "Daily Office & Work",
-    shortName: "Daily Office",
+    name: "The Daily Commute & Work Day",
+    shortName: "Work Day",
     tagline: "Smart casual, office polish & transit",
     experience: "Work Day",
     iconKind: "briefcase",
     imageSrc: "/occasions/work-day.jpg",
   },
   {
-    id: "weekend-hangouts",
-    name: "Weekend Hangouts & Cafes",
-    shortName: "Weekend Hangouts",
+    id: "weekend-stroll",
+    name: "Weekend Stroll & Brunch",
+    shortName: "Weekend Stroll",
     tagline: "Effortless casual comfort for days off",
     experience: "Weekend Stroll",
     iconKind: "coffee",
