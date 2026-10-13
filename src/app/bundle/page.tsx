@@ -29,6 +29,8 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
   const plannedDays = Math.min(365, Math.max(1, Number(days) || DEFAULT_PLANNED_DAYS));
   const ids = await getBundle();
   const quote = await quoteBundle(user.id, ids, plannedDays);
+  // Adding up the engine's per-pair amounts (bookkeeping, not a new price).
+  const birthdayGift = quote.lines.reduce((sum, l) => sum.plus(l.birthdayFree), new D(0));
 
   if (quote.lines.length === 0) {
     return (
@@ -70,6 +72,9 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
                     {line.size} · worn {formatWear(line.wear)} → {formatWear(line.wearEnd)} /{" "}
                     {line.lifespanDays} · {formatLKR(line.priceToday)} per day · rent about{" "}
                     {formatLKR(line.estimate)}
+                    {new D(line.birthdayFree).gt(0) && (
+                      <>, with {formatLKR(line.birthdayFree)} on us for your birthday month</>
+                    )}
                   </div>
                   <div className="text-xs text-subtle">
                     Days {formatDate(line.firstDay)} – {formatDate(line.lastDay)}
@@ -104,6 +109,11 @@ export default async function BundlePage({ searchParams }: PageProps<"/bundle">)
               Update
             </Button>
           </form>
+          {birthdayGift.gt(0) && (
+            <Row label="Birthday month: rent on us, already taken off">
+              {formatLKR(birthdayGift)}
+            </Row>
+          )}
           <Row label={`Rent estimate for ${plannedDays} days, locked now`}>
             {formatLKR(quote.estimate)}
           </Row>

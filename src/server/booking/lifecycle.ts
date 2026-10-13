@@ -27,7 +27,7 @@ import { walletBalance } from "../wallet";
 import { customerAddress, merchantAddress } from "./addresses";
 import { BookingError } from "./errors";
 import { loadHoldings } from "./holdings";
-import { replan } from "./plan";
+import { birthdayFreeWear, replan } from "./plan";
 import { cancelReservation } from "./reservations";
 import { shoeName } from "@/lib/shoe-name";
 
@@ -506,7 +506,10 @@ async function openDamageDispute(tx: Tx, itemId: string, userId: string, notes?:
 export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: SettingsRow) {
   const item = await tx.rentalItem.findUniqueOrThrow({
     where: { id: itemId },
-    include: { rental: true, shoe: { include: { settings: true } } },
+    include: {
+      rental: { include: { borrower: { select: { dateOfBirth: true } } } },
+      shoe: { include: { settings: true } },
+    },
   });
   if (item.status === "CLOSED") return item;
   if (!item.firstDay || !item.lastDay) throw new BookingError("Holding period is incomplete");
@@ -518,12 +521,25 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
   const { params, settings, collected } = shoeCurve(item.shoe);
   const wEnd = wearEnd(wStart, added, item.shoe.lifespanDays, !params.pastLife);
   const phi = settings.catchUp ? catchUpPhi(params, collected, wStart) : toD(item.phi);
-  const { income, undiscounted, discountCost } = incomeBetween(
+  // Birthday month (pricing-spec.md §8a): no rent for the wear on those days, for the first
+  // `birthdayFreePairs` pairs held. OPEN DECISION: platform-funded, so the merchant's target
+  // is unchanged and they are paid it from later rentals, as with the release discount.
+  const dob = item.rental.borrower.dateOfBirth;
+  const free = birthdayFreeWear(
+    holdings,
+    item.id,
+    wStart,
+    { start: dateToDay(item.firstDay), end: dateToDay(item.lastDay) },
+    dob ? dob.toISOString().slice(0, 10) : undefined,
+    settingsRow.birthdayFreePairs,
+  );
+  const { income, undiscounted, discountCost, freeCost } = incomeBetween(
     params,
     wStart,
     wEnd,
     toD(item.discount),
     phi,
+    free,
   );
   // Merchant first: the merchant's share fills up to their target, the platform gets the
   // rest. A merchant-funded discount lowers the merchant's target by its cost.
@@ -548,6 +564,7 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
       phi: phi.toString(),
       chargeExact: income.toString(),
       discountCost: discountCost.toString(),
+      birthdayFree: freeCost.toString(),
       charge: charge.toFixed(2),
       merchantShare: merchantShare.toFixed(2),
       platformShare: platformShare.toFixed(2),
@@ -558,7 +575,7 @@ export async function closeItem(tx: Tx, itemId: string, now: Date, settingsRow: 
     data: {
       wear: wEnd.toString(),
       collectedSoFar: toD(item.shoe.collectedSoFar).plus(income).toString(),
-      lostToDiscounts: toD(item.shoe.lostToDiscounts).plus(discountCost).toString(),
+      lostToDiscounts: toD(item.shoe.lostToDiscounts).plus(discountCost).plus(freeCost).toString(),
       merchantCollected: toD(item.shoe.merchantCollected).plus(merchantShare).toFixed(2),
     },
   });

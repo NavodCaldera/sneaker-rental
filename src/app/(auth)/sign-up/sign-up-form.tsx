@@ -10,8 +10,10 @@ import { signUpAction, type FormState } from "@/server/auth/actions";
 export function SignUpForm({
   defaultRole,
   today,
+  birthdayFreePairs,
 }: {
   defaultRole: "MERCHANT" | "BORROWER";
+  birthdayFreePairs: number;
   /** Today in Colombo, "YYYY-MM-DD" */
   today: string;
 }) {
@@ -60,7 +62,9 @@ export function SignUpForm({
       <Field label="Email" name="email" error={errors.email}>
         <Input name="email" type="email" autoComplete="email" required />
       </Field>
-      {role === "BORROWER" && <ProfileFields today={today} errors={errors} />}
+      {role === "BORROWER" && (
+        <ProfileFields today={today} birthdayFreePairs={birthdayFreePairs} errors={errors} />
+      )}
       <Field label="Phone" name="phone" error={errors.phone}>
         <Input name="phone" type="tel" autoComplete="tel" placeholder="+94 77 123 4567" />
       </Field>

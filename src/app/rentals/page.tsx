@@ -4,6 +4,7 @@ import type { RentalItemStatus } from "@/generated/prisma/client";
 import { PhotoImg } from "@/components/shoe-bits";
 import { Alert, Badge, Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { formatDate, formatDateTime, formatLKR, formatTokens, formatWear } from "@/lib/format";
+import { roundMoney, toD } from "@/lib/decimal";
 import { requireUser } from "@/server/auth/session";
 import { borrowerRentals } from "@/server/booking/queries";
 import { EarlyReturnForm, EndRentalForm, ExtendForm, OfferButtons } from "./item-forms";
@@ -102,6 +103,13 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                                 {item.shoe.lifespanDays} · rent estimate{" "}
                                 {formatLKR(item.plannedCharge?.toString() ?? "0")}, locked until
                                 it&apos;s back
+                                {item.plannedBirthdayFree?.gt(0) && (
+                                  <>
+                                    {" "}
+                                    ({formatLKR(item.plannedBirthdayFree.toString())} on us for your
+                                    birthday month)
+                                  </>
+                                )}
                               </>
                             )}
                             {item.status === "CLOSED" && item.charge && (
@@ -110,6 +118,13 @@ export default async function RentalsPage({ searchParams }: PageProps<"/rentals"
                                 · wear {formatWear(item.wearStart!.toString())} →{" "}
                                 {formatWear(item.wearEnd!.toString())} · charged{" "}
                                 {formatLKR(item.charge.toString())}
+                                {item.birthdayFree && roundMoney(toD(item.birthdayFree)).gt(0) && (
+                                  <>
+                                    {" "}
+                                    · {formatLKR(roundMoney(toD(item.birthdayFree)))} on us for your
+                                    birthday month
+                                  </>
+                                )}
                               </>
                             )}
                           </div>

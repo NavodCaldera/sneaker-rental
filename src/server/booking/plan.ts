@@ -1,17 +1,20 @@
 import "server-only";
 import type { RentalItemStatus } from "@/generated/prisma/client";
-import { D, toD } from "@/lib/decimal";
+import { D, roundMoney, toD } from "@/lib/decimal";
 import { formatDate, formatDateTime, formatTokens, formatWear } from "@/lib/format";
 import { catchUpPhi, chargedAmounts, incomeBetween } from "@/lib/pricing";
 import {
   type Day,
   type Holding,
+  birthdayFreeRanges,
+  birthdayWindows,
   chainWear,
   colomboDay,
   dateToDay,
   dayToDate,
   plannedLastDay,
   wearAdded,
+  wearOverRanges,
 } from "@/lib/wear-ledger";
 import { type PricedShoe, shoeCurve } from "../catalogue/pricing";
 import type { Tx } from "../db";
@@ -64,7 +67,38 @@ export type ItemPlan = {
   income: D;
   /** Rounded rent: what the borrower pays for the plan */
   charge: D;
+  /** Rent waived for the borrower's birthday month (pricing-spec.md §8a), unrounded */
+  birthdayFree: D;
 };
+
+/**
+ * The birthday month (product owner, 2026-10-13): each borrower's date of birth
+ * ('YYYY-MM-DD', when known) and how many pairs held at once are rent-free in that month.
+ */
+export type BirthdayGift = { datesOfBirth: Map<string, string>; freePairs: number };
+
+export const NO_BIRTHDAY_GIFT: BirthdayGift = { datesOfBirth: new Map(), freePairs: 0 };
+
+/**
+ * The wear intervals of an item that are rent-free for its borrower's birthday month: the
+ * wear it gains on birthday-month days while it is among their first `freePairs` pairs.
+ * `wearStart` is the item's starting wear; the pricing engine clips them to its interval.
+ */
+export function birthdayFreeWear(
+  holdings: Holding[],
+  itemId: string,
+  wearStart: D,
+  period: { start: Day; end: Day },
+  dateOfBirth: string | undefined,
+  freePairs: number,
+): [D, D][] {
+  if (!dateOfBirth || freePairs <= 0) return [];
+  const windows = birthdayWindows(dateOfBirth, period.start, period.end);
+  const ranges = birthdayFreeRanges(holdings, itemId, windows, freePairs, period.end);
+  return wearOverRanges(holdings, itemId, ranges).map(
+    ([a, b]) => [wearStart.plus(a), wearStart.plus(b)] as [D, D],
+  );
+}
 
 export type Plan = { items: Map<string, ItemPlan>; committedWear: Map<string, D> };
 
@@ -85,7 +119,12 @@ function holdOrder(a: PlanItem, b: PlanItem) {
  * cancelled) of each borrower with an open item here, and every open item of each pair, or
  * the 1/n split and the chains come out wrong (`loadPlanItems` does this).
  */
-export function planItems(items: PlanItem[], shoes: Map<string, PlanShoe>, today: Day): Plan {
+export function planItems(
+  items: PlanItem[],
+  shoes: Map<string, PlanShoe>,
+  today: Day,
+  gift: BirthdayGift = NO_BIRTHDAY_GIFT,
+): Plan {
   const tomorrow = today + 1;
   const open = items.filter((i) => isOpen(i.status));
 
@@ -140,9 +179,24 @@ export function planItems(items: PlanItem[], shoes: Map<string, PlanShoe>, today
     list.forEach((i, k) => {
       const { start, end } = chain[k];
       const phi = settings.catchUp ? catchUpPhi(params, collected, start) : i.phi;
-      const { income, undiscounted } = incomeBetween(params, start, end, i.discount, phi);
-      const { charge } = chargedAmounts(income, { merchantOutstanding: 0, undiscounted });
       const p = period.get(i.id)!;
+      const free = birthdayFreeWear(
+        holdings.get(i.borrowerId)!,
+        i.id,
+        start,
+        p,
+        gift.datesOfBirth.get(i.borrowerId),
+        gift.freePairs,
+      );
+      const { income, undiscounted, freeCost } = incomeBetween(
+        params,
+        start,
+        end,
+        i.discount,
+        phi,
+        free,
+      );
+      const { charge } = chargedAmounts(income, { merchantOutstanding: 0, undiscounted });
       plans.set(i.id, {
         itemId: i.id,
         shoeId,
@@ -152,6 +206,7 @@ export function planItems(items: PlanItem[], shoes: Map<string, PlanShoe>, today
         wearEnd: end,
         income,
         charge,
+        birthdayFree: freeCost,
       });
     });
     committedWear.set(shoeId, chain.length ? chain[chain.length - 1].end : toD(shoe.wear));
@@ -173,6 +228,7 @@ const itemFields = {
   phi: true,
   plannedFirstDay: true,
   plannedCharge: true,
+  plannedBirthdayFree: true,
   plannedWearStart: true,
   rentPaid: true,
   offerFirstDay: true,
@@ -241,7 +297,14 @@ export async function loadPlanItems(tx: Tx, seed: { borrowerIds?: string[]; shoe
     where: { id: { in: [...shoeIds] } },
     include: { settings: true },
   });
-  return { rows, shoes: new Map(shoeRows.map((s) => [s.id, s])) };
+  const people = await tx.user.findMany({
+    where: { id: { in: [...borrowers] }, dateOfBirth: { not: null } },
+    select: { id: true, dateOfBirth: true },
+  });
+  const datesOfBirth = new Map(
+    people.map((u) => [u.id, u.dateOfBirth!.toISOString().slice(0, 10)]),
+  );
+  return { rows, shoes: new Map(shoeRows.map((s) => [s.id, s])), datesOfBirth };
 }
 
 /**
@@ -258,8 +321,12 @@ export async function replan(
   now: Date,
   options: { actorId?: string; settings?: SettingsRow } = {},
 ): Promise<{ offers: string[] }> {
-  const { rows, shoes } = await loadPlanItems(tx, seed);
-  const plan = planItems(rows.map(toPlanItem), shoes, colomboDay(now));
+  const { rows, shoes, datesOfBirth } = await loadPlanItems(tx, seed);
+  const settings = options.settings ?? (await getActiveSettings(now));
+  const plan = planItems(rows.map(toPlanItem), shoes, colomboDay(now), {
+    datesOfBirth,
+    freePairs: settings.birthdayFreePairs,
+  });
   const offers: string[] = [];
 
   for (const [shoeId, committed] of plan.committedWear) {
@@ -297,7 +364,6 @@ export async function replan(
         row.offerFirstDay !== null &&
         dateToDay(row.offerFirstDay) === p.firstDay;
       if (same) continue;
-      const settings = options.settings ?? (await getActiveSettings(now));
       const dueAt =
         row.offerDueAt ?? new Date(now.getTime() + settings.offerResponseHours * 3_600_000);
       await tx.rentalItem.update({
@@ -316,6 +382,8 @@ export async function replan(
     const changed =
       agreed === null ||
       !agreed.eq(p.charge) ||
+      row.plannedBirthdayFree === null ||
+      !toD(row.plannedBirthdayFree).eq(roundMoney(p.birthdayFree)) ||
       agreedFirst !== p.firstDay ||
       row.plannedWearStart === null ||
       !toD(row.plannedWearStart).eq(p.wearStart) ||
@@ -328,6 +396,7 @@ export async function replan(
           plannedWearStart: p.wearStart.toString(),
           plannedWearEnd: p.wearEnd.toString(),
           plannedCharge: p.charge.toFixed(2),
+          plannedBirthdayFree: roundMoney(p.birthdayFree).toFixed(2),
           offerFirstDay: null,
           offerCharge: null,
           offerWearStart: null,

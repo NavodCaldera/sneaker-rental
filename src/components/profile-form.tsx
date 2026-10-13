@@ -7,7 +7,15 @@ import { ProfileFields } from "./profile-fields";
 import { Alert, Button } from "./ui";
 
 /** A customer's profile on their account page; sign-up asks the same questions. */
-export function ProfileForm({ current, today }: { current: ProfileUser; today: string }) {
+export function ProfileForm({
+  current,
+  today,
+  birthdayFreePairs,
+}: {
+  current: ProfileUser;
+  today: string;
+  birthdayFreePairs: number;
+}) {
   const [state, action, pending] = useActionState<ProfileState, FormData>(updateProfileAction, {});
   const missing = !current.dateOfBirth || !current.gender || !current.shoeSize;
   return (
@@ -16,7 +24,12 @@ export function ProfileForm({ current, today }: { current: ProfileUser; today: s
       {missing && !state.ok && (
         <Alert>Tell us about you, and we&apos;ll show you shoes in your size, made for you.</Alert>
       )}
-      <ProfileFields current={current} today={today} errors={state.fieldErrors} />
+      <ProfileFields
+        current={current}
+        today={today}
+        birthdayFreePairs={birthdayFreePairs}
+        errors={state.fieldErrors}
+      />
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? "Saving…" : "Save profile"}
       </Button>

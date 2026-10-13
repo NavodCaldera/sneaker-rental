@@ -30,6 +30,7 @@ export default async function AdminSettings() {
     holdCost: active.holdCost.toFixed(2),
     offerResponseHours: String(active.offerResponseHours),
     earlyReturnNoticeDays: String(active.earlyReturnNoticeDays),
+    birthdayFreePairs: String(active.birthdayFreePairs),
     maxPairsPerBundle: String(active.maxPairsPerBundle),
     disputeWindowDays: String(active.disputeWindowDays),
     freeReturnHours: String(active.freeReturnHours),

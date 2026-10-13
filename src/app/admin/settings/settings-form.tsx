@@ -74,6 +74,11 @@ const GROUPS: { title: string; fields: { name: string; label: string; hint?: str
         label: "Notice for an early return (days)",
         hint: "A borrower ending a term early picks a last day at least this far ahead (10)",
       },
+      {
+        name: "birthdayFreePairs",
+        label: "Rent-free pairs in a birthday month",
+        hint: "No rent for this many pairs in a customer's birthday month (4; 0 = off). Platform-funded, open decision",
+      },
       { name: "maxPairsPerBundle", label: "Max pairs held at once" },
       { name: "disputeWindowDays", label: "Dispute window (days)" },
       { name: "freeReturnHours", label: "Free return window (hours)" },
