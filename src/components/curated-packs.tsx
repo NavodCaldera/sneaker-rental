@@ -32,9 +32,6 @@ export function CuratedPacksShowcase({ packs }: { packs: PackView[] }) {
               </div>
 
               <h3 className="mt-4 text-lg font-bold text-ink">{pack.title}</h3>
-              {pack.subtitle && (
-                <p className="mt-1 line-clamp-2 text-xs text-subtle">{pack.subtitle}</p>
-              )}
 
               <div className="mt-5 flex flex-col gap-3">
                 <div className="text-xs font-semibold uppercase tracking-wider text-subtle">

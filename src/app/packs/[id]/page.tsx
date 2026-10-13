@@ -43,7 +43,6 @@ export default async function PackPage({ params }: PageProps<"/packs/[id]">) {
           {rotationBadge(pack.roles.length)}
         </span>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{pack.title}</h1>
-        {pack.subtitle && <p className="max-w-2xl text-subtle">{pack.subtitle}</p>}
       </header>
 
       {(borrower ? anyBookable : !user) && (
