@@ -54,3 +54,10 @@ next-env.d.ts
 
 # local data
 /.data/
+
+# Local LLM service
+ai-service/.venv/
+ai-service/models/
+ai-service/cache/
+*.gguf
+*.safetensors

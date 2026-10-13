@@ -2,17 +2,16 @@
 
 import { useState, useRef, useEffect, useTransition } from "react";
 import Link from "next/link";
+import { shoeName } from "@/lib/shoe-name";
+import {
+  type StylistAnswer,
+  type StylistShoeItem,
+  STYLIST_HISTORY_MAX,
+  ruleStylistAnswer,
+} from "@/lib/stylist";
 import { PhotoImg } from "./shoe-bits";
 
-export type StylistShoeItem = {
-  id: string;
-  brand: string;
-  model: string;
-  experiences: string[];
-  priceToday: string;
-  photoId?: string;
-  condition: string;
-};
+export type { StylistShoeItem };
 
 type ChatMessage = {
   id: string;
@@ -21,99 +20,8 @@ type ChatMessage = {
   suggestedShoes?: StylistShoeItem[];
 };
 
-function matchShoesForOccasion(query: string, shoes: StylistShoeItem[]): StylistShoeItem[] {
-  const q = query.toLowerCase();
-
-  // Keyword mappings to experiences & shoe models
-  let targetExp: string | null = null;
-  if (
-    q.includes("run") ||
-    q.includes("jog") ||
-    q.includes("tempo") ||
-    q.includes("marathon") ||
-    q.includes("athletic")
-  ) {
-    targetExp = "Morning Run";
-  } else if (
-    q.includes("work") ||
-    q.includes("office") ||
-    q.includes("meeting") ||
-    q.includes("corporate") ||
-    q.includes("client")
-  ) {
-    targetExp = "Work Day";
-  } else if (
-    q.includes("cafe") ||
-    q.includes("brunch") ||
-    q.includes("hangout") ||
-    q.includes("weekend") ||
-    q.includes("stroll") ||
-    q.includes("coffee")
-  ) {
-    targetExp = "Weekend Stroll";
-  } else if (
-    q.includes("night") ||
-    q.includes("dinner") ||
-    q.includes("party") ||
-    q.includes("club") ||
-    q.includes("evening") ||
-    q.includes("wedding")
-  ) {
-    targetExp = "Night Out";
-  }
-
-  if (targetExp) {
-    const matched = shoes.filter((s) => s.experiences.includes(targetExp));
-    if (matched.length > 0) return matched.slice(0, 3);
-  }
-
-  // Fallback to text matching against brand/model
-  const textMatched = shoes.filter(
-    (s) =>
-      q.includes(s.brand.toLowerCase()) ||
-      q.includes(s.model.toLowerCase()) ||
-      s.experiences.some((exp) => q.includes(exp.toLowerCase())),
-  );
-  if (textMatched.length > 0) return textMatched.slice(0, 3);
-
-  // Default to first 3 diverse pairs
-  return shoes.slice(0, 3);
-}
-
-function generateStylistAdvice(query: string): string {
-  const q = query.toLowerCase();
-  if (q.includes("run") || q.includes("jog") || q.includes("tempo") || q.includes("marathon")) {
-    return "For your run, responsive cushioning, energy return, and breathable support are paramount. Here are our top high-performance pairs:";
-  }
-  if (
-    q.includes("work") ||
-    q.includes("office") ||
-    q.includes("meeting") ||
-    q.includes("corporate") ||
-    q.includes("client")
-  ) {
-    return "For a professional work environment, you want clean lines, understated luxury, and all-day transit comfort. These refined pairs fit the brief perfectly:";
-  }
-  if (
-    q.includes("cafe") ||
-    q.includes("brunch") ||
-    q.includes("hangout") ||
-    q.includes("weekend") ||
-    q.includes("coffee")
-  ) {
-    return "For relaxed weekend moments, effortless style and laid-back comfort make the biggest statement. Here are top silhouettes for your rotation:";
-  }
-  if (
-    q.includes("night") ||
-    q.includes("dinner") ||
-    q.includes("party") ||
-    q.includes("club") ||
-    q.includes("evening")
-  ) {
-    return "For an evening occasion, a standout silhouette with clean polish will elevate your entire look. Here are curated statement pairs:";
-  }
-  return `For "${query}", you'll want versatile, elevated footwear that seamlessly transitions through your day. Here are our top handpicked recommendations:`;
-}
+/** How long the chat waits for /api/stylist before answering from the shoes it already has. */
+const STYLIST_FETCH_TIMEOUT_MS = 8000;
 
 export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
   const [inputValue, setInputValue] = useState("");
@@ -130,38 +38,55 @@ export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
     }
   }, [messages, isTyping, isOpen]);
 
-  const handleConsult = (query: string) => {
+  const handleConsult = async (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
 
     setIsOpen(true);
-    const userMsgId = `user-${Date.now()}`;
     const userMsg: ChatMessage = {
-      id: userMsgId,
+      id: `user-${Date.now()}`,
       sender: "user",
       text: trimmed,
     };
+    const history = messages
+      .slice(-STYLIST_HISTORY_MAX)
+      .map((m) => ({ sender: m.sender, text: m.text }));
 
     setMessages((prev) => [...prev, userMsg]);
     setInputValue("");
     setIsTyping(true);
 
-    setTimeout(() => {
-      const recommendations = matchShoesForOccasion(trimmed, shoes);
-      const advice = generateStylistAdvice(trimmed);
-
-      const stylistMsg: ChatMessage = {
-        id: `stylist-${Date.now()}`,
-        sender: "stylist",
-        text: advice,
-        suggestedShoes: recommendations,
-      };
-
-      startTransition(() => {
-        setIsTyping(false);
-        setMessages((prev) => [...prev, stylistMsg]);
+    // The server answers with the local model, or its own rule engine when the model is off.
+    // If the server can't be reached, the rule engine answers here from the shoes we have.
+    let answer: Pick<StylistAnswer, "advice" | "suggestedShoes">;
+    try {
+      const res = await fetch("/api/stylist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed, history }),
+        signal: AbortSignal.timeout(STYLIST_FETCH_TIMEOUT_MS),
       });
-    }, 600);
+      if (!res.ok) throw new Error(`Stylist replied ${res.status}`);
+      const data = (await res.json()) as Partial<StylistAnswer>;
+      if (typeof data.advice !== "string" || !Array.isArray(data.suggestedShoes)) {
+        throw new Error("Unexpected stylist reply");
+      }
+      answer = { advice: data.advice, suggestedShoes: data.suggestedShoes };
+    } catch {
+      answer = ruleStylistAnswer(trimmed, shoes);
+    }
+
+    const stylistMsg: ChatMessage = {
+      id: `stylist-${Date.now()}`,
+      sender: "stylist",
+      text: answer.advice,
+      suggestedShoes: answer.suggestedShoes,
+    };
+
+    startTransition(() => {
+      setIsTyping(false);
+      setMessages((prev) => [...prev, stylistMsg]);
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -318,13 +243,13 @@ export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
                           <div className="size-14 shrink-0 overflow-hidden rounded-lg bg-muted">
                             <PhotoImg
                               id={shoe.photoId}
-                              alt={`${shoe.brand} ${shoe.model}`}
+                              alt={shoeName(shoe)}
                               className="size-full object-cover transition group-hover:scale-105"
                             />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h4 className="text-xs font-semibold text-ink truncate group-hover:text-accent transition-colors">
-                              {shoe.brand} {shoe.model}
+                            <h4 className="text-xs font-semibold text-ink truncate group-hover:underline">
+                              {shoeName(shoe)}
                             </h4>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-xs font-bold text-ink">{shoe.priceToday}</span>
@@ -334,7 +259,7 @@ export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
                               Condition: {shoe.condition}
                             </span>
                           </div>
-                          <span className="text-xs font-semibold text-accent group-hover:translate-x-0.5 transition-transform">
+                          <span className="text-xs font-semibold text-ink group-hover:translate-x-0.5 transition-transform">
                             →
                           </span>
                         </Link>

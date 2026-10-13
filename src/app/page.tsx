@@ -9,8 +9,8 @@ import { ShoeRow, ShoeRowItem } from "@/components/shoe-row";
 import { OccasionDiscovery } from "@/components/occasion-discovery";
 import { CuratedPacksShowcase } from "@/components/curated-packs";
 import { D } from "@/lib/decimal";
-import { formatLKR, formatPercent, formatWear } from "@/lib/format";
-import { OccasionSearchBar, type StylistShoeItem } from "@/components/occasion-search-bar";
+import { formatPercent, formatWear } from "@/lib/format";
+import { OccasionSearchBar } from "@/components/occasion-search-bar";
 import { conditionShort } from "@/lib/shoe-condition";
 import { cardPair, groupByListing, sizeRange } from "@/lib/listing";
 import { shoeSizeInfo } from "@/lib/shoe-size";
@@ -21,6 +21,7 @@ import { homeFor } from "@/server/auth/service";
 import { browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { publishedPacks } from "@/server/packs";
+import { stylistShoes } from "@/server/stylist";
 import { getActiveSettings } from "@/server/settings";
 import { homeRows } from "./home-rows";
 
@@ -53,11 +54,12 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       ? picked
       : undefined;
   const forParam = audience?.toLowerCase();
-  const [shoes, allShoes, active, packs] = await Promise.all([
+  const [shoes, allShoes, active, packs, stylist] = await Promise.all([
     browseShoes({ audience, experience }),
     browseShoes({}),
     getActiveSettings(),
     publishedPacks(),
+    stylistShoes(),
   ]);
   const today = colomboDay(new Date());
 
@@ -123,20 +125,6 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   // Accelerate Your Stride shows the whole shop's discounted pairs if this tab has none.
   const rows = homeRows(cards, scope, cardsOf(allShoes));
 
-  const stylistShoes: StylistShoeItem[] = allShoes.map((shoe) => {
-    const release = releaseInfo(shoe, active, today);
-    const pricing = shoePricing(shoe, release.discount);
-    return {
-      id: shoe.id,
-      brand: shoe.brand,
-      model: shoe.model,
-      experiences: shoe.experiences,
-      priceToday: formatLKR(pricing.priceToday),
-      photoId: shoe.photos[0]?.id,
-      condition: conditionShort(shoe.condition),
-    };
-  });
-
   return (
     <main className="flex flex-col gap-10">
       {showIntro && <IntroSplash />}
@@ -171,7 +159,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </nav>
         )}
 
-        <OccasionSearchBar shoes={stylistShoes} />
+        <OccasionSearchBar shoes={stylist} />
       </div>
 
       <OccasionDiscovery currentExperience={experience} audienceParam={forParam} />
