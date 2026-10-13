@@ -42,10 +42,14 @@ export default async function ClosetPage({ searchParams }: PageProps<"/closet">)
   // The URL wins; with nothing in it, pick up the plan the visitor was working on, else a
   // customer's own size and who they are (their profile, product owner 2026-10-13).
   const profile = user?.role === "BORROWER" ? shoppingProfile(user, colomboToday()) : null;
+  // A customer with a profile isn't asked who it's for or a size: the Closet is theirs, in
+  // their size, and they change it on their account page (product owner, 2026-10-14).
   const fromUrl = one(sp.for) !== undefined || one(sp.size) !== undefined;
-  const start = fromUrl
-    ? { for: one(sp.for), size: one(sp.size) }
-    : (draft ?? (profile && { for: profile.audience.toLowerCase(), size: profile.size }));
+  const start = profile
+    ? { for: profile.audience.toLowerCase(), size: profile.size }
+    : fromUrl
+      ? { for: one(sp.for), size: one(sp.size) }
+      : draft;
   const audience = parseShopAudience(start?.for);
   const size = start?.size ?? "";
   const sizeOk = parseSize(size) !== null;
@@ -62,54 +66,71 @@ export default async function ClosetPage({ searchParams }: PageProps<"/closet">)
         </p>
       </header>
 
-      <Card>
-        <form
-          key={`${audience}|${size}`}
-          className="flex flex-wrap items-end gap-3"
-          aria-label="Fit"
-        >
-          <div className="flex flex-col gap-1">
-            <label htmlFor="closet-for" className="text-sm font-medium">
-              Who it&apos;s for
-            </label>
-            <Select
-              id="closet-for"
-              name="for"
-              defaultValue={audience?.toLowerCase() ?? ""}
-              required
-            >
-              <option value="" disabled>
-                Choose…
-              </option>
-              {SHOP_AUDIENCES.map((a) => (
-                <option key={a.value} value={a.value.toLowerCase()}>
-                  {a.label}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="closet-size" className="text-sm font-medium">
-              Size
-            </label>
-            <Select id="closet-size" name="size" defaultValue={sizeOk ? size : ""} required>
-              <option value="" disabled>
-                Choose…
-              </option>
-              <SizeOptions sizes={facets.sizes} />
-              {sizeOk && !Object.values(facets.sizes).flat().includes(size) && (
-                <option>{size}</option>
-              )}
-            </Select>
-          </div>
-          <Button type="submit" variant={ready ? "secondary" : "primary"}>
-            {ready ? "Update" : "Calibrate My Rotation"}
-          </Button>
-          <Link href={sizeGuideHref(sizeOk ? size : undefined)} className="py-2 text-sm underline">
-            Size guide
+      {profile ? (
+        <Card className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm">
+            Showing pairs in your size:{" "}
+            <span className="font-semibold">
+              {size} · {SHOP_AUDIENCES.find((a) => a.value === profile.audience)?.label}
+            </span>
+          </p>
+          <Link href="/account" className="text-sm underline">
+            Change your size in your profile
           </Link>
-        </form>
-      </Card>
+        </Card>
+      ) : (
+        <Card>
+          <form
+            key={`${audience}|${size}`}
+            className="flex flex-wrap items-end gap-3"
+            aria-label="Fit"
+          >
+            <div className="flex flex-col gap-1">
+              <label htmlFor="closet-for" className="text-sm font-medium">
+                Who it&apos;s for
+              </label>
+              <Select
+                id="closet-for"
+                name="for"
+                defaultValue={audience?.toLowerCase() ?? ""}
+                required
+              >
+                <option value="" disabled>
+                  Choose…
+                </option>
+                {SHOP_AUDIENCES.map((a) => (
+                  <option key={a.value} value={a.value.toLowerCase()}>
+                    {a.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="closet-size" className="text-sm font-medium">
+                Size
+              </label>
+              <Select id="closet-size" name="size" defaultValue={sizeOk ? size : ""} required>
+                <option value="" disabled>
+                  Choose…
+                </option>
+                <SizeOptions sizes={facets.sizes} />
+                {sizeOk && !Object.values(facets.sizes).flat().includes(size) && (
+                  <option>{size}</option>
+                )}
+              </Select>
+            </div>
+            <Button type="submit" variant={ready ? "secondary" : "primary"}>
+              {ready ? "Update" : "Calibrate My Rotation"}
+            </Button>
+            <Link
+              href={sizeGuideHref(sizeOk ? size : undefined)}
+              className="py-2 text-sm underline"
+            >
+              Size guide
+            </Link>
+          </form>
+        </Card>
+      )}
 
       {ready ? (
         <Planner audience={audience} size={size} draft={draft} role={user?.role ?? null} />

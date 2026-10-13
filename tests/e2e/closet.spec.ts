@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { ACCOUNTS, PASSWORD } from "./helpers";
 
-test("closet: one size, choose a pair per slot, sign in keeps the plan, adds to the bundle", async ({
+test("closet: signed out picks a size, choose a pair per slot, sign in keeps the plan and uses the profile size, adds to the bundle", async ({
   page,
 }) => {
   // A pair already in the bundle (a women's pair) must survive adding the rotation.
   await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(ACCOUNTS.borrower3);
+  await page.getByLabel("Email").fill(ACCOUNTS.borrower2);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).not.toHaveURL(/sign-in/);
@@ -51,11 +51,15 @@ test("closet: one size, choose a pair per slot, sign in keeps the plan, adds to 
   // Signing in comes back to the closet with the same plan.
   await summary.getByRole("link", { name: "Sign in to rent these pairs" }).click();
   await expect(page).toHaveURL("/sign-in?next=/closet");
-  await page.getByLabel("Email").fill(ACCOUNTS.borrower3);
+  await page.getByLabel("Email").fill(ACCOUNTS.borrower2);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL("/closet");
   await expect(page.getByRole("button", { name: `Remove ${picked} from Night Out` })).toBeVisible();
+  // A signed-in customer isn't asked who it's for or a size: it comes from their profile.
+  await expect(page.getByText("Showing pairs in your size:")).toContainText("UK 9 · Men");
+  await expect(page.getByLabel("Who it's for")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Change your size in your profile" })).toBeVisible();
 
   // Adding the rotation keeps what was already in the bundle.
   await page.getByRole("button", { name: /to my bundle$/ }).click();
