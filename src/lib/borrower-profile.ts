@@ -16,6 +16,24 @@ export const BECOMING_HINT =
   "A few words about the personality you want to have and how people should see you.";
 /** The example we give (product owner, 2026-10-13). */
 export const BECOMING_EXAMPLE = "I want to build Sri Lanka's largest tech sensation";
+
+/**
+ * Personality types shown as ideas in the box (product owner, 2026-10-13), so customers can
+ * picture the person they want to become. Each uses words `personasFromStory` reads.
+ */
+export const BECOMING_IDEAS = [
+  "a confident leader people trust",
+  "a calm, sharp professional",
+  "a bold creative with my own style",
+  "a fit, energetic athlete",
+  "a curious explorer who loves to travel",
+  "the star of every party",
+];
+
+/** The box's placeholder: our example, then the personality ideas. */
+export const BECOMING_PLACEHOLDER =
+  `${BECOMING_EXAMPLE}. People see me as sharp, calm and always ready.\n\n` +
+  `Other ideas: ${BECOMING_IDEAS.join(" · ")}`;
 export const BECOMING_MIN = 10;
 export const BECOMING_MAX = 500;
 
