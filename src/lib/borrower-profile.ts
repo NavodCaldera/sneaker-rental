@@ -19,6 +19,24 @@ export const BECOMING_EXAMPLE = "I want to build Sri Lanka's largest tech sensat
 export const BECOMING_MIN = 10;
 export const BECOMING_MAX = 500;
 
+/**
+ * Why we ask for the date of birth (product owner, 2026-10-13): to celebrate with them (no rent
+ * in their birthday month for up to `freePairs` pairs) and to show under-13s kids' shoes.
+ */
+export function birthdayReason(freePairs: number) {
+  const pairs = freePairs === 1 ? "pair" : "pairs";
+  const gift =
+    freePairs > 0
+      ? `We value your celebrations: in your birthday month, rent is on us for up to ${freePairs} ${pairs}. `
+      : "";
+  return `${gift}Under 13s are shown kids' shoes. Your date of birth stays private.`;
+}
+
+/** True when `today` ("YYYY-MM-DD") is in the calendar month of the date of birth. */
+export function inBirthdayMonth(dateOfBirth: string, today: string) {
+  return dateOfBirth.slice(5, 7) === today.slice(5, 7);
+}
+
 export const GENDERS: { value: Gender; label: string }[] = [
   { value: "MALE", label: "Male" },
   { value: "FEMALE", label: "Female" },

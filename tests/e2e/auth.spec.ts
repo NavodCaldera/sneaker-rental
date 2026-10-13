@@ -72,9 +72,14 @@ test("a new customer tells us who they want to become and is shown shoes for the
   await page.getByText("Customer", { exact: true }).click();
   await page.getByLabel("Full name").fill("Test Customer");
   await page.getByLabel("Email").fill(`customer-${Date.now()}@test.local`);
+  // Why we ask for the date of birth, to build trust.
   await expect(
-    page.getByText(/For example: .I want to build Sri Lanka's largest tech sensation/),
+    page.getByText(
+      "We value your celebrations: in your birthday month, rent is on us for up to 4 pairs.",
+      { exact: false },
+    ),
   ).toBeVisible();
+  await expect(page.getByText("For example:")).toHaveCount(0);
   await page
     .getByLabel("Whom do you want to become?")
     .fill("I want to build Sri Lanka's largest tech sensation. People see me as calm and sharp.");

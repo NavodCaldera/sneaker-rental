@@ -314,6 +314,11 @@ model PricingSettings {
   offerResponseHours    Int      @default(24)
   /// An early return must be asked for at least this many days before the new last day
   earlyReturnNoticeDays Int      @default(10)
+  /// Birthday month (product owner, 2026-10-13): no rent on a customer's days in the calendar
+  /// month of their birthday, for up to this many pairs held at once (the first ones they
+  /// started). OPEN DECISION: platform-funded like the release discount (the merchant's
+  /// lifetime target is unchanged)
+  birthdayFreePairs     Int      @default(4)
   maxPairsPerBundle     Int
   disputeWindowDays     Int
   freeReturnHours       Int
@@ -424,6 +429,10 @@ model RentalItem {
   phi               Decimal          @default(1) @db.Decimal(20, 16)
   /// Unrounded charge and discount cost from the pricing engine
   chargeExact       Decimal?         @db.Decimal(28, 12)
+  /// Rent waived for the borrower's birthday month (pricing-spec.md §8a), unrounded, set at
+  /// close; `plannedBirthdayFree` is the same for the plan, rounded, shown with the estimate
+  birthdayFree      Decimal?         @db.Decimal(28, 12)
+  plannedBirthdayFree Decimal?       @db.Decimal(14, 2)
   discountCost      Decimal?         @db.Decimal(28, 12)
   /// Charged amounts (2 dp)
   charge            Decimal?         @db.Decimal(14, 2)

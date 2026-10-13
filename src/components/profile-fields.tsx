@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   BECOMING_EXAMPLE,
   BECOMING_HINT,
+  birthdayReason,
   BECOMING_MAX,
   BECOMING_MIN,
   BECOMING_QUESTION,
@@ -32,9 +33,12 @@ function FieldError({ error }: { error?: string[] }) {
 export function ProfileFields({
   current,
   today,
+  birthdayFreePairs,
   errors = {},
 }: {
   current?: ProfileUser;
+  /** Pairs rent-free in the birthday month (settings), for the reason we give */
+  birthdayFreePairs: number;
   /** Today in Colombo, "YYYY-MM-DD": the latest date of birth */
   today: string;
   errors?: Record<string, string[] | undefined>;
@@ -56,7 +60,6 @@ export function ProfileFields({
           defaultValue={current?.becomingStory ?? ""}
           placeholder={`${BECOMING_EXAMPLE}. People see me as sharp, calm and always ready.`}
         />
-        <p className="text-xs text-subtle">For example: &ldquo;{BECOMING_EXAMPLE}&rdquo;</p>
         <FieldError error={errors.becomingStory} />
       </div>
 
@@ -84,7 +87,7 @@ export function ProfileFields({
         label="Date of birth"
         name="dateOfBirth"
         error={errors.dateOfBirth}
-        hint="Under 13s are shown kids' shoes"
+        hint={birthdayReason(birthdayFreePairs)}
       >
         <Input
           name="dateOfBirth"

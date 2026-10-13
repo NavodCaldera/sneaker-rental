@@ -177,3 +177,72 @@ export function lifeLeft(wear: Decimal.Value, lifespan: Decimal.Value): D {
 export function atEndOfLife(wear: Decimal.Value, lifespan: Decimal.Value): boolean {
   return new D(wear).gte(lifespan);
 }
+
+// ─── Birthday month (product owner, 2026-10-13) ───────────────────────────
+
+/**
+ * The days of a borrower's birthday month between `from` and `to` (both inclusive): the
+ * calendar month of their date of birth ('YYYY-MM-DD'), every year, clipped to the range.
+ * Someone born on 29 February has all of February.
+ */
+export function birthdayWindows(dateOfBirth: string, from: Day, to: Day): [Day, Day][] {
+  const month = Number(dateOfBirth.slice(5, 7)) - 1;
+  if (!(month >= 0 && month < 12)) throw new RangeError(`Bad date of birth: ${dateOfBirth}`);
+  const windows: [Day, Day][] = [];
+  const firstYear = dayToDate(from).getUTCFullYear();
+  const lastYear = dayToDate(to).getUTCFullYear();
+  for (let year = firstYear; year <= lastYear; year++) {
+    const start = dateToDay(new Date(Date.UTC(year, month, 1)));
+    const end = dateToDay(new Date(Date.UTC(year, month + 1, 1))) - 1;
+    if (end >= from && start <= to) windows.push([Math.max(start, from), Math.min(end, to)]);
+  }
+  return windows;
+}
+
+/**
+ * The days an item is rent-free for a birthday: days in `windows` when it is among the first
+ * `maxPairs` pairs its borrower holds that day, counting pairs in the order they started (first
+ * day, then item id). Returns maximal day ranges, both ends inclusive. A pair stays free once
+ * it is: pairs that started earlier only leave, and later ones queue behind it.
+ *
+ * @param holdings every holding of the same borrower, including the item itself
+ * @param through  last day to count; defaults to the item's own last day. Required if open.
+ */
+export function birthdayFreeRanges(
+  holdings: Holding[],
+  itemId: string,
+  windows: [Day, Day][],
+  maxPairs: number,
+  through?: Day,
+): [Day, Day][] {
+  const item = holdings.find((h) => h.itemId === itemId);
+  if (!item) throw new RangeError(`No holding for item ${itemId}`);
+  const last = through ?? item.end;
+  if (last === null) throw new RangeError("An open holding needs a `through` day");
+  const before = (h: Holding) =>
+    h.start < item.start || (h.start === item.start && h.itemId < item.itemId);
+  const ahead = holdings.filter((h) => h.itemId !== itemId && before(h));
+
+  const ranges: [Day, Day][] = [];
+  for (const [from, to] of windows) {
+    for (let day = Math.max(from, item.start); day <= Math.min(to, last); day++) {
+      const free = ahead.filter((h) => covers(h, day)).length < maxPairs;
+      if (!free) continue;
+      const prev = ranges[ranges.length - 1];
+      if (prev && prev[1] === day - 1) prev[1] = day;
+      else ranges.push([day, day]);
+    }
+  }
+  return ranges;
+}
+
+/**
+ * The wear an item gains over each day range, as [before, after] offsets from its starting
+ * wear (from `wearAdded`). Add the item's starting wear to get the wear interval to price.
+ */
+export function wearOverRanges(holdings: Holding[], itemId: string, ranges: [Day, Day][]) {
+  return ranges.map(
+    ([from, to]) =>
+      [wearAdded(holdings, itemId, from - 1), wearAdded(holdings, itemId, to)] as [D, D],
+  );
+}

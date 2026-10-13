@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import type { RentalItemStatus } from "@/generated/prisma/client";
-import { D, toD } from "@/lib/decimal";
+import { D, roundMoney, toD } from "@/lib/decimal";
 import { bundleDailyCost, catchUpPhi, shownPrice } from "@/lib/pricing";
 import { fullAddress } from "@/lib/address";
 import { atEndOfLife, dayToDate } from "@/lib/wear-ledger";
@@ -51,6 +51,8 @@ export type QuoteLine = {
   lastDay: Date;
   /** Rent estimate for the term: locked at booking, the actual rent is charged at return */
   estimate: string;
+  /** Rent the estimate leaves out for the borrower's birthday month (rounded; "0.00" if none) */
+  birthdayFree: string;
   problem?: string;
 };
 
@@ -119,7 +121,11 @@ export async function quoteBundle(
   const release = new Map(listed.map((s) => [s.id, releaseInfo(s, row, today)]));
 
   // Plan the new pairs alongside the borrower's bookings and each pair's queue.
-  const { rows, shoes: planShoes } = await loadPlanItems(db, {
+  const {
+    rows,
+    shoes: planShoes,
+    datesOfBirth,
+  } = await loadPlanItems(db, {
     borrowerIds: borrowerId ? [borrowerId] : [],
     shoeIds: listed.map((s) => s.id),
   });
@@ -140,7 +146,10 @@ export async function quoteBundle(
       phi: new D(1),
     });
   }
-  const plan = planItems(items, planShoes, today);
+  const plan = planItems(items, planShoes, today, {
+    datesOfBirth,
+    freePairs: row.birthdayFreePairs,
+  });
 
   const lines: QuoteLine[] = listed.map((shoe) => {
     const p = plan.items.get(`new:${shoe.id}`)!;
@@ -165,6 +174,7 @@ export async function quoteBundle(
       firstDay: dayToDate(p.firstDay),
       lastDay: dayToDate(p.lastDay),
       estimate: p.charge.toFixed(2),
+      birthdayFree: roundMoney(p.birthdayFree).toFixed(2),
       problem,
     };
   });

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   PERSONAS,
   ageOn,
+  birthdayReason,
+  inBirthdayMonth,
   personasFromStory,
   profileAudience,
   profileShoeSize,
@@ -92,5 +94,17 @@ describe("customer profile", () => {
       becoming: ["EXPLORER"],
     });
     expect(shoppingProfile({ ...user, shoeSize: null }, "2026-10-13")).toBeNull();
+  });
+
+  it("says why we ask for the date of birth, and knows the birthday month", () => {
+    expect(birthdayReason(4)).toBe(
+      "We value your celebrations: in your birthday month, rent is on us for up to 4 pairs. " +
+        "Under 13s are shown kids' shoes. Your date of birth stays private.",
+    );
+    expect(birthdayReason(0)).toBe(
+      "Under 13s are shown kids' shoes. Your date of birth stays private.",
+    );
+    expect(inBirthdayMonth("1993-10-02", "2026-10-31")).toBe(true);
+    expect(inBirthdayMonth("1993-10-02", "2026-11-01")).toBe(false);
   });
 });

@@ -10,6 +10,10 @@ const ONE = new D(1);
  * (docs/pricing-spec.md "Prices"). Wear past L is charged at P(L) per wear-day when the
  * shoe's settings say so (`pastLife`), and earns nothing otherwise.
  * Discounts apply to this item only; they never change the curve for the next item.
+ *
+ * `free` are wear intervals [from, to] within [wStart, wEnd] whose rent is waived: the wear
+ * the pair gained on the borrower's birthday-month days (pricing-spec.md §8a). Their price,
+ * after the discount, is `freeCost`, and is not charged. The wear itself still counts.
  */
 export function incomeBetween(
   p: CurveParams,
@@ -17,17 +21,31 @@ export function incomeBetween(
   wEnd: Decimal.Value,
   discount: Decimal.Value = 0,
   phi: Decimal.Value = 1,
-): { income: D; undiscounted: D; discountCost: D } {
+  free: [Decimal.Value, Decimal.Value][] = [],
+): { income: D; undiscounted: D; discountCost: D; freeCost: D } {
   assertDiscount(discount);
   const start = new D(wStart);
   const end = new D(wEnd);
   if (end.lt(start)) throw new RangeError("wEnd must be ≥ wStart");
 
-  const undiscounted = new D(phi)
-    .times(p.K)
-    .times(rentIntegral(p, end).minus(rentIntegral(p, start)));
+  const rent = (a: D, b: D) =>
+    new D(phi).times(p.K).times(rentIntegral(p, b).minus(rentIntegral(p, a)));
+  const undiscounted = rent(start, end);
   const discountCost = undiscounted.times(discount);
-  return { income: undiscounted.minus(discountCost), undiscounted, discountCost };
+  // Free wear, clipped to the item's own interval (wear past L may be capped).
+  let freeGross = new D(0);
+  for (const [a, b] of free) {
+    const from = D.max(start, a);
+    const to = D.min(end, b);
+    if (to.gt(from)) freeGross = freeGross.plus(rent(from, to));
+  }
+  const freeCost = ONE.minus(discount).times(freeGross);
+  return {
+    income: undiscounted.minus(discountCost).minus(freeCost),
+    undiscounted,
+    discountCost,
+    freeCost,
+  };
 }
 
 export function assertDiscount(discount: Decimal.Value): void {

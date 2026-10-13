@@ -262,6 +262,7 @@ describe("pricing settings", () => {
         holdCost: "0",
         offerResponseHours: 24,
         earlyReturnNoticeDays: 10,
+        birthdayFreePairs: 4,
         maxPairsPerBundle: 4,
         disputeWindowDays: 3,
         freeReturnHours: 24,

@@ -42,6 +42,7 @@ This file is authoritative. It merges the reference rent engine and its spec (Re
 | `releaseDiscountStep` | | 0.005 | Release discount added per day from the start of that window |
 | `offerResponseHours` | | 24 | Time a reserved-next borrower has to accept a higher price after an early return, before the reservation is cancelled (OPEN DECISION) |
 | `earlyReturnNoticeDays` | | 10 | An early return is asked for at least this many days before the new last day |
+| `birthdayFreePairs` | | 4 | Pairs held at once that pay no rent in a borrower's birthday month (§8a; platform-funded, OPEN DECISION; 0 = off). Operational: read from the active version |
 | `catchUpEnabled` (`catchUp`) | | false | Option B: spread past discounts over the remaining life (OPEN DECISION) |
 | `chargePastLife` | | true | Past L, keep counting wear and charge P(L) per wear-day until the pair is returned, even past R. Off = the reference engine (wear and rent stop at L). Part of each shoe's settings snapshot |
 | `capitalRate` | r | 0.12 | Idle-cost test only |
@@ -326,6 +327,26 @@ For a 90-day term (days 1–90): reservable from day 1 at no discount, then 0.5%
 - It uses the active settings (a platform marketing rule), not the shoe's settings snapshot.
 - OPEN DECISION: it is funded by the platform (`PLATFORM`), so the merchant is still paid first. If release discounts on a pair add up to more than the platform's margin, the merchant falls short of their target.
 - **Platform promotions** (`PLATFORM`, the default) leave the merchant's target alone, so the platform bears them: it reaches its own share later, or not at all.
+
+### 8a. Birthday month (built; product owner, 2026-10-13)
+
+We value our customers' celebrations: in the calendar month of a borrower's birthday (`User.dateOfBirth`, Asia/Colombo dates, every year; born 29 February → all of February) **no rent is charged** for the wear on those days, for up to `birthdayFreePairs` (4) pairs held at once.
+
+```
+windows      = the birthday month's days inside the item's holding                  (birthdayWindows)
+free days    = days in a window when the item is among the borrower's first
+               birthdayFreePairs pairs held that day, by first day then item id     (birthdayFreeRanges)
+free wear    = [w_start + wearAdded(through from − 1), w_start + wearAdded(through to)] per range   (wearOverRanges)
+freeCost     = (1 − d) × φ × K × Σ [IQ(b) − IQ(a)] over the free wear, clipped to [w_start, w_end]
+income       = gross − d × gross − freeCost                                          (incomeBetween(…, free))
+```
+
+- The wear still counts in full (the pair ages the same, the next borrower is priced at the new wear); only the rent for it is waived.
+- A pair stays free once it is: pairs that started earlier only leave, and later ones queue behind it. A fifth pair pays until one of the first four goes.
+- It applies to the rent estimate at booking and on every replan (`planItems` with the borrowers' dates of birth; `ItemPlan.birthdayFree`, stored rounded as `RentalItem.plannedBirthdayFree`) and to the charge at close (`RentalItem.birthdayFree`, unrounded). Customers see it on the bundle ("Birthday month: rent on us, already taken off"), on My rentals and, during the month, on their account page.
+- It is applied after any discount (`(1 − d)`), so it never stacks with one: a waived day costs nothing either way.
+- OPEN DECISION: funded by the platform like the release discount. The merchant's target is unchanged and the merchant is still paid first from later rentals; the waived rent is added to `Shoe.lostToDiscounts`. `birthdayFreePairs` is an operational setting (active version; 0 turns it off).
+- Customers are told why we ask for the date of birth at sign-up: "We value your celebrations: in your birthday month, rent is on us for up to 4 pairs. Under 13s are shown kids' shoes. Your date of birth stays private." (`birthdayReason`).
 
 ---
 
