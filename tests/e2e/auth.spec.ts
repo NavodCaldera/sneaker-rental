@@ -103,10 +103,9 @@ test("a new customer tells us who they want to become and is shown shoes for the
   await expect(page).toHaveURL("/browse?all=1");
   await expect(page.getByLabel("Size", { exact: true })).toHaveValue("");
 
-  // The Closet starts from the same size.
+  // The Closet uses the same size, with no form to fill in.
   await page.goto("/closet");
-  await expect(page.getByLabel("Who it's for")).toHaveValue("men");
-  await expect(page.getByLabel("Size", { exact: true })).toHaveValue("UK 9");
+  await expect(page.getByText("Showing pairs in your size:")).toContainText("UK 9 · Men");
 
   // The account page shows the profile and changes it.
   await page.goto("/account");

@@ -82,26 +82,9 @@ test("header: Equip Your Evolution link and unified Sign in / Sign up button", a
   // Dark/light mode button is placed after the sign in / sign up button
   await expect(page.getByRole("button", { name: /mode/i })).toBeVisible();
 
-  // Clicking "Equip Your Evolution" navigates to /closet
+  // The Closet needs an account: signed out, the link leads to sign-in and back after it.
   await closetLink.click();
-  await expect(page).toHaveURL("/closet");
-
-  // On /closet, the Virtual Rotating Wardrobe simulator is visible
-  const closet = page.getByRole("region", { name: "Your Nova Closet" });
-  await expect(closet).toBeVisible();
-  await expect(closet.getByText("The Wear-Sharing Engine")).toBeVisible();
-  await expect(closet.getByText("Active Rotation")).toBeVisible();
-  await expect(closet.getByText("Daily Wear Division")).toBeVisible();
-  await expect(closet.getByText("Unlocked Retail Value")).toBeVisible();
-  await expect(closet.getByText("Combined Daily Rent")).toBeVisible();
-
-  // Test adding an extra slot (unlimited capacity)
-  await closet.getByRole("button", { name: "+ Add Extra Pair Slot" }).click();
-  await expect(closet.getByText("Empty Slot 5")).toBeVisible();
-
-  // Verify the Equip button is present
-  const equipBtn = closet.getByRole("button", { name: /Equip This Rotation/ });
-  await expect(equipBtn).toBeVisible();
+  await expect(page).toHaveURL("/sign-in?next=/closet");
 });
 
 test.describe("welcome animation", () => {

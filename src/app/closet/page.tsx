@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Role } from "@/generated/prisma/enums";
 import { RotationClosetSimulator, type RotationShoe } from "@/components/rotation-closet-simulator";
 import { SizeOptions, sizeGuideHref } from "@/components/size-bits";
@@ -18,7 +19,7 @@ import { parseSize, sizeSummary } from "@/lib/shoe-size";
 import { SHOP_AUDIENCES, parseShopAudience } from "@/lib/shoe-style";
 import { colomboDay } from "@/lib/wear-ledger";
 import { shoppingProfile } from "@/lib/borrower-profile";
-import { colomboToday } from "@/server/auth/service";
+import { colomboToday, homeFor } from "@/server/auth/service";
 import { getCurrentUser } from "@/server/auth/session";
 import { getBundle } from "@/server/booking/bundle";
 import { browseFacets, browseShoes } from "@/server/catalogue";
@@ -38,10 +39,15 @@ function one(v: string | string[] | undefined) {
 export default async function ClosetPage({ searchParams }: PageProps<"/closet">) {
   const sp = await searchParams;
   const draft = parseClosetDraft((await cookies()).get(CLOSET_COOKIE)?.value);
-  const [user, facets] = await Promise.all([getCurrentUser(), browseFacets()]);
+  // The Closet is for signed-in customers (product owner, 2026-10-14): anyone else signs in
+  // first and comes back here; merchants and admins go to their own pages.
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in?next=/closet");
+  if (user.role !== "BORROWER") redirect(homeFor(user.role));
+  const facets = await browseFacets();
   // The URL wins; with nothing in it, pick up the plan the visitor was working on, else a
   // customer's own size and who they are (their profile, product owner 2026-10-13).
-  const profile = user?.role === "BORROWER" ? shoppingProfile(user, colomboToday()) : null;
+  const profile = shoppingProfile(user, colomboToday());
   // A customer with a profile isn't asked who it's for or a size: the Closet is theirs, in
   // their size, and they change it on their account page (product owner, 2026-10-14).
   const fromUrl = one(sp.for) !== undefined || one(sp.size) !== undefined;
@@ -133,7 +139,7 @@ export default async function ClosetPage({ searchParams }: PageProps<"/closet">)
       )}
 
       {ready ? (
-        <Planner audience={audience} size={size} draft={draft} role={user?.role ?? null} />
+        <Planner audience={audience} size={size} draft={draft} role={user.role} />
       ) : (
         <p className="text-sm text-subtle">
           Set your demographic and size to unlock battle-tested pairs ready to power your daily

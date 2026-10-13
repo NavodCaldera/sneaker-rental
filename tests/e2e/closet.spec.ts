@@ -1,9 +1,17 @@
 import { expect, test } from "@playwright/test";
 import { ACCOUNTS, PASSWORD } from "./helpers";
 
-test("closet: signed out picks a size, choose a pair per slot, sign in keeps the plan and uses the profile size, adds to the bundle", async ({
-  page,
-}) => {
+test("closet: signed out goes to sign-in and comes back to the closet", async ({ page }) => {
+  await page.goto("/closet");
+  await expect(page).toHaveURL("/sign-in?next=/closet");
+  await page.getByLabel("Email").fill(ACCOUNTS.borrower2);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL("/closet");
+  await expect(page.getByRole("heading", { level: 1, name: "Equip Your Evolution" })).toBeVisible();
+});
+
+test("closet: profile size, choose a pair per slot, adds to the bundle", async ({ page }) => {
   // A pair already in the bundle (a women's pair) must survive adding the rotation.
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(ACCOUNTS.borrower2);
@@ -16,17 +24,13 @@ test("closet: signed out picks a size, choose a pair per slot, sign in keeps the
   const kept = (await page.getByRole("heading", { level: 1 }).first().textContent())!.trim();
   await page.getByRole("button", { name: "Add to bundle" }).click();
   await expect(page).toHaveURL("/bundle");
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL("/");
 
-  // Signed out: nothing is shown until who it's for and a size are picked.
+  // The closet is in the customer's own size and for them: no form to fill in.
   await page.goto("/closet");
   await expect(page.getByRole("heading", { level: 1, name: "Equip Your Evolution" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Rotation summary" })).toHaveCount(0);
-  await page.getByLabel("Who it's for").selectOption("men");
-  await page.getByLabel("Size").selectOption("UK 9");
-  await page.getByRole("button", { name: "Calibrate My Rotation" }).click();
-  await expect(page).toHaveURL(/\/closet\?for=men&size=UK\+9/);
+  await expect(page.getByText("Showing pairs in your size:")).toContainText("UK 9 · Men");
+  await expect(page.getByLabel("Who it's for")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Change your size in your profile" })).toBeVisible();
 
   // Only pairs in that size are offered.
   const shelf = page.getByRole("region", { name: /Pairs in your size/ });
@@ -47,19 +51,6 @@ test("closet: signed out picks a size, choose a pair per slot, sign in keeps the
   await expect(page.getByRole("button", { name: `Remove ${picked} from Night Out` })).toBeVisible();
   const summary = page.getByRole("region", { name: "Rotation summary" });
   await expect(summary).toContainText(/per day/);
-
-  // Signing in comes back to the closet with the same plan.
-  await summary.getByRole("link", { name: "Sign in to rent these pairs" }).click();
-  await expect(page).toHaveURL("/sign-in?next=/closet");
-  await page.getByLabel("Email").fill(ACCOUNTS.borrower2);
-  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("/closet");
-  await expect(page.getByRole("button", { name: `Remove ${picked} from Night Out` })).toBeVisible();
-  // A signed-in customer isn't asked who it's for or a size: it comes from their profile.
-  await expect(page.getByText("Showing pairs in your size:")).toContainText("UK 9 · Men");
-  await expect(page.getByLabel("Who it's for")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Change your size in your profile" })).toBeVisible();
 
   // Adding the rotation keeps what was already in the bundle.
   await page.getByRole("button", { name: /to my bundle$/ }).click();
