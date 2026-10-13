@@ -83,7 +83,7 @@ export async function SiteHeader() {
               href="/closet"
               className="hidden rounded-full border border-line px-4 py-2 font-medium text-ink shadow-sm sm:inline-block hover:border-ink hover:bg-muted transition-all"
             >
-              Build Your Nova Closet
+              Equip Your Evolution
             </Link>
             <Link
               href="/sign-in"

@@ -9,14 +9,14 @@ export type OccasionMoment = {
 };
 
 /**
- * The home page's Moments & Occasions cards (titles set by the product owner, see CLAUDE.md).
+ * The home page's Arenas of Character & Presence cards (titles set by the product owner, see CLAUDE.md).
  * Each card opens Browse filtered by `experience`, which is also the Closet slot name, so its
  * title contains that experience's name.
  */
 export const OCCASIONS: OccasionMoment[] = [
   {
     id: "morning-run",
-    name: "Morning Run & Performance",
+    name: "Endurance & Relentless Grit",
     shortName: "Morning Run",
     tagline: "Miles, tempos, and race days",
     experience: "Morning Run",
@@ -25,7 +25,7 @@ export const OCCASIONS: OccasionMoment[] = [
   },
   {
     id: "work-day",
-    name: "The Daily Commute & Work Day",
+    name: "Executive Presence",
     shortName: "Work Day",
     tagline: "Smart casual, office polish & transit",
     experience: "Work Day",
@@ -34,7 +34,7 @@ export const OCCASIONS: OccasionMoment[] = [
   },
   {
     id: "weekend-stroll",
-    name: "Weekend Stroll & Brunch",
+    name: "Clarity, Reset & Grounding",
     shortName: "Weekend Stroll",
     tagline: "Effortless casual comfort for days off",
     experience: "Weekend Stroll",
@@ -43,7 +43,7 @@ export const OCCASIONS: OccasionMoment[] = [
   },
   {
     id: "night-out",
-    name: "Night Out & Big Occasions",
+    name: "Milestones & The Spotlight",
     shortName: "Night Out",
     tagline: "Evening silhouettes and standout pairs",
     experience: "Night Out",

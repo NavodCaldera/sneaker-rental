@@ -1,5 +1,8 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { IntroSplash } from "@/components/intro-splash";
+import { INTRO_SEEN_COOKIE, RETURNING_COOKIE } from "@/lib/intro";
 import { type ShoeCardData, ShoeCard } from "@/components/shoe-card";
 import { conditionPercent } from "@/components/shoe-bits";
 import { ShoeRow, ShoeRowItem } from "@/components/shoe-row";
@@ -37,6 +40,10 @@ function homeHref(params: { for?: string; experience?: string }) {
 export default async function Home({ searchParams }: PageProps<"/">) {
   const user = await getCurrentUser();
   if (user && user.role !== "BORROWER") redirect(homeFor(user.role));
+
+  // First-time visitors (never signed in, not yet shown this visit) get the welcome animation.
+  const jar = await cookies();
+  const showIntro = !user && !jar.has(RETURNING_COOKIE) && !jar.has(INTRO_SEEN_COOKIE);
 
   const sp = await searchParams;
   const audience = parseShopAudience(typeof sp.for === "string" ? sp.for : undefined);
@@ -132,6 +139,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   return (
     <main className="flex flex-col gap-10">
+      {showIntro && <IntroSplash />}
       <h1 className="sr-only">Nova: rent shoes by the day</h1>
 
       <div className="flex flex-col items-center gap-6">

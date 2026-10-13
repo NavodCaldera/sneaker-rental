@@ -353,20 +353,23 @@ const STYLE_PACKS: SeedPack[] = [
     highlight: "Hold 3 pairs · wear splits 3 ways · about a third of the wear on each",
     roles: [
       {
-        name: "Daily Mileage Eater",
-        description: "Max-cushion road endurance for daily miles",
+        name: "Compounding Grit",
+        description:
+          "The bedrock of daily discipline. Builds the quiet mental toughness that powers every ambition.",
         experience: "Morning Run",
         pairs: ["Nike Pegasus 41", "Asics Gel-Kayano 31"],
       },
       {
-        name: "Speed & Tempo Day",
-        description: "Lightweight, propulsive ride for fast workouts",
+        name: "Threshold Velocity",
+        description:
+          "Unlocking your next echelon. The razor-sharp speed and propulsion that shatters personal limits.",
         experience: "Morning Run",
         pairs: ["Adidas Ultraboost Light"],
       },
       {
-        name: "Active Recovery",
-        description: "Plush comfort for post-run errands and rest days",
+        name: "Restorative Dignity",
+        description:
+          "Honoring the recovery that fuels greatness. Elevated comfort keeping you composed between battles.",
         experience: "Weekend Stroll",
         pairs: ["New Balance 550"],
       },
@@ -378,20 +381,23 @@ const STYLE_PACKS: SeedPack[] = [
     highlight: "1 work shoe + 1 commuter + 1 weekend icon",
     roles: [
       {
-        name: "The Office Sharp",
-        description: "Clean, refined silhouette for meetings",
+        name: "Boardroom Gravitas",
+        description:
+          "Impeccable executive polish. Sets an unmistakable standard of authority before you utter a word.",
         experience: "Work Day",
         pairs: ["New Balance 550", "Adidas Samba OG"],
       },
       {
-        name: "The Transit Commuter",
-        description: "All-day walking support for the commute",
+        name: "Composed Transit",
+        description:
+          "Poise through the daily noise. Navigating city chaos with calm focus and unyielding posture.",
         experience: "Work Day",
         pairs: ["Veja V-10"],
       },
       {
-        name: "The Weekend Statement",
-        description: "Effortless street style for brunches and evenings",
+        name: "Creative Magnetic Presence",
+        description:
+          "Authentic off-duty distinction. Effortless taste that turns casual downtime into an expression of style.",
         experience: "Night Out",
         pairs: ["Converse Chuck 70 Hi", "Vans Old Skool"],
       },
@@ -403,14 +409,16 @@ const STYLE_PACKS: SeedPack[] = [
     highlight: "Alternate daily · each pair dries out and stays fresher",
     roles: [
       {
-        name: "The Low-Top Classic",
-        description: "Low-profile heritage pair that goes with anything",
+        name: "Understated Poise",
+        description:
+          "Quiet confidence in every room. An ageless silhouette proving true elegance never shouts.",
         experience: "Street Session",
         pairs: ["Adidas Samba OG", "Puma Suede Classic"],
       },
       {
-        name: "The High-Mileage Mover",
-        description: "Flexible cushion for long weekend walks",
+        name: "The Relentless Mover",
+        description:
+          "Grounded stamina and sculpted composure. Built for the days you construct your vision block by block.",
         experience: "Weekend Stroll",
         pairs: ["Nike Air Jordan 1 Mid", "Veja V-10"],
       },

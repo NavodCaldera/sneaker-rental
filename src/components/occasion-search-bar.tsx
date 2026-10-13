@@ -21,20 +21,44 @@ type ChatMessage = {
   suggestedShoes?: StylistShoeItem[];
 };
 
-
-
 function matchShoesForOccasion(query: string, shoes: StylistShoeItem[]): StylistShoeItem[] {
   const q = query.toLowerCase();
 
   // Keyword mappings to experiences & shoe models
   let targetExp: string | null = null;
-  if (q.includes("run") || q.includes("jog") || q.includes("tempo") || q.includes("marathon") || q.includes("athletic")) {
+  if (
+    q.includes("run") ||
+    q.includes("jog") ||
+    q.includes("tempo") ||
+    q.includes("marathon") ||
+    q.includes("athletic")
+  ) {
     targetExp = "Morning Run";
-  } else if (q.includes("work") || q.includes("office") || q.includes("meeting") || q.includes("corporate") || q.includes("client")) {
+  } else if (
+    q.includes("work") ||
+    q.includes("office") ||
+    q.includes("meeting") ||
+    q.includes("corporate") ||
+    q.includes("client")
+  ) {
     targetExp = "Work Day";
-  } else if (q.includes("cafe") || q.includes("brunch") || q.includes("hangout") || q.includes("weekend") || q.includes("stroll") || q.includes("coffee")) {
+  } else if (
+    q.includes("cafe") ||
+    q.includes("brunch") ||
+    q.includes("hangout") ||
+    q.includes("weekend") ||
+    q.includes("stroll") ||
+    q.includes("coffee")
+  ) {
     targetExp = "Weekend Stroll";
-  } else if (q.includes("night") || q.includes("dinner") || q.includes("party") || q.includes("club") || q.includes("evening") || q.includes("wedding")) {
+  } else if (
+    q.includes("night") ||
+    q.includes("dinner") ||
+    q.includes("party") ||
+    q.includes("club") ||
+    q.includes("evening") ||
+    q.includes("wedding")
+  ) {
     targetExp = "Night Out";
   }
 
@@ -61,13 +85,31 @@ function generateStylistAdvice(query: string): string {
   if (q.includes("run") || q.includes("jog") || q.includes("tempo") || q.includes("marathon")) {
     return "For your run, responsive cushioning, energy return, and breathable support are paramount. Here are our top high-performance pairs:";
   }
-  if (q.includes("work") || q.includes("office") || q.includes("meeting") || q.includes("corporate") || q.includes("client")) {
+  if (
+    q.includes("work") ||
+    q.includes("office") ||
+    q.includes("meeting") ||
+    q.includes("corporate") ||
+    q.includes("client")
+  ) {
     return "For a professional work environment, you want clean lines, understated luxury, and all-day transit comfort. These refined pairs fit the brief perfectly:";
   }
-  if (q.includes("cafe") || q.includes("brunch") || q.includes("hangout") || q.includes("weekend") || q.includes("coffee")) {
+  if (
+    q.includes("cafe") ||
+    q.includes("brunch") ||
+    q.includes("hangout") ||
+    q.includes("weekend") ||
+    q.includes("coffee")
+  ) {
     return "For relaxed weekend moments, effortless style and laid-back comfort make the biggest statement. Here are top silhouettes for your rotation:";
   }
-  if (q.includes("night") || q.includes("dinner") || q.includes("party") || q.includes("club") || q.includes("evening")) {
+  if (
+    q.includes("night") ||
+    q.includes("dinner") ||
+    q.includes("party") ||
+    q.includes("club") ||
+    q.includes("evening")
+  ) {
     return "For an evening occasion, a standout silhouette with clean polish will elevate your entire look. Here are curated statement pairs:";
   }
   return `For "${query}", you'll want versatile, elevated footwear that seamlessly transitions through your day. Here are our top handpicked recommendations:`;
@@ -130,26 +172,31 @@ export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
   return (
     <div className="w-full flex flex-col items-center">
       {/* Luxury Occasion Search Bar Container */}
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-3xl">
+        {/* On small screens the prompt sits above the bar, so the input keeps the full width */}
+        <p
+          aria-hidden="true"
+          className="mb-2 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-ink md:hidden"
+        >
+          <span className="size-2 rounded-full bg-accent animate-pulse" aria-hidden="true" />
+          WHAT ROOM ARE YOU ENTERING?
+        </p>
         <form
           onSubmit={handleSubmit}
           className="group relative flex items-center rounded-full border border-line bg-paper/95 p-1.5 shadow-md backdrop-blur-md transition-all duration-300 hover:border-ink/40 hover:shadow-lg focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/40"
         >
           {/* Stylist Prompt Label */}
-          <div className="hidden sm:flex items-center gap-2 pl-4 pr-3 border-r border-line shrink-0">
-            <span
-              className="size-2 rounded-full bg-accent animate-pulse"
-              aria-hidden="true"
-            />
+          <div className="hidden md:flex items-center gap-2 pl-4 pr-3 border-r border-line shrink-0">
+            <span className="size-2 rounded-full bg-accent animate-pulse" aria-hidden="true" />
             <span className="text-xs font-bold uppercase tracking-wider text-ink whitespace-nowrap">
-              What&apos;s the occasion?
+              WHAT ROOM ARE YOU ENTERING?
             </span>
           </div>
 
           {/* Search Input */}
           <div className="relative flex-1 px-3 sm:px-4">
             <label htmlFor="occasion-search" className="sr-only">
-              What&apos;s the occasion?
+              WHAT ROOM ARE YOU ENTERING?
             </label>
             <input
               ref={inputRef}
@@ -157,8 +204,8 @@ export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Tell Nova your plans..."
-              className="w-full bg-transparent text-sm sm:text-base font-normal text-ink placeholder:text-subtle focus:outline-none"
+              placeholder="Tell Nova the presence you want to command..."
+              className="w-full bg-transparent text-sm font-normal text-ink text-ellipsis placeholder:text-subtle focus:outline-none"
             />
           </div>
 
@@ -214,7 +261,13 @@ export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
               aria-label="Close stylist chat"
               className="flex size-8 items-center justify-center rounded-full text-subtle hover:bg-muted hover:text-ink transition-colors"
             >
-              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                viewBox="0 0 24 24"
+                className="size-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M18 6 6 18M6 6l12 12" />
               </svg>
             </button>
@@ -228,7 +281,8 @@ export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
             {messages.length === 0 && (
               <div className="py-8 text-center text-subtle">
                 <p className="text-xs">
-                  Tell me where you&apos;re heading, and I&apos;ll curate the perfect shoes for your rotation.
+                  Tell me where you&apos;re heading, and I&apos;ll curate the perfect shoes for your
+                  rotation.
                 </p>
               </div>
             )}
@@ -273,9 +327,7 @@ export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
                               {shoe.brand} {shoe.model}
                             </h4>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-xs font-bold text-ink">
-                                {shoe.priceToday}
-                              </span>
+                              <span className="text-xs font-bold text-ink">{shoe.priceToday}</span>
                               <span className="text-[10px] text-subtle">per day</span>
                             </div>
                             <span className="text-[10px] text-subtle">
@@ -341,7 +393,13 @@ export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
               aria-label="Send reply"
               className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent hover:opacity-90 transition-transform active:scale-95"
             >
-              <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <svg
+                viewBox="0 0 24 24"
+                className="size-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
             </button>

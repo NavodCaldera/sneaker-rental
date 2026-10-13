@@ -45,7 +45,7 @@ test("a merchant makes a style pack, an admin approves it, a borrower rents the 
   await page.goto("/");
   const card = page.getByRole("article", { name: title });
   await expect(card.getByText("Daily Runner")).toBeVisible();
-  await card.getByRole("link", { name: /Explore This Rotation/ }).click();
+  await card.getByRole("link", { name: /Equip This Blueprint/ }).click();
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
   await expect(page.getByText(/per day: each day's wear is split/)).toBeVisible();
   // The rotation takes the first bookable pair of each role (earlier tests may have rented

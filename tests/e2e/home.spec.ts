@@ -5,9 +5,7 @@ test("home page loads", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Nova/);
 });
 
-test("home: occasion discovery leads to browse with who-it's-for filtering", async ({
-  page,
-}) => {
+test("home: occasion discovery leads to browse with who-it's-for filtering", async ({ page }) => {
   await page.goto("/");
   // Just listed, Best value today, Brand new pairs and Being worn now are gone from home.
   await expect(page.getByRole("region", { name: "Just listed" })).toHaveCount(0);
@@ -17,11 +15,15 @@ test("home: occasion discovery leads to browse with who-it's-for filtering", asy
   await expect(page.getByRole("navigation", { name: "Who it's for" })).toHaveCount(0);
 
   // Occasions and curated style packs lead prominently.
-  await expect(page.getByRole("region", { name: "Moments and occasions" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Curated rotations" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Arenas of character and presence" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Curated transformation blueprints" }),
+  ).toBeVisible();
 
   // Clicking an occasion card navigates to the dedicated browse page with that experience.
-  await page.getByRole("link", { name: /Morning Run & Performance/ }).click();
+  await page.getByRole("link", { name: /Endurance & Relentless Grit/ }).click();
   await expect(page).toHaveURL(/\/browse\?experience=Morning(\+|%20)Run/);
 
   // On the browse page, Who it's for tabs are ready for filtering.
@@ -39,13 +41,11 @@ test("home: occasion discovery leads to browse with who-it's-for filtering", asy
   await expect(page).toHaveURL(/experience=Morning(\+|%20)Run/);
 });
 
-test("home: occasion concierge search bar opens personal stylist chat", async ({
-  page,
-}) => {
+test("home: occasion concierge search bar opens personal stylist chat", async ({ page }) => {
   await page.goto("/");
 
-  // Verify the occasion search bar is present with Tell Nova your plans copy
-  const searchInput = page.getByPlaceholder("Tell Nova your plans...");
+  // Verify the occasion search bar is present with Tell Nova the presence you want to command copy
+  const searchInput = page.getByPlaceholder("Tell Nova the presence you want to command...");
   await expect(searchInput).toBeVisible();
 
   // Enter an occasion and submit
@@ -68,13 +68,11 @@ test("home: occasion concierge search bar opens personal stylist chat", async ({
   await expect(page.getByRole("button", { name: /Nova Stylist/ })).toBeVisible();
 });
 
-test("header: Build Your Nova Closet link and unified Sign in / Sign up button", async ({
-  page,
-}) => {
+test("header: Equip Your Evolution link and unified Sign in / Sign up button", async ({ page }) => {
   await page.goto("/");
 
-  // Header has "Build Your Nova Closet" link
-  const closetLink = page.getByRole("link", { name: "Build Your Nova Closet" });
+  // Header has "Equip Your Evolution" link
+  const closetLink = page.getByRole("link", { name: "Equip Your Evolution" });
   await expect(closetLink).toBeVisible();
 
   // Header has unified "Sign in / Sign up" button
@@ -84,7 +82,7 @@ test("header: Build Your Nova Closet link and unified Sign in / Sign up button",
   // Dark/light mode button is placed after the sign in / sign up button
   await expect(page.getByRole("button", { name: /mode/i })).toBeVisible();
 
-  // Clicking "Build Your Nova Closet" navigates to /closet
+  // Clicking "Equip Your Evolution" navigates to /closet
   await closetLink.click();
   await expect(page).toHaveURL("/closet");
 
@@ -104,4 +102,21 @@ test("header: Build Your Nova Closet link and unified Sign in / Sign up button",
   // Verify the Equip button is present
   const equipBtn = closet.getByRole("button", { name: /Equip This Rotation/ });
   await expect(equipBtn).toBeVisible();
+});
+
+test.describe("welcome animation", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("first-time visitors see the questions, then the home page", async ({ page }) => {
+    await page.goto("/");
+    const intro = page.getByRole("dialog", { name: "Welcome to Nova" });
+    await expect(intro).toBeVisible();
+    await expect(intro.getByText("Whom do you want to become?")).toHaveCount(1);
+    await intro.getByRole("button", { name: "Skip" }).click();
+    await expect(intro).toHaveCount(0);
+
+    // Not shown again on this visit.
+    await page.goto("/");
+    await expect(page.getByRole("dialog", { name: "Welcome to Nova" })).toHaveCount(0);
+  });
 });

@@ -4,20 +4,17 @@ import { rotationBadge } from "@/lib/style-pack";
 import type { PackView } from "@/server/packs";
 
 /**
- * "Curated Rotations & Style Packs" on the home page: published packs made by merchants
+ * "Curated Transformation Blueprints" on the home page: published packs made by merchants
  * (approved by an admin) and admins, newest first. Each role lists the pairs that fill it.
  */
 export function CuratedPacksShowcase({ packs }: { packs: PackView[] }) {
   if (packs.length === 0) return null;
   return (
-    <section aria-label="Curated rotations" className="w-full">
+    <section aria-label="Curated transformation blueprints" className="w-full">
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <h2 className="text-xl font-bold tracking-tight text-ink sm:text-2xl">
-          Curated Rotations &amp; Style Packs
+          Curated Transformation Blueprints
         </h2>
-        <span className="rounded-full bg-accent/25 px-2.5 py-0.5 text-xs font-semibold text-ink">
-          Wear-Sharing Engine
-        </span>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -31,9 +28,6 @@ export function CuratedPacksShowcase({ packs }: { packs: PackView[] }) {
               <div className="flex items-center justify-between gap-2">
                 <span className="rounded-full bg-ink px-3 py-1 text-xs font-semibold text-paper">
                   {rotationBadge(pack.roles.length)}
-                </span>
-                <span className="text-xs font-medium text-subtle">
-                  {pack.roles.length} pairs rotating
                 </span>
               </div>
 
@@ -96,7 +90,7 @@ export function CuratedPacksShowcase({ packs }: { packs: PackView[] }) {
                 href={`/packs/${pack.id}`}
                 className="flex w-full items-center justify-center gap-2 rounded-full bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
               >
-                <span>Explore This Rotation</span>
+                <span>Equip This Blueprint</span>
                 <span aria-hidden="true">&rarr;</span>
               </Link>
             </div>

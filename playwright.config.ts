@@ -22,6 +22,22 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: "on-first-retry",
+    // The welcome animation covers the home page for first-time visitors; tests skip it.
+    storageState: {
+      cookies: [
+        {
+          name: "nova_intro_seen",
+          value: "1",
+          domain: "localhost",
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    },
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },

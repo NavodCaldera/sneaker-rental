@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import type { Role } from "@/generated/prisma/client";
+import { RETURNING_COOKIE } from "@/lib/intro";
 import { type SessionUser, endSession, homeFor, startSession, userForToken } from "./service";
 
 const COOKIE = "sr_session";
@@ -15,6 +16,12 @@ export async function signInAs(userId: string) {
     secure: process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
+  });
+  // Remember that this browser has signed in, so it never sees the first-visit welcome.
+  (await cookies()).set(RETURNING_COOKIE, "1", {
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365 * 2,
   });
 }
 

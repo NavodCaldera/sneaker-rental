@@ -81,11 +81,11 @@ export function OccasionDiscovery({
   audienceParam?: string;
 }) {
   return (
-    <section aria-label="Moments and occasions" className="w-full">
+    <section aria-label="Arenas of character and presence" className="w-full">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-ink sm:text-2xl">
-            Moments &amp; Occasions
+            Arenas of Character &amp; Presence
           </h2>
         </div>
       </div>

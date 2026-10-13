@@ -12,15 +12,15 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 1. Experience & Lifestyle First (Not a Technical Shoe Catalog)
 - **Occasion-Led Discovery:** Instead of leading with sterile technical filters (brand, size), customers explore shoes through lifestyle moments and occasions:
-  - *Morning Run & Performance* (athletic endurance, tempos, race day)
-  - *The Daily Commute & Work Day* (smart casual, office polish, urban transit)
-  - *Weekend Stroll & Brunch* (effortless casual comfort, relaxed cafe terrace)
-  - *Night Out & Big Occasions* (evening silhouettes, statement luxury)
+  - *Endurance & Relentless Grit* (athletic endurance, tempos, race day)
+  - *Executive Presence* (smart casual, office polish, urban transit)
+  - *Clarity, Reset & Grounding* (effortless casual comfort, relaxed cafe terrace)
+  - *Milestones & The Spotlight* (evening silhouettes, statement luxury)
   Occasion cards feature rich, authentic lifestyle photography with frosted glass icon pills and bold titles. Keep cards clean without cluttering taglines.
-- **Curated Rotations & Style Packs:** Merchants and admins create wardrobe rotations from real listed pairs (`/merchant/packs`, `/admin/packs`); a merchant's pack is published only after an admin approves it. Published packs (seeded examples: *The Marathon & Active Recovery*, *The All-Week Urban Wardrobe*, *The 24/7 City Explorer*) show on the home page and at `/packs/[id]`.
+- **Curated Transformation Blueprints:** Merchants and admins create wardrobe rotations from real listed pairs (`/merchant/packs`, `/admin/packs`); a merchant's pack is published only after an admin approves it. Published packs (seeded examples: *The Marathon & Active Recovery*, *The All-Week Urban Wardrobe*, *The 24/7 City Explorer*) show on the home page and at `/packs/[id]`.
 - **Occasion Concierge & Stylist Bar:** The homepage search pill is an aspirational concierge prompt rather than a technical database query:
-  - *Prompt / Label:* "What's the occasion?"
-  - *Placeholder:* "Tell Nova your plans..."
+  - *Prompt / Label:* "What room are you entering?"
+  - *Placeholder:* "Tell Nova the presence you want to command..."
   - Submitting or clicking suggestion chips triggers the interactive **Nova Personal Stylist** drawer in the bottom-right corner, offering tailored shoe recommendations and instant rotation advice.
 - **Experiential Listing & Shoe Storytelling:** On shoe detail pages (`/shoes/[id]`), shoes are presented as lifestyle stories rather than dry specs:
   - *Best Paired For (`ShoeBestPaired`):* Ideal occasions, terrain, and styling tips.
