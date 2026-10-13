@@ -427,8 +427,42 @@ const STYLE_PACKS: SeedPack[] = [
 ];
 
 /** Seeds the example packs once, from listed seed pairs (looked up by brand and model). */
+/** Role names the example packs were first seeded with, replaced by the Transformation Economy copy. */
+const LEGACY_ROLE_NAMES = new Set([
+  "Daily Mileage Eater",
+  "Speed & Tempo Day",
+  "Active Recovery",
+  "The Office Sharp",
+  "The Transit Commuter",
+  "The Weekend Statement",
+  "The Low-Top Classic",
+  "The High-Mileage Mover",
+]);
+
+/** Brings example packs seeded earlier up to the current role names and descriptions. */
+async function refreshStylePackCopy() {
+  let updated = 0;
+  for (const pack of STYLE_PACKS) {
+    const existing = await db.stylePack.findFirst({
+      where: { title: pack.title },
+      include: { roles: { orderBy: { position: "asc" } } },
+    });
+    if (!existing) continue;
+    for (const [i, role] of pack.roles.entries()) {
+      const row = existing.roles[i];
+      if (!row || !LEGACY_ROLE_NAMES.has(row.name)) continue;
+      await db.stylePackRole.update({
+        where: { id: row.id },
+        data: { name: role.name, description: role.description },
+      });
+      updated++;
+    }
+  }
+  if (updated > 0) console.log(`Refreshed ${updated} example style pack roles`);
+}
+
 async function seedStylePacks() {
-  if ((await db.stylePack.count()) > 0) return;
+  if ((await db.stylePack.count()) > 0) return refreshStylePackCopy();
   const admin = await db.user.findUniqueOrThrow({ where: { email: "admin@sneakers.test" } });
   const listed = await db.shoe.findMany({
     where: { status: { notIn: ["DRAFT", "RETIRED", "SOLD"] } },
