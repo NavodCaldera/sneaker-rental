@@ -3,12 +3,11 @@ import { redirect } from "next/navigation";
 import { type ShoeCardData, ShoeCard } from "@/components/shoe-card";
 import { conditionPercent } from "@/components/shoe-bits";
 import { ShoeRow, ShoeRowItem } from "@/components/shoe-row";
-import { SearchBox } from "@/components/search-box";
-import { SizeOptions } from "@/components/size-bits";
 import { OccasionDiscovery } from "@/components/occasion-discovery";
 import { CuratedPacksShowcase } from "@/components/curated-packs";
 import { D } from "@/lib/decimal";
-import { formatPercent, formatWear } from "@/lib/format";
+import { formatLKR, formatPercent, formatWear } from "@/lib/format";
+import { OccasionSearchBar, type StylistShoeItem } from "@/components/occasion-search-bar";
 import { conditionShort } from "@/lib/shoe-condition";
 import { cardPair, groupByListing, sizeRange } from "@/lib/listing";
 import { shoeSizeInfo } from "@/lib/shoe-size";
@@ -16,7 +15,7 @@ import { ALL_EXPERIENCES, EXPERIENCES, SHOP_AUDIENCES, parseShopAudience } from 
 import { colomboDay } from "@/lib/wear-ledger";
 import { getCurrentUser } from "@/server/auth/session";
 import { homeFor } from "@/server/auth/service";
-import { browseFacets, browseShoes } from "@/server/catalogue";
+import { browseShoes } from "@/server/catalogue";
 import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { publishedPacks } from "@/server/packs";
 import { getActiveSettings } from "@/server/settings";
@@ -47,10 +46,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       ? picked
       : undefined;
   const forParam = audience?.toLowerCase();
-  const [shoes, allShoes, facets, active, packs] = await Promise.all([
+  const [shoes, allShoes, active, packs] = await Promise.all([
     browseShoes({ audience, experience }),
     browseShoes({}),
-    browseFacets(),
     getActiveSettings(),
     publishedPacks(),
   ]);
@@ -118,34 +116,25 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   // Exceptional Value shows the whole shop's discounted pairs if this tab has none.
   const rows = homeRows(cards, scope, cardsOf(allShoes));
 
+  const stylistShoes: StylistShoeItem[] = allShoes.map((shoe) => {
+    const release = releaseInfo(shoe, active, today);
+    const pricing = shoePricing(shoe, release.discount);
+    return {
+      id: shoe.id,
+      brand: shoe.brand,
+      model: shoe.model,
+      experiences: shoe.experiences,
+      priceToday: formatLKR(pricing.priceToday),
+      photoId: shoe.photos[0]?.id,
+      condition: conditionShort(shoe.condition),
+    };
+  });
+
   return (
     <main className="flex flex-col gap-10">
       <h1 className="sr-only">Nova: rent shoes by the day</h1>
 
       <div className="flex flex-col items-center gap-6">
-        <nav aria-label="Who it's for" className="w-full overflow-x-auto [scrollbar-width:none]">
-          <ul className="mx-auto flex w-max gap-6 px-1 sm:gap-10">
-            {[{ value: undefined, label: "All" }, ...SHOP_AUDIENCES].map((a) => {
-              const current = a.value === audience;
-              return (
-                <li key={a.label}>
-                  <Link
-                    href={homeHref({ for: a.value?.toLowerCase() })}
-                    aria-current={current ? "page" : undefined}
-                    className={`block border-b-2 pb-2 text-sm transition ${
-                      current
-                        ? "border-ink font-semibold text-ink"
-                        : "border-transparent text-subtle hover:border-line hover:text-ink"
-                    }`}
-                  >
-                    {a.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
         {audience && (
           <nav
             aria-label={`Experiences for ${audienceName}`}
@@ -174,47 +163,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </nav>
         )}
 
-        <form
-          action="/browse"
-          role="search"
-          aria-label="Find shoes"
-          className="relative flex w-full max-w-3xl items-center rounded-full border border-line bg-paper py-2 pl-2 pr-2 shadow-md"
-        >
-          {forParam && <input type="hidden" name="for" value={forParam} />}
-          {experience && <input type="hidden" name="experience" value={experience} />}
-          <label className="flex min-w-0 flex-1 cursor-pointer flex-col justify-center rounded-full px-5 py-1.5 hover:bg-muted">
-            <span className="text-xs font-semibold">Size</span>
-            <select
-              name="size"
-              defaultValue=""
-              className="-ml-1 w-full cursor-pointer bg-transparent text-sm text-subtle outline-none"
-            >
-              <option value="">Any size</option>
-              <SizeOptions sizes={facets.sizes} />
-            </select>
-          </label>
-          <span aria-hidden="true" className="h-8 w-px bg-line" />
-          <SearchBox />
-          <button
-            type="submit"
-            aria-label="Search"
-            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent transition hover:brightness-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-          </button>
-        </form>
+        <OccasionSearchBar shoes={stylistShoes} />
       </div>
 
       <OccasionDiscovery currentExperience={experience} audienceParam={forParam} />

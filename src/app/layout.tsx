@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { cookies } from "next/headers";
 import { NavTracker } from "@/components/back-button";
+import { HideOnAuthPages } from "@/components/hide-on-auth-pages";
 import { SiteHeader } from "@/components/site-header";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 import "./globals.css";
@@ -32,7 +33,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col font-sans">
         <NavTracker />
-        <SiteHeader />
+        <HideOnAuthPages>
+          <SiteHeader />
+        </HideOnAuthPages>
         <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8">{children}</div>
       </body>
     </html>

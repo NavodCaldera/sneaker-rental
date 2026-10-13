@@ -44,9 +44,9 @@ export async function SiteHeader() {
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-4">
         <Link
           href="/"
-          className="flex items-center gap-2 text-xl font-bold tracking-tight text-ink"
+          className="text-2xl font-extrabold tracking-tight text-accent hover:opacity-90 transition-opacity"
         >
-          <span aria-hidden="true" className="inline-block size-6 rounded-lg bg-accent" /> Nova
+          Nova
         </Link>
         {user ? (
           <>
@@ -62,7 +62,6 @@ export async function SiteHeader() {
               ))}
             </nav>
             <div className="ml-auto flex items-center gap-3 text-sm">
-              <ThemeToggle initial={theme} />
               <Link
                 href="/notifications"
                 className="rounded-full px-3 py-1.5 font-medium hover:bg-muted"
@@ -75,23 +74,24 @@ export async function SiteHeader() {
                   Sign out
                 </button>
               </form>
+              <ThemeToggle initial={theme} />
             </div>
           </>
         ) : (
-          <div className="ml-auto flex items-center gap-1 text-sm">
-            <ThemeToggle initial={theme} />
+          <div className="ml-auto flex items-center gap-2 text-sm">
+            <Link
+              href="/closet"
+              className="hidden rounded-full border border-line px-4 py-2 font-medium text-ink shadow-sm sm:inline-block hover:border-ink hover:bg-muted transition-all"
+            >
+              Build Your Nova Closet
+            </Link>
             <Link
               href="/sign-in"
-              className="rounded-full border border-line px-4 py-2 font-medium shadow-sm hover:shadow"
+              className="whitespace-nowrap rounded-full bg-accent px-4 py-2 font-medium text-on-accent hover:opacity-90 transition-opacity"
             >
-              Sign in
+              Sign in / Sign up
             </Link>
-            <Link
-              href="/sign-up"
-              className="rounded-full bg-accent px-4 py-2 font-medium text-on-accent hover:opacity-90"
-            >
-              Sign up
-            </Link>
+            <ThemeToggle initial={theme} />
           </div>
         )}
       </div>

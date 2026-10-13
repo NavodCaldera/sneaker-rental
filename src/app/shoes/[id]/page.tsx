@@ -20,6 +20,14 @@ import { releaseInfo, shoeCurvePreview, shoePricing } from "@/server/catalogue/p
 import { getBundle } from "@/server/booking/bundle";
 import { RentPanel } from "./rent-panel";
 import { shoeName } from "@/lib/shoe-name";
+import {
+  getShoeCircularJourney,
+  getShoePairingStory,
+  getWearBarometerStory,
+} from "@/lib/shoe-storytelling";
+import { ShoeBestPaired } from "@/components/shoe-best-paired";
+import { ShoeJourney } from "@/components/shoe-journey";
+import { ShoeValueBarometer } from "@/components/shoe-value-barometer";
 
 export async function generateMetadata({ params }: PageProps<"/shoes/[id]">): Promise<Metadata> {
   const shoe = await getListing((await params).id);
@@ -42,22 +50,34 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
   const preview = shoeCurvePreview(shoe);
   const [main, ...rest] = shoe.photos;
 
+  const pairingStory = getShoePairingStory(shoe);
+  const journeyStory = getShoeCircularJourney(shoe);
+  const discountPct = discounted ? Math.round(release.discount.times(100).toNumber()) : 0;
+  const barometerStory = getWearBarometerStory(shoe.committedWear, shoe.lifespanDays, discountPct);
+
   return (
     <main className="flex flex-col gap-4">
       <BackButton href="/browse" to="browse" useHistory />
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="flex flex-col gap-4">
-          <PhotoImg id={main?.id} alt={shoeName(shoe)} className="aspect-[4/3] w-full rounded-xl" />
+        <div className="flex flex-col gap-6">
+          <PhotoImg id={main?.id} alt={shoeName(shoe)} className="aspect-[4/3] w-full rounded-2xl shadow-sm" />
           <div className="grid grid-cols-4 gap-3">
             {rest.map((p) => (
               <PhotoImg
                 key={p.id}
                 id={p.id}
                 alt={`${p.kind.toLowerCase()} view`}
-                className="aspect-square w-full rounded-lg"
+                className="aspect-square w-full rounded-xl"
               />
             ))}
           </div>
+
+          {/* Best Paired For: Occasions, Terrain, Stylist Tip */}
+          <ShoeBestPaired story={pairingStory} />
+
+          {/* The Shoe's Journey: Circular Lifecycle */}
+          <ShoeJourney journey={journeyStory} />
+
           <Card>
             <h2 className="mb-1 font-medium">How the price changes</h2>
             <p className="mb-3 text-sm text-subtle">
@@ -69,9 +89,9 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           </Card>
         </div>
 
-        <aside className="flex flex-col gap-4">
+        <aside className="flex flex-col gap-5">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{shoeName(shoe)}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{shoeName(shoe)}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-subtle">
               <ShoeSizeHover size={shoeSizeInfo(shoe).primary} details={shoeSizeInfo(shoe)} />
               <span>
@@ -83,7 +103,7 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
           </div>
           <SizePicker sizes={sizes} current={shoe.id} currentSize={shoe.size} />
           <div>
-            <span className="text-3xl font-semibold">{formatLKR(pricing.priceToday)}</span>
+            <span className="text-3xl font-bold">{formatLKR(pricing.priceToday)}</span>
             <span className="text-subtle"> per day today</span>
             {discounted && (
               <p className="mt-1 text-sm">
@@ -102,6 +122,9 @@ export default async function ShoePage({ params }: PageProps<"/shoes/[id]">) {
               </p>
             )}
           </div>
+
+          {/* Wear-Curve Value Barometer */}
+          <ShoeValueBarometer barometer={barometerStory} />
           <div className="text-sm">
             <WearBar wear={shoe.committedWear.toString()} lifespan={shoe.lifespanDays} />
             <p className="mt-1 text-subtle">

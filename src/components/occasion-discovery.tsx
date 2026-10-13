@@ -88,22 +88,14 @@ export function OccasionDiscovery({
             Moments &amp; Occasions
           </h2>
         </div>
-        {currentExperience && (
-          <Link
-            href={audienceParam ? `/?for=${audienceParam}` : "/"}
-            className="text-xs font-semibold text-subtle underline hover:text-ink"
-          >
-            Clear moment ({currentExperience})
-          </Link>
-        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {OCCASIONS.map((occ) => {
           const isActive = currentExperience === occ.experience;
           const href = audienceParam
-            ? `/?for=${audienceParam}&experience=${encodeURIComponent(occ.experience)}`
-            : `/?experience=${encodeURIComponent(occ.experience)}`;
+            ? `/browse?for=${encodeURIComponent(audienceParam)}&experience=${encodeURIComponent(occ.experience)}`
+            : `/browse?experience=${encodeURIComponent(occ.experience)}`;
 
           return (
             <Link

@@ -18,6 +18,7 @@ import { rankForPersona, shoppingProfile } from "@/lib/borrower-profile";
 import { audienceLabel } from "@/lib/shoe-style";
 import { colomboToday } from "@/server/auth/service";
 import { getCurrentUser } from "@/server/auth/session";
+import { OCCASIONS } from "@/lib/curated-packs";
 
 export const metadata: Metadata = { title: "Browse" };
 
@@ -69,9 +70,13 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
   });
   const listings = rankForPersona(grouped, (l) => l.pair.experiences, profile?.becoming ?? []);
 
+  const activeOccasion = OCCASIONS.find((o) => o.experience === filters.experience);
+  const headerTitle = activeOccasion ? activeOccasion.name : "Elevate Your Everyday";
+
   return (
     <main>
-      <PageHeader title="Elevate Your Everyday" />
+      <PageHeader title={headerTitle} description={activeOccasion?.tagline} />
+
       {personal && (
         <p className="-mt-2 mb-4 text-sm text-subtle">
           Shoes in your size, {profile.size} · {audienceLabel(profile.audience)}
@@ -80,6 +85,60 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
             Show all shoes
           </Link>
         </p>
+      )}
+      {/* Demographic Tabs: All | Men | Women | Boys | Girls */}
+      <nav aria-label="Who it's for" className="mb-6 w-full overflow-x-auto [scrollbar-width:none]">
+        <ul className="flex w-max gap-2 px-1 sm:gap-3">
+          {[{ value: undefined, label: "All" }, ...SHOP_AUDIENCES].map((a) => {
+            const current = a.value === filters.audience;
+            const params = new URLSearchParams();
+            if (a.value) params.set("for", a.value.toLowerCase());
+            // A customer's Browse otherwise starts from their profile again.
+            else if (profile) params.set("all", "1");
+            if (filters.experience) params.set("experience", filters.experience);
+            if (filters.size) params.set("size", filters.size);
+            if (filters.brand) params.set("brand", filters.brand);
+            if (filters.q) params.set("q", filters.q);
+            const href = params.toString() ? `/browse?${params.toString()}` : "/browse";
+
+            return (
+              <li key={a.label}>
+                <Link
+                  href={href}
+                  aria-current={current ? "page" : undefined}
+                  className={`block rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    current
+                      ? "bg-ink font-semibold text-paper shadow-sm"
+                      : "border border-line text-subtle hover:border-ink hover:text-ink"
+                  }`}
+                >
+                  {a.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {filters.experience && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/15 px-3 py-1 text-xs font-semibold text-ink">
+            <span>Occasion: {activeOccasion?.name ?? filters.experience}</span>
+            <Link
+              href={`/browse?${new URLSearchParams({
+                ...(filters.audience && { for: filters.audience.toLowerCase() }),
+                ...(filters.size && { size: filters.size }),
+                ...(filters.brand && { brand: filters.brand }),
+                ...(filters.q && { q: filters.q }),
+                ...(profile && { all: "1" }),
+              }).toString()}`}
+              className="ml-1 rounded-full p-0.5 text-subtle hover:text-ink"
+              aria-label="Clear occasion filter"
+            >
+              ×
+            </Link>
+          </span>
+        </div>
       )}
       <form
         // A new set of filters (e.g. "Show all shoes") resets the selects to it.

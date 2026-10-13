@@ -23,6 +23,7 @@
   --good: var(--ink);
   --warn: var(--ink);
   --danger: var(--ink);
+  --invalid: light-dark(#d92d20, #ff6b5e);
   --info: var(--ink);
   --chart: #35d6ed;
 }
@@ -44,6 +45,7 @@
   --color-good: var(--good);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
+  --color-invalid: var(--invalid);
   --color-info: var(--info);
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import {
   BECOMING_PLACEHOLDER,
   BECOMING_HINT,
@@ -8,6 +11,9 @@ import {
   BECOMING_QUESTION,
   GENDERS,
   isoDate,
+  profileShoeSize,
+  shoeSizeExists,
+  shoeSizeProblem,
   splitShoeSize,
   type ProfileUser,
 } from "@/lib/borrower-profile";
@@ -41,10 +47,30 @@ export function ProfileFields({
   errors?: Record<string, string[] | undefined>;
 }) {
   const size = splitShoeSize(current?.shoeSize);
+  const [gender, setGender] = useState(current?.gender ?? "");
+  const [dob, setDob] = useState(current?.dateOfBirth ? isoDate(current.dateOfBirth) : "");
+  const [system, setSystem] = useState<string>(size.system);
+  const [value, setValue] = useState(size.value);
+  const sizeInput = useRef<HTMLInputElement>(null);
+
+  // The size is checked as it is typed, against the chart for their gender (and kids' range
+  // for under 13s), so a wrong size is refused before the form is sent. The server checks again.
+  const label = profileShoeSize(system, value);
+  const validDob = /^\d{4}-\d{2}-\d{2}$/.test(dob) && dob <= today;
+  const detail =
+    label && validDob && (gender === "MALE" || gender === "FEMALE")
+      ? shoeSizeProblem(label, gender, dob, today)
+      : null;
+  // Until gender and date of birth are known, a size that exists for no one is still refused.
+  const invalid = Boolean(detail) || (label !== null && !shoeSizeExists(label));
+  useEffect(() => {
+    sizeInput.current?.setCustomValidity(invalid ? "Invalid Size" : "");
+  }, [invalid]);
+
   return (
     <>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="becomingStory" className="text-base font-semibold tracking-tight">
+        <label htmlFor="becomingStory" className="text-sm font-bold">
           {BECOMING_QUESTION}
         </label>
         <p className="text-xs text-subtle">{BECOMING_HINT}</p>
@@ -61,7 +87,12 @@ export function ProfileFields({
       </div>
 
       <Field label="Gender" name="gender" error={errors.gender}>
-        <Select name="gender" required defaultValue={current?.gender ?? ""}>
+        <Select
+          name="gender"
+          required
+          value={gender}
+          onChange={(e) => setGender(e.target.value as typeof gender)}
+        >
           <option value="" disabled>
             Select gender
           </option>
@@ -85,7 +116,8 @@ export function ProfileFields({
           autoComplete="bday"
           required
           max={today}
-          defaultValue={current?.dateOfBirth ? isoDate(current.dateOfBirth) : ""}
+          value={dob}
+          onChange={(e) => setDob(e.target.value)}
           className="w-44"
         />
       </Field>
@@ -93,7 +125,7 @@ export function ProfileFields({
       <Field
         label="Shoe size"
         name="shoeSizeValue"
-        error={errors.shoeSizeValue}
+        error={invalid ? undefined : errors.shoeSizeValue}
         hint={
           <Link href="/size-guide" target="_blank" className="underline">
             Size guide
@@ -104,7 +136,8 @@ export function ProfileFields({
           <Select
             name="shoeSizeSystem"
             aria-label="Size system"
-            defaultValue={size.system}
+            value={system}
+            onChange={(e) => setSystem(e.target.value)}
             className="w-24"
           >
             {LISTING_SIZE_SYSTEMS.map((s) => (
@@ -114,15 +147,25 @@ export function ProfileFields({
             ))}
           </Select>
           <Input
+            ref={sizeInput}
             name="shoeSizeValue"
             inputMode="decimal"
             required
             pattern="\d{1,2}(\.\d)?"
             placeholder="9"
-            defaultValue={size.value}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
             className="w-24"
           />
         </div>
+        {invalid && (
+          <div role="alert" className="flex flex-col gap-0.5">
+            <p className="text-xs font-medium text-red-600 dark:text-red-400" style={{ color: "red" }}>
+              Invalid Size
+            </p>
+            {detail && <p className="text-xs text-subtle">{detail}</p>}
+          </div>
+        )}
       </Field>
     </>
   );

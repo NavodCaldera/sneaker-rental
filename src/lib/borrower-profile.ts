@@ -1,5 +1,5 @@
 import type { Gender, SizeSystem } from "@/generated/prisma/enums";
-import { SIZE_KEY, chartFor, formatSize, normalizeSize, parseSize } from "./shoe-size";
+import { SIZE_CHARTS, SIZE_KEY, chartFor, formatSize, normalizeSize, parseSize } from "./shoe-size";
 import type { SHOP_AUDIENCES } from "./shoe-style";
 
 /**
@@ -12,8 +12,7 @@ import type { SHOP_AUDIENCES } from "./shoe-style";
  */
 
 export const BECOMING_QUESTION = "Whom do you want to become?";
-export const BECOMING_HINT =
-  "A few words about the personality you want to have and how people should see you.";
+export const BECOMING_HINT = "Your personal AI assistant agent will train based on your wordings";
 /** The example we give (product owner, 2026-10-13). */
 export const BECOMING_EXAMPLE = "I want to build Sri Lanka's largest tech sensation";
 /** The box's placeholder: our example only (the "Other ideas" line was removed, 2026-10-13). */
@@ -321,6 +320,20 @@ export function shoeSizeProblem(
   return sizes.includes(parsed.value)
     ? null
     : `${chart.name} sizes run from ${system} ${sizes[0]} to ${sizes[sizes.length - 1]} in half sizes. Check the size and the system (UK, EU, US)`;
+}
+
+/**
+ * Whether a profile size exists for anyone (a kids' size, or on either chart), for checking it
+ * before we know the gender or date of birth.
+ */
+export function shoeSizeExists(shoeSize: string) {
+  const parsed = parseSize(shoeSize);
+  if (!parsed || parsed.system === "CM") return true;
+  const system = parsed.system as SizeSystem;
+  const [min, max] = KIDS_SIZE_RANGE[system];
+  const n = Number(parsed.value);
+  if (n >= min && n <= max) return true;
+  return SIZE_CHARTS.some((c) => c.rows.some((r) => r[SIZE_KEY[system]] === parsed.value));
 }
 
 /** The system and number of a stored profile size, for the form. */

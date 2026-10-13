@@ -66,7 +66,7 @@ export function Field({
   const message = Array.isArray(error) ? error[0] : error;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={name} className="text-sm font-medium">
+      <label htmlFor={name} className="text-sm font-bold">
         {label}
       </label>
       {children}
