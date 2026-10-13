@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PackCarousel } from "@/components/pack-carousel";
 import { formatLKR } from "@/lib/format";
 import { rotationBadge } from "@/lib/style-pack";
 import type { PackView } from "@/server/packs";
@@ -11,13 +12,13 @@ export function CuratedPacksShowcase({ packs }: { packs: PackView[] }) {
   if (packs.length === 0) return null;
   return (
     <section aria-label="Curated transformation blueprints" className="w-full">
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <h2 className="text-xl font-bold tracking-tight text-ink sm:text-2xl">
-          Curated Transformation Blueprints
-        </h2>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <PackCarousel
+        heading={
+          <h2 className="text-xl font-bold tracking-tight text-ink sm:text-2xl">
+            Curated Transformation Blueprints
+          </h2>
+        }
+      >
         {packs.map((pack) => (
           <article
             key={pack.id}
@@ -96,7 +97,7 @@ export function CuratedPacksShowcase({ packs }: { packs: PackView[] }) {
             </div>
           </article>
         ))}
-      </div>
+      </PackCarousel>
     </section>
   );
 }
