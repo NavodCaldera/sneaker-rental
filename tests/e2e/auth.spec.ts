@@ -83,7 +83,7 @@ test("a new customer tells us who they want to become and is shown shoes for the
   await page
     .getByLabel("Whom do you want to become?")
     .fill("I want to build Sri Lanka's largest tech sensation. People see me as calm and sharp.");
-  await page.getByText("Male", { exact: true }).click();
+  await page.getByLabel("Gender").selectOption("MALE");
   await page.getByLabel("Date of birth").fill("1993-07-02");
   await page.getByLabel("Size system").selectOption("UK");
   await page.getByLabel("Shoe size").fill("9");

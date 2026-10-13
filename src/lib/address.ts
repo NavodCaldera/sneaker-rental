@@ -16,8 +16,7 @@ export const citySchema = z
 
 /** Why we ask for the address, shown next to the field (sign-up and account pages). */
 export const ADDRESS_REASON = {
-  BORROWER:
-    "We deliver your shoes to this address and collect them from here when your rental ends. Only the drivers who carry your pairs see it.",
+  BORROWER: "",
   MERCHANT:
     "Drivers pick up your shoes from this address for each rental and bring them back here afterwards. Only the drivers who carry your pairs see it.",
 } as const;

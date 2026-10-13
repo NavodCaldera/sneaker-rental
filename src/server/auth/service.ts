@@ -10,6 +10,7 @@ import {
   isoDate,
   personasFromStory,
   profileShoeSize,
+  shoeSizeProblem,
 } from "@/lib/borrower-profile";
 import { colomboDay, dayToDate } from "@/lib/wear-ledger";
 import type { Gender, Role, User } from "@/generated/prisma/client";
@@ -94,6 +95,10 @@ export function readProfile(
   const shoeSize = profileShoeSize(f.shoeSizeSystem ?? "", f.shoeSizeValue ?? "");
   if (!f.shoeSizeValue?.trim()) errors.shoeSizeValue = "Enter your shoe size";
   else if (!shoeSize) errors.shoeSizeValue = "Enter a size such as 9 or 8.5";
+  else if (gender && !errors.dateOfBirth) {
+    const problem = shoeSizeProblem(shoeSize, gender, dob, today);
+    if (problem) errors.shoeSizeValue = problem;
+  }
 
   // One line or a short paragraph; runs of spaces and blank lines are tidied.
   const becomingStory = (f.becomingStory ?? "")

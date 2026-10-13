@@ -14,9 +14,6 @@ import {
 import { LISTING_SIZE_SYSTEMS } from "@/lib/shoe-size";
 import { Field, Input, Select, Textarea } from "./ui";
 
-const pill =
-  "cursor-pointer rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-ink has-[:checked]:bg-muted has-[:checked]:font-medium has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink/20";
-
 function FieldError({ error }: { error?: string[] }) {
   return error?.[0] ? (
     <p className="text-xs font-medium text-ink" role="alert">
@@ -63,25 +60,18 @@ export function ProfileFields({
         <FieldError error={errors.becomingStory} />
       </div>
 
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="mb-1 text-sm font-medium">Gender</legend>
-        <div className="grid grid-cols-2 gap-2">
+      <Field label="Gender" name="gender" error={errors.gender}>
+        <Select name="gender" required defaultValue={current?.gender ?? ""}>
+          <option value="" disabled>
+            Select gender
+          </option>
           {GENDERS.map((g) => (
-            <label key={g.value} className={pill}>
-              <input
-                type="radio"
-                name="gender"
-                value={g.value}
-                defaultChecked={current?.gender === g.value}
-                required
-                className="sr-only"
-              />
+            <option key={g.value} value={g.value}>
               {g.label}
-            </label>
+            </option>
           ))}
-        </div>
-        <FieldError error={errors.gender} />
-      </fieldset>
+        </Select>
+      </Field>
 
       <Field
         label="Date of birth"
@@ -105,12 +95,9 @@ export function ProfileFields({
         name="shoeSizeValue"
         error={errors.shoeSizeValue}
         hint={
-          <>
-            The size on your shoes&apos; labels. We&apos;ll show you pairs in this size.{" "}
-            <Link href="/size-guide" target="_blank" className="underline">
-              Size guide
-            </Link>
-          </>
+          <Link href="/size-guide" target="_blank" className="underline">
+            Size guide
+          </Link>
         }
       >
         <div className="flex gap-2">

@@ -1,5 +1,5 @@
 import type { Gender, SizeSystem } from "@/generated/prisma/enums";
-import { formatSize, normalizeSize, parseSize } from "./shoe-size";
+import { SIZE_KEY, chartFor, formatSize, normalizeSize, parseSize } from "./shoe-size";
 import type { SHOP_AUDIENCES } from "./shoe-style";
 
 /**
@@ -283,6 +283,43 @@ export function profileShoeSize(system: string, value: string) {
   const v = value.trim();
   if (!/^\d{1,2}(\.\d)?$/.test(v) || Number(v) <= 0) return null;
   return formatSize(system as SizeSystem, normalizeSize(v));
+}
+
+/** The sizes children can have: no kids' chart yet, so a plausible range per system. */
+const KIDS_SIZE_RANGE: Record<SizeSystem, [number, number]> = {
+  UK: [0, 13.5],
+  EU: [16, 40],
+  US: [0, 13.5],
+};
+
+/**
+ * Checks a profile size against who is wearing it: adults must be on their gender's size chart
+ * (women's for Female, men's for Male), in the system they picked; under 13s within the kids'
+ * range. Returns a message, or null when the size is right. `shoeSize` is as from `profileShoeSize`.
+ */
+export function shoeSizeProblem(
+  shoeSize: string,
+  gender: Gender,
+  dateOfBirth: string,
+  today: string,
+): string | null {
+  const parsed = parseSize(shoeSize);
+  if (!parsed || parsed.system === "CM") return null;
+  const system = parsed.system as SizeSystem;
+  const audience = profileAudience(gender, dateOfBirth, today);
+  if (audience === "BOYS" || audience === "GIRLS") {
+    const [min, max] = KIDS_SIZE_RANGE[system];
+    const n = Number(parsed.value);
+    return n >= min && n <= max
+      ? null
+      : `Kids' sizes run from ${system} ${min} to ${max}. Check the size on the label`;
+  }
+  const chart = chartFor(audience === "WOMEN" ? "WOMEN" : "MEN")!;
+  const key = SIZE_KEY[system];
+  const sizes = chart.rows.map((r) => r[key]);
+  return sizes.includes(parsed.value)
+    ? null
+    : `${chart.name} sizes run from ${system} ${sizes[0]} to ${sizes[sizes.length - 1]} in half sizes. Check the size and the system (UK, EU, US)`;
 }
 
 /** The system and number of a stored profile size, for the form. */

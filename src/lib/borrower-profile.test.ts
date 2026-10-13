@@ -8,6 +8,7 @@ import {
   profileAudience,
   profileShoeSize,
   rankForPersona,
+  shoeSizeProblem,
   shoppingProfile,
   splitShoeSize,
   suitsPersona,
@@ -106,5 +107,33 @@ describe("customer profile", () => {
     );
     expect(inBirthdayMonth("1993-10-02", "2026-10-31")).toBe(true);
     expect(inBirthdayMonth("1993-10-02", "2026-11-01")).toBe(false);
+  });
+});
+
+describe("shoeSizeProblem", () => {
+  const today = "2026-10-13";
+  const adult = "1993-07-02";
+
+  it("accepts sizes on the gender's chart, in any system", () => {
+    expect(shoeSizeProblem("UK 9", "MALE", adult, today)).toBeNull();
+    expect(shoeSizeProblem("EU 39", "FEMALE", adult, today)).toBeNull();
+    expect(shoeSizeProblem("US 8.5", "FEMALE", adult, today)).toBeNull();
+  });
+
+  it("rejects sizes off the gender's chart", () => {
+    expect(shoeSizeProblem("UK 2", "MALE", adult, today)).toMatch(
+      /^Men's sizes run from UK 5 to 12/,
+    );
+    expect(shoeSizeProblem("UK 11", "FEMALE", adult, today)).toMatch(
+      /^Women's sizes run from UK 2 to 8/,
+    );
+    expect(shoeSizeProblem("EU 1", "MALE", adult, today)).toMatch(/EU 38 to 47/);
+    expect(shoeSizeProblem("UK 6.2", "MALE", adult, today)).not.toBeNull();
+  });
+
+  it("checks under 13s against a kids' range", () => {
+    expect(shoeSizeProblem("UK 13", "FEMALE", "2016-05-01", today)).toBeNull();
+    expect(shoeSizeProblem("UK 9", "MALE", "2016-05-01", today)).toBeNull();
+    expect(shoeSizeProblem("UK 20", "MALE", "2016-05-01", today)).toMatch(/^Kids' sizes/);
   });
 });
