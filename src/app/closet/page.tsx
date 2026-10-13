@@ -26,7 +26,7 @@ import { releaseInfo, shoePricing } from "@/server/catalogue/pricing";
 import { getActiveSettings } from "@/server/settings";
 
 export const metadata: Metadata = {
-  title: "Equip Your Evolution | Nova",
+  title: { absolute: "Equip Your Evolution | Nova" },
   description:
     "Curate an agile rotation calibrated for every arena of your climb. Multi-pair luxury with zero capital drag.",
 };
