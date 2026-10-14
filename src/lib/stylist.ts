@@ -86,6 +86,10 @@ export function generateStylistAdvice(query: string): string {
   return `For "${query}", you'll want versatile, elevated footwear that seamlessly transitions through your day. Here are our top handpicked recommendations:`;
 }
 
+function escapeRegExp(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /** The keyword rule engine's whole answer. */
 export function ruleStylistAnswer(query: string, shoes: StylistShoeItem[]): StylistAnswer {
   return {
@@ -123,5 +127,14 @@ export function readStylistReply(
     .filter((s): s is StylistShoeItem => !!s)
     .slice(0, STYLIST_MAX_PAIRS);
   if (suggestedShoes.length === 0) return null;
-  return { advice: advice.trim().slice(0, 1000), suggestedShoes };
+  // Models sometimes echo ids in the text, e.g. "Nike Dunk Low (cmv5…)": take them out.
+  // Whole words only, so a short id never cuts letters out of a word.
+  const text = shoes
+    .reduce(
+      (t, s) => t.replace(new RegExp(`\\s*\\(?\\b${escapeRegExp(s.id)}\\b\\)?`, "g"), ""),
+      advice,
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return { advice: text.slice(0, 1000), suggestedShoes };
 }

@@ -28,15 +28,17 @@ Ollama serves an OpenAI-compatible API at `http://127.0.0.1:11434/v1` (the styli
 | GPU (recommended) | 12 GB+ VRAM (RTX 3060 12 GB, 4070, 4080…) or Apple Silicon with 16 GB+ unified memory | A reply in about 2–5 s       |
 | CPU only          | 16 GB RAM (32 GB is more comfortable), a recent 8-core CPU                            | Often 20 s or more per reply |
 
+Measured on a laptop with an i7-13620H, 16 GB RAM and no NVIDIA GPU (2026-10-14): `qwen2.5:14b` writes about 3.4 tokens a second, loading it takes about 2–3 minutes, and with the app, the database and an editor open only about 0.5 GB of RAM was left, so Windows swapped. A stylist reply took 35 s when Ollama still had the catalogue prompt cached, and well over a minute otherwise. Ollama unloads an idle model after 5 minutes (`OLLAMA_KEEP_ALIVE` changes that), so the next question pays the load again.
+
 On a smaller machine use `qwen2.5:7b` (about 4.7 GB), set `STYLIST_LLM_MODEL=qwen2.5:7b` and pull that model instead.
 
 ## Settings (`.env`)
 
-| Variable                 | Default                     | What it does                                                                                                                       |
-| ------------------------ | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `STYLIST_LLM_URL`        | `http://127.0.0.1:11434/v1` | The OpenAI-compatible endpoint. `off` always uses the rule engine.                                                                 |
-| `STYLIST_LLM_MODEL`      | `qwen2.5:14b`               | The model name Ollama serves.                                                                                                      |
-| `STYLIST_LLM_TIMEOUT_MS` | `3500`                      | How long to wait before the rule engine answers. A full 14B reply rarely fits in 3.5 s on a CPU, so raise it (e.g. `30000`) there. |
+| Variable                 | Default                     | What it does                                                                                                                                                                                                          |
+| ------------------------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STYLIST_LLM_URL`        | `http://127.0.0.1:11434/v1` | The OpenAI-compatible endpoint. `off` always uses the rule engine.                                                                                                                                                    |
+| `STYLIST_LLM_MODEL`      | `qwen2.5:14b`               | The model name Ollama serves.                                                                                                                                                                                         |
+| `STYLIST_LLM_TIMEOUT_MS` | `3500`                      | How long to wait before the rule engine answers. A full 14B reply rarely fits in 3.5 s on a CPU, so raise it there (e.g. `180000`). The chat in the browser waits for the server, which always answers by this limit. |
 
 ## Files
 

@@ -20,8 +20,11 @@ type ChatMessage = {
   suggestedShoes?: StylistShoeItem[];
 };
 
-/** How long the chat waits for /api/stylist before answering from the shoes it already has. */
-const STYLIST_FETCH_TIMEOUT_MS = 8000;
+/**
+ * A last-resort limit on /api/stylist: the server answers with its rule engine once its own
+ * model limit (STYLIST_LLM_TIMEOUT_MS) passes, so this only catches a server that never replies.
+ */
+const STYLIST_FETCH_TIMEOUT_MS = 5 * 60_000;
 
 export function OccasionSearchBar({ shoes }: { shoes: StylistShoeItem[] }) {
   const [inputValue, setInputValue] = useState("");

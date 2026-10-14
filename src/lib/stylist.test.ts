@@ -28,6 +28,16 @@ describe("readStylistReply", () => {
     expect(reply?.suggestedShoes.map((s) => s.id)).toEqual(["c", "a", "b"]);
   });
 
+  it("takes ids out of the advice text", () => {
+    const named = JSON.stringify({
+      advice: "Wear the Nike Dunk (cmv5id) tonight.",
+      recommendedShoeIds: ["cmv5id"],
+    });
+    expect(readStylistReply(named, [shoe("cmv5id", ["Night Out"], "Nike", "Dunk")])?.advice).toBe(
+      "Wear the Nike Dunk tonight.",
+    );
+  });
+
   it("reads JSON wrapped in a code fence", () => {
     const raw = '```json\n{"advice":"Go.","recommendedShoeIds":["b"]}\n```';
     expect(readStylistReply(raw, shoes)?.suggestedShoes.map((s) => s.id)).toEqual(["b"]);
